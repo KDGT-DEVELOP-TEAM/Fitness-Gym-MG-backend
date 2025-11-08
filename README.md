@@ -19,7 +19,7 @@ project-root/
 ├── src/
 │   ├── main/
 │   │   ├── java/
-│   │   │   └── com/example/app/
+│   │   │   └── com/example/fitnessgym_mg/
 │   │   │       ├── entity/                      # データベース構造（エンティティ）
 │   │   │       │   ├── User.java
 │   │   │       │   ├── Customer.java
@@ -112,7 +112,7 @@ project-root/
 │   │
 │   └── test/
 │       └── java/
-│           └── com/example/app/
+│           └── com/example/fitnessgym_mg/
 │               ├── entity/
 │               │   └── UserEntityTest.java
 │               ├── service/
