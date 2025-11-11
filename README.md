@@ -125,6 +125,142 @@ project-root/
 └── README.md
 ```
 
+## データベース構造
+
+### Stores（店舗）
+| カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
+| --- | --- | --- | --- | --- | --- | --- |
+| id | uuid | ○ | ○ | ○ | ○ | 主キー |
+| name | varchar(100) |  | ○ | ○ |  | 店舗名 |
+
+### Users（ユーザー）
+| カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
+| --- | --- | --- | --- | --- | --- | --- |
+| id | uuid | ○ | ○ | ○ | ○ | 主キー |
+| email | varchar(255) |  | ○ | ○ | ○ | メールアドレス |
+| name | varchar(50) |  | ○ |  |  | 氏名 |
+| pass | varchar(60) |  | ○ |  |  | ハッシュ化パスワード（bcrypt、8〜16文字入力想定） |
+| role | enum('admin','manager','trainer') |  | ○ |  |  | 権限区分 |
+| is_active | boolean |  | ○ |  |  | 有効／無効 |
+
+### Customers（顧客）
+| カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
+| --- | --- | --- | --- | --- | --- | --- |
+| id | uuid | ○ | ○ | ○ | ○ | 主キー |
+| kana | varchar(100) |  | ○ |  |  | フリガナ |
+| name | varchar(100) |  | ○ |  |  | 氏名 |
+| gender | enum('male','female') |  | ○ |  |  | 性別 |
+| birthday | date |  | ○ |  |  | 生年月日 |
+| height | numeric |  | ○ |  |  | 身長 |
+| email | varchar(255) |  | ○ | ○ |  | メールアドレス |
+| phone | varchar(12) |  | ○ |  |  | 電話番号 |
+| address | varchar(200) |  | ○ |  |  | 住所 |
+| medical | varchar(100) |  |  |  |  | 医療・既往歴 |
+| taboo | varchar(100) |  |  |  |  | 禁忌事項 |
+| first_posture_group_id | uuid |  | ○ |  |  | FK → `posture_groups`（初回姿勢画像） |
+| memo | varchar(500) |  |  |  |  | 自由記入メモ |
+| created_at | timestamptz |  | ○ |  | ○ | 登録日時 |
+| is_active | boolean |  | ○ |  |  | 有効／無効 |
+
+### Lessons（レッスン）
+| カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
+| --- | --- | --- | --- | --- | --- | --- |
+| id | uuid | ○ | ○ | ○ | ○ | 主キー |
+| store_id | uuid |  | ○ |  | ○ | FK → `stores` |
+| user_id | uuid |  | ○ |  |  | FK → `users`（担当トレーナー） |
+| customer_id | uuid |  | ○ |  | ○ | FK → `customers` |
+| posture_group_id | uuid |  |  |  |  | FK → `posture_groups`（レッスン時姿勢） |
+| condition | varchar(50) |  |  |  |  | 体調メモ |
+| weight | numeric |  |  |  |  | 体重 |
+| meal | varchar(150) |  |  |  |  | 食事内容 |
+| memo | varchar(500) |  |  |  |  | レッスンメモ |
+| start_date | timestamptz |  |  |  |  | レッスン開始日時 |
+| end_date | timestamptz |  |  |  |  | レッスン終了日時 |
+| next_date | timestamptz |  |  |  |  | 次回予約日時 |
+| next_store_id | uuid |  |  |  |  | FK → `stores`（次回予定店舗） |
+| next_user_id | uuid |  |  |  |  | FK → `users`（次回担当） |
+| created_at | timestamptz |  | ○ |  |  | 追加日時 |
+
+### Trainings（トレーニング）
+| カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
+| --- | --- | --- | --- | --- | --- | --- |
+| lesson_id | uuid | ○ | ○ |  | ○ | 複合PK（lesson_id + order_no）、FK → `lessons` |
+| order_no | int | ○ | ○ |  |  | 複合PK（lesson_id + order_no） |
+| name | varchar(20) |  | ○ |  |  | 種目名 |
+| reps | int |  | ○ |  |  | 回数 |
+
+### Logs（監査ログ）
+| カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
+| --- | --- | --- | --- | --- | --- | --- |
+| id | uuid | ○ | ○ | ○ | ○ | 主キー |
+| user_id | uuid |  | ○ |  | ○ | FK → `users` |
+| action | varchar |  | ○ |  |  | 操作内容 |
+| target_table | varchar |  | ○ |  |  | 対象テーブル |
+| target_id | uuid |  | ○ |  | ○ | 対象レコードID |
+| created_at | timestamptz |  | ○ |  |  | 操作日時 |
+
+### Store_Customers（店舗×顧客）
+| カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
+| --- | --- | --- | --- | --- | --- | --- |
+| store_id | uuid | ○ | ○ |  |  | 複合PK（store_id + customer_id）、FK → `stores` |
+| customer_id | uuid | ○ | ○ |  |  | 複合PK（store_id + customer_id）、FK → `customers` |
+
+### User_Stores（ユーザー×店舗）
+| カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
+| --- | --- | --- | --- | --- | --- | --- |
+| user_id | uuid | ○ | ○ |  |  | 複合PK（user_id + store_id）、FK → `users` |
+| store_id | uuid | ○ | ○ |  |  | 複合PK（user_id + store_id）、FK → `stores` |
+
+### User_Customers（ユーザー×顧客）
+| カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
+| --- | --- | --- | --- | --- | --- | --- |
+| user_id | uuid | ○ | ○ |  |  | 複合PK（user_id + customer_id）、FK → `users` |
+| customer_id | uuid | ○ | ○ |  |  | 複合PK（user_id + customer_id）、FK → `customers` |
+
+### posture_groups（姿勢画像グループ）
+| カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
+| --- | --- | --- | --- | --- | --- | --- |
+| id | uuid | ○ | ○ | ○ | ○ | 主キー |
+| customer_id | uuid |  | ○ |  | ○ | FK → `customers` |
+| lesson_id | uuid |  | ○ |  | ○ | FK → `lessons` |
+| captured_at | timestamptz |  | ○ |  |  | 撮影日時 |
+| created_at | timestamptz |  | ○ |  |  | 追加日時 |
+
+### posture_images（姿勢画像）
+| カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
+| --- | --- | --- | --- | --- | --- | --- |
+| id | uuid | ○ | ○ | ○ | ○ | 主キー |
+| posture_group_id | uuid |  | ○ |  | ○ | FK → `posture_groups` |
+| title | text |  | ○ |  |  | 画像タイトル |
+| storage_key | varchar |  | ○ |  |  | ストレージ上のパス |
+| consent_publication | boolean |  | ○ |  |  | 公開同意フラグ |
+| taken_at | timestamptz |  | ○ |  |  | 撮影日時 |
+| created_at | timestamptz |  | ○ |  |  | 追加日時 |
+| position | enum('front','right','back','left') |  | ○ |  |  | 撮影方向 |
+
+### ER 図（Mermaid）
+```mermaid
+erDiagram
+    STORES ||--o{ LESSONS : "実施・次回"
+    STORES ||--o{ STORE_CUSTOMERS : "所属"
+    STORES ||--o{ USER_STORES : "配属"
+
+    USERS ||--o{ LESSONS : "担当"
+    USERS ||--o{ USER_STORES : "配属"
+    USERS ||--o{ USER_CUSTOMERS : "担当"
+    USERS ||--o{ LOGS : "操作"
+
+    CUSTOMERS ||--o{ LESSONS : "受講"
+    CUSTOMERS ||--o{ STORE_CUSTOMERS : "所属"
+    CUSTOMERS ||--o{ USER_CUSTOMERS : "担当"
+    CUSTOMERS ||--o{ POSTURE_GROUPS : "姿勢"
+
+    LESSONS ||--o{ TRAININGS : "メニュー"
+    LESSONS ||--o{ POSTURE_GROUPS : "姿勢記録"
+
+    POSTURE_GROUPS ||--o{ POSTURE_IMAGES : "撮影"
+```
+
 ## パッケージ概要
 - `entity`: ユーザー、顧客、店舗、レッスン等の永続化モデル
 - `repository`: Spring Data JPA を利用したデータアクセス層
@@ -159,5 +295,5 @@ project-root/
 - ci : CI/CD 設定変更
 - revert : 変更の取り消し
 
-commit例 feat: ログイン機能実装
+commit例 "feat: ログイン機能実装"
 
