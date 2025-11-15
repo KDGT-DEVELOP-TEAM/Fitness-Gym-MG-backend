@@ -1,9 +1,209 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="ja" th:replace="layout/base :: content">
-  <body>
-    <section>
-      <h1>User List Placeholder</h1>
-    </section>
-  </body>
-</html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>ユーザー一覧</title>
 
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+    // フィルタ送信
+    document.getElementById("filterForm").onsubmit = (e) => {
+        e.preventDefault();
+        const params = new URLSearchParams(new FormData(e.target));
+        location.href = `/users?${params.toString()}`;
+    };
+
+    document.getElementById("clearBtn").onclick = () => {
+        location.href = "/users";
+    };
+
+    // 新規作成モーダル
+    document.getElementById("openCreateModal").onclick = () => {
+        document.getElementById("createForm").reset();
+        document.getElementById("createModal").style.display = "block";
+    };
+
+    document.getElementById("createForm").onsubmit = async (e) => {
+        e.preventDefault();
+
+        const data = Object.fromEntries(new FormData(e.target));
+
+        // boolean → 正しく送る
+        data.active = true;
+
+        await fetch("/users", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(data)
+        });
+
+        location.reload();
+    };
+
+    // 有効/無効
+    document.querySelectorAll(".toggleActive").forEach(btn => {
+        btn.onclick = async () => {
+            await fetch(`/users/${btn.dataset.id}/active`, {method: "PATCH"});
+            location.reload();
+        };
+    });
+
+    // 削除
+    document.querySelectorAll(".deleteBtn").forEach(btn => {
+        btn.onclick = async () => {
+            if (!confirm("削除しますか？")) return;
+            await fetch(`/users/${btn.dataset.id}`, {method: "DELETE"});
+            location.reload();
+        };
+    });
+
+    // 編集モーダル
+    document.querySelectorAll(".editBtn").forEach(btn => {
+        btn.onclick = () => {
+
+            const form = document.getElementById("editForm");
+
+            form.id.value    = btn.dataset.id;
+            form.name.value  = btn.dataset.name;
+            form.kana.value  = btn.dataset.kana;
+            form.email.value = btn.dataset.email;
+
+            // ★ enum と一致させるため value は大文字
+            form.role.value  = btn.dataset.role.toUpperCase();
+
+            document.getElementById("editModal").style.display = "block";
+        };
+    });
+
+    // 編集保存
+    document.getElementById("editForm").onsubmit = async (e) => {
+        e.preventDefault();
+
+        const data = Object.fromEntries(new FormData(e.target));
+
+        await fetch(`/users/${data.id}`, {
+            method: "PUT",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(data)
+        });
+
+        location.reload();
+    };
+});
+</script>
+</head>
+
+<body>
+
+<button id="openCreateModal">＋ 新規ユーザー作成</button>
+
+<form id="filterForm">
+    <input type="text" name="keyword" placeholder="名前検索（漢字・ふりがな）"
+           th:value="${keyword}">
+
+    <select name="role">
+        <option value="">すべて</option>
+
+        <!-- ★ enum 名に合わせて大文字に修正 -->
+        <option value="ADMIN"   th:selected="${role == 'ADMIN'}">本部</option>
+        <option value="MANAGER" th:selected="${role == 'MANAGER'}">店長</option>
+        <option value="TRAINER" th:selected="${role == 'TRAINER'}">トレーナー</option>
+    </select>
+
+    <select name="sort">
+        <option value="created" th:selected="${sort == 'created'}">新着順</option>
+        <option value="kana"    th:selected="${sort == 'kana'}">50音順</option>
+    </select>
+
+    <button type="submit">検索</button>
+    <button type="button" id="clearBtn">クリア</button>
+</form>
+
+<p><span th:text="${count}"></span> 件が見つかりました</p>
+
+<table>
+    <tr>
+        <th>名前</th>
+        <th>ロール</th>
+        <th>有効</th>
+        <th>操作</th>
+    </tr>
+
+    <tr th:each="u : ${users}">
+        <td th:text="${u.name}"></td>
+        <td th:text="${u.role}"></td>
+
+        <td>
+            <button class="toggleActive"
+                    th:attr="data-id=${u.id}"
+                    th:text="${u.active} ? '有効' : '無効'">
+            </button>
+        </td>
+
+        <td>
+            <button class="editBtn"
+                th:attr="data-id=${u.id},
+                         data-name=${u.name},
+                         data-kana=${u.kana},
+                         data-email=${u.email},
+                         data-role=${u.role}">
+                編集
+            </button>
+
+            <button class="deleteBtn" th:attr="data-id=${u.id}">削除</button>
+        </td>
+    </tr>
+</table>
+
+
+<!-- 新規作成モーダル -->
+<div id="createModal" style="display:none;">
+    <div>
+        <h2>新規ユーザー作成</h2>
+        <form id="createForm">
+            <input name="name" placeholder="名前" required>
+            <input name="kana" placeholder="ふりがな" required>
+
+            <input name="email" placeholder="メール" required>
+            <input name="pass" placeholder="パスワード" required>
+
+            <select name="role">
+                <!-- ★ enum に合わせて大文字 -->
+                <option value="ADMIN">admin</option>
+                <option value="MANAGER">manager</option>
+                <option value="TRAINER">trainer</option>
+            </select>
+
+            <button type="submit">保存</button>
+        </form>
+    </div>
+</div>
+
+
+<!-- 編集モーダル -->
+<div id="editModal" style="display:none;">
+    <div>
+        <h2>ユーザー編集</h2>
+        <form id="editForm">
+            <input type="hidden" name="id">
+
+            <input name="name" required>
+            <input name="kana" required>
+
+            <input name="email" required>
+            <input name="pass" placeholder="変更時のみ入力">
+
+            <select name="role">
+                <option value="ADMIN">admin</option>
+                <option value="MANAGER">manager</option>
+                <option value="TRAINER">trainer</option>
+            </select>
+
+            <button type="submit">保存</button>
+        </form>
+    </div>
+</div>
+
+</body>
+</html>
