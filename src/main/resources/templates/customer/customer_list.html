@@ -1,10 +1,241 @@
 <!DOCTYPE html>
-<htmlxmlns:th="http://www.thymeleaf.org">
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
 <head>
 <meta charset="UTF-8">
-<title>Insert title here</title>
+<title>顧客一覧</title>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+    // --- フィルタ送信 ---
+    document.getElementById("filterForm").onsubmit = (e) => {
+        e.preventDefault();
+        const params = new URLSearchParams(new FormData(e.target));
+        // URLの変更
+        location.href = `/customers?${params.toString()}`;
+    };
+
+    document.getElementById("clearBtn").onclick = () => {
+        location.href = "/customers";
+    };
+
+    // --- 新規作成モーダル ---
+    document.getElementById("openCreateModal").onclick = () => {
+        document.getElementById("createForm").reset();
+        document.getElementById("createModal").style.display = "block";
+    };
+
+    document.getElementById("createForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target));
+        
+        // boolean → 正しく送る
+        data.active = true; // 新規作成時は有効
+
+        // height は数値に変換
+        data.height = parseFloat(data.height);
+        
+        await fetch("/customers", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(data)
+        });
+
+        location.reload();
+    };
+
+    // --- 有効/無効 ---
+    document.querySelectorAll(".toggleActive").forEach(btn => {
+        btn.onclick = async () => {
+            await fetch(`/customers/${btn.dataset.id}/active`, {method: "PATCH"});
+            location.reload();
+        };
+    });
+
+    // --- 削除 ---
+    document.querySelectorAll(".deleteBtn").forEach(btn => {
+        btn.onclick = async () => {
+            if (!confirm("削除しますか？")) return;
+            await fetch(`/customers/${btn.dataset.id}`, {method: "DELETE"});
+            location.reload();
+        };
+    });
+
+    // --- 編集モーダル ---
+    document.querySelectorAll(".editBtn").forEach(btn => {
+        btn.onclick = async () => {
+
+            const id = btn.dataset.id;
+            const form = document.getElementById("editForm");
+            
+            // サーバーから顧客情報を取得
+            const response = await fetch(`/customers/${id}`);
+            const customer = await response.json(); // Customer エンティティが返ってくる想定
+
+            form.id.value          = customer.id;
+			document.getElementById("edit-id-display").value = customer.id;
+            form.name.value        = customer.name;
+            form.kana.value        = customer.kana;
+            form.email.value       = customer.email;
+            form.gender.value      = customer.gender;
+            form.birthday.value    = customer.birthday; // LocalDateはそのまま入る想定
+            form.height.value      = customer.height;
+            form.phone.value       = customer.phone;
+            form.address.value     = customer.address;
+            form.medical.value     = customer.medical || '';
+            form.taboo.value       = customer.taboo || '';
+            form.memo.value        = customer.memo || '';
+            
+            // ★ 初回姿勢画像ID (UUID)
+            form.firstPostureGroupId.value = customer.firstPostureGroupId || ''; 
+            
+            // is_active の状態を設定
+            form.active.checked = customer.active;
+
+            document.getElementById("editModal").style.display = "block";
+        };
+    });
+
+    // --- 編集保存 ---
+    document.getElementById("editForm").onsubmit = async (e) => {
+        e.preventDefault();
+
+        const data = Object.fromEntries(new FormData(e.target));
+        
+        // boolean のチェックボックスはチェックがないと送信されないため、手動で設定
+        data.active = e.target.active.checked;
+        data.height = parseFloat(data.height);
+
+        // firstPostureGroupId が空の場合は null にする (UUID型送信のため)
+        if (data.firstPostureGroupId === "") {
+            delete data.firstPostureGroupId;
+        }
+        
+        // ★ 編集時の初回姿勢画像必須チェック（クライアントサイド）
+        if (!data.firstPostureGroupId) {
+             alert("初回姿勢画像IDは編集時に必須です。");
+             return;
+        }
+
+        await fetch(`/customers/${data.id}`, {
+            method: "PUT",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(data)
+        });
+
+        location.reload();
+    };
+});
+</script>
 </head>
+
 <body>
+
+<button id="openCreateModal">＋ 新規顧客作成</button>
+
+<form id="filterForm">
+    <input type="text" name="keyword" placeholder="名前検索（漢字・ふりがな）"
+           th:value="${keyword}">
+
+    <select name="sort">
+        <option value="created" th:selected="${sort == 'created'}">作成日順</option>
+        <option value="kana"    th:selected="${sort == 'kana'}">50音順</option>
+    </select>
+
+    <button type="submit">検索</button>
+    <button type="button" id="clearBtn">クリア</button>
+</form>
+
+<p><span th:text="${count}"></span> 件が見つかりました</p>
+
+<table>
+    <tr>
+        <th>名前</th>
+        <th>年齢</th>
+        <th>有効/無効</th>
+        <th>操作</th>
+    </tr>
+
+    <tr th:each="c : ${customers}">
+        <td th:text="${c.name}"></td>
+        <td th:text="${c.age} + '歳'"></td>
+        
+        <td>
+            <button class="toggleActive"
+                    th:attr="data-id=${c.id}"
+                    th:text="${c.active} ? '有効' : '無効'">
+            </button>
+        </td>
+
+        <td>
+            <button class="editBtn" th:attr="data-id=${c.id}">
+                編集
+            </button>
+
+            <button class="deleteBtn" th:attr="data-id=${c.id}">削除</button>
+        </td>
+    </tr>
+</table>
+
+
+<div id="createModal" style="display:none;">
+    <div>
+        <h2>新規顧客作成</h2>
+        <form id="createForm">
+            <input name="name" placeholder="氏名" required>
+            <input name="kana" placeholder="フリガナ" required>
+            <select name="gender" required>
+                <option value="">性別</option>
+                <option th:each="g : ${genders}" th:value="${g}" th:text="${g}"></option>
+            </select>
+            <input type="date" name="birthday" placeholder="生年月日" required>
+            <input type="number" step="0.1" name="height" placeholder="身長(cm)" required>
+            <input name="email" placeholder="メール" required>
+            <input name="phone" placeholder="電話番号" required>
+            <input name="address" placeholder="住所" required>
+
+            <input name="medical" placeholder="既往歴">
+            <input name="taboo" placeholder="禁忌事項">
+            <textarea name="memo" placeholder="メモ"></textarea>
+            
+            <button type="submit">保存</button>
+        </form>
+    </div>
+</div>
+
+
+<div id="editModal" style="display:none;">
+    <div>
+        <h2>顧客編集</h2>
+        <form id="editForm">
+            <input type="hidden" name="id">
+			<div class="form-group">
+			    <label for="edit-id-display">顧客ID</label>
+			    <input type="text" id="edit-id-display" readonly disabled class="form-control" placeholder="UUID"> 
+			</div>
+
+            <input name="name" required placeholder="氏名">
+            <input name="kana" required placeholder="フリガナ">
+            <select name="gender" required>
+                <option value="男">男</option>
+                <option value="女">女</option>
+            </select>
+            <input type="date" name="birthday" required placeholder="誕生日">
+            <input type="number" step="0.1" name="height" required placeholder="身長（cm）">
+            <input name="email" required placeholder="メールアドレス">
+            <input name="phone" required placeholder="電話番号">
+            <input name="address" required placeholder="住所">
+
+            <input name="medical" placeholder="既往歴">
+            <input name="taboo" placeholder="禁忌事項">
+            <textarea name="memo" placeholder="メモ"></textarea>
+            
+            <input name="firstPostureGroupId" placeholder="初回姿勢画像ID (UUID)" required>
+
+            <button type="submit">保存</button>
+        </form>
+    </div>
+</div>
 
 </body>
 </html>

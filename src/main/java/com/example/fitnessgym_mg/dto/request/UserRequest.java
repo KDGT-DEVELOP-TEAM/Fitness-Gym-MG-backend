@@ -12,23 +12,24 @@ import lombok.Data;
 @Data
 public class UserRequest {
 
-	@Email
-	@NotBlank
+	@Email(message = "有効なメールアドレスを入力してください")
+	@NotBlank(message = "メールアドレスは必須です")
+	@Size(max = 255)
 	private String email;
 
-	@NotBlank
+	@NotBlank(message = "名前は必須です")
 	@Size(min = 2, max = 50)
 	private String name;
 
-	@NotBlank
+	@NotBlank(message = "フリガナは必須です")
 	@Size(min = 2, max = 50)
 	private String kana;
 
-	@NotBlank
-	@Size(min = 8, max = 16)
+	//	@NotBlank(message = "パスワードは必須です")
+	@Size(min = 8, max = 16, message = "パスワードは8文字以上16文字以内で設定してください")
 	private String pass; // 編集時は null の可能性あり
 
-	@NotNull
+	@NotNull(message = "ロール選択は必須です")
 	private UserRole role;
 
 	private boolean active = true;

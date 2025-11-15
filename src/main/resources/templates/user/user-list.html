@@ -63,8 +63,11 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.onclick = () => {
 
             const form = document.getElementById("editForm");
+			
+			const userId = btn.dataset.id;
+			document.getElementById("edit-id-display").value = userId;
 
-            form.id.value    = btn.dataset.id;
+            form.id.value    = userId;
             form.name.value  = btn.dataset.name;
             form.kana.value  = btn.dataset.kana;
             form.email.value = btn.dataset.email;
@@ -169,7 +172,6 @@ document.addEventListener("DOMContentLoaded", () => {
             <input name="pass" placeholder="パスワード" required>
 
             <select name="role">
-                <!-- ★ enum に合わせて大文字 -->
                 <option value="ADMIN">admin</option>
                 <option value="MANAGER">manager</option>
                 <option value="TRAINER">trainer</option>
@@ -187,12 +189,16 @@ document.addEventListener("DOMContentLoaded", () => {
         <h2>ユーザー編集</h2>
         <form id="editForm">
             <input type="hidden" name="id">
+			<div class="form-group">
+			    <label for="edit-id-display">ユーザーID</label>
+			    <input type="text" id="edit-id-display" readonly disabled placeholder="UUID"> 
+			</div>
 
-            <input name="name" required>
-            <input name="kana" required>
+            <input name="name" required placeholder="名前">
+            <input name="kana" required placeholder="ふりがな">
 
-            <input name="email" required>
-            <input name="pass" placeholder="変更時のみ入力">
+            <input name="email" required placeholder="メールアドレス">
+            <input type="password" name="pass" placeholder="パスワード変更時のみ入力">
 
             <select name="role">
                 <option value="ADMIN">admin</option>
