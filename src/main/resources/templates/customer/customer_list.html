@@ -3,7 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <title>顧客一覧</title>
+<style>
+	table {
+	    width: 100%;
+	    border-collapse: collapse;
+	    margin-top: 20px;
+	}
 
+	table th, table td {
+	    border: 1px solid #ccc;
+	    padding: 8px 10px;
+	    text-align: left;
+	}
+
+	table th {
+	    font-weight: bold;
+	}
+</style>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
 
@@ -125,14 +141,52 @@ document.addEventListener("DOMContentLoaded", () => {
 
         location.reload();
     };
+	
+	// 年齢計算関数
+	function calcAge(birthdayStr) {
+	    if (!birthdayStr) return "-";
+
+	    const today = new Date();
+	    const birth = new Date(birthdayStr);
+
+	    let age = today.getFullYear() - birth.getFullYear();
+	    const m = today.getMonth() - birth.getMonth();
+	    const d = today.getDate() - birth.getDate();
+
+	    // 誕生日がまだ来ていなければ -1
+	    if (m < 0 || (m === 0 && d < 0)) {
+	        age--;
+	    }
+
+	    return age;
+	}
+	// 新規作成モーダル：誕生日入力で年齢更新
+	document.querySelector("#createForm input[name='birthday']")
+	    .addEventListener("change", (e) => {
+	        document.getElementById("createAgeDisplay").textContent = calcAge(e.target.value);
+	    });
+	// 編集モーダル：誕生日セット時に年齢更新
+	document.querySelector("#editForm input[name='birthday']")
+	    .addEventListener("change", (e) => {
+	        document.getElementById("editAgeDisplay").textContent = calcAge(e.target.value);
+	    });
+		
+		// モーダルを閉じる
+		document.querySelectorAll(".closeModal").forEach(btn => {
+		    btn.onclick = () => {
+		        btn.closest(".modal").style.display = "none";
+		    };
+		});
+
 });
 </script>
 </head>
 
 <body>
-
+<!-- 新規作成ボタン -->
 <button id="openCreateModal">＋ 新規顧客作成</button>
 
+<!-- 検索フォーム -->
 <form id="filterForm">
     <input type="text" name="keyword" placeholder="名前検索（漢字・ふりがな）"
            th:value="${keyword}">
@@ -148,6 +202,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 <p><span th:text="${count}"></span> 件が見つかりました</p>
 
+<!-- 一覧テーブル -->
 <table>
     <tr>
         <th>名前</th>
@@ -168,18 +223,16 @@ document.addEventListener("DOMContentLoaded", () => {
         </td>
 
         <td>
-            <button class="editBtn" th:attr="data-id=${c.id}">
-                編集
-            </button>
-
-            <button class="deleteBtn" th:attr="data-id=${c.id}">削除</button>
+            <button class="editBtn" th:attr="data-id=${c.id}">編集</button>
+            <button class="deleteBtn" th:if="${!c.active}" th:attr="data-id=${c.id}">削除</button>
         </td>
     </tr>
 </table>
 
-
-<div id="createModal" style="display:none;">
+<!-- 新規作成モーダル -->
+<div id="createModal" class="modal" style="display:none;">
     <div>
+		<button class="closeModal">× 入力情報を保存せず一覧に戻る</button>
         <h2>新規顧客作成</h2>
         <form id="createForm">
             <input name="name" placeholder="氏名" required>
@@ -189,6 +242,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <option th:each="g : ${genders}" th:value="${g}" th:text="${g}"></option>
             </select>
             <input type="date" name="birthday" placeholder="生年月日" required>
+			<div>現在の年齢：<span id="createAgeDisplay">-</span> 歳</div>
             <input type="number" step="0.1" name="height" placeholder="身長(cm)" required>
             <input name="email" placeholder="メール" required>
             <input name="phone" placeholder="電話番号" required>
@@ -203,9 +257,10 @@ document.addEventListener("DOMContentLoaded", () => {
     </div>
 </div>
 
-
-<div id="editModal" style="display:none;">
+<!-- 編集モーダル -->
+<div id="editModal" class="modal" style="display:none;">
     <div>
+		<button class="closeModal">× 入力情報を保存せず一覧に戻る</button>
         <h2>顧客編集</h2>
         <form id="editForm">
             <input type="hidden" name="id">
@@ -221,6 +276,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <option value="女">女</option>
             </select>
             <input type="date" name="birthday" required placeholder="誕生日">
+			<div>現在の年齢：<span id="createAgeDisplay">-</span> 歳</div>
             <input type="number" step="0.1" name="height" required placeholder="身長（cm）">
             <input name="email" required placeholder="メールアドレス">
             <input name="phone" required placeholder="電話番号">

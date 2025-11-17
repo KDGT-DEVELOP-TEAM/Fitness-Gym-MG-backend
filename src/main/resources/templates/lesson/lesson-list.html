@@ -1,9 +1,183 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="ja" th:replace="layout/base :: content">
-  <body>
-    <section>
-      <h1>Lesson List Placeholder</h1>
-    </section>
-  </body>
-</html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>レッスン履歴</title>
 
+<style>
+	table {
+	    width: 100%;
+	    border-collapse: collapse;
+	    margin-top: 20px;
+	}
+
+	table th, table td {
+	    border: 1px solid #ccc;
+	    padding: 8px 10px;
+	    text-align: left;
+	}
+
+	table th {
+	    font-weight: bold;
+	}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0/dist/chartjs-plugin-datalabels.min.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+    /* 共通関数：右端へスクロール */
+    function scrollToRight(selector) {
+        const elem = document.querySelector(selector).parentElement;
+        elem.scrollLeft = elem.scrollWidth;
+    }
+
+    /* --- フィルタ送信 (共通) --- */
+    const filterForm = document.getElementById("filterForm");
+    filterForm.onsubmit = (e) => {
+        e.preventDefault();
+        const params = new URLSearchParams(new FormData(e.target));
+
+        // 現在選択中のグラフタイプも付与
+        params.set('chartType', document.querySelector('input[name="chartType"]:checked').value);
+
+        location.href = `/lessons?${params.toString()}`;
+    };
+
+
+    /* --- グラフ切り替え（週 ⇄ 月） --- */
+    document.querySelectorAll('input[name="chartType"]').forEach(radio => {
+        radio.onchange = () => {
+            // フォーム送信（ → ページがリロード → Chart.js を描画 ）
+            filterForm.dispatchEvent(new Event('submit', { cancelable: true }));
+        };
+    });
+
+
+    /* --- Chart.js 描画処理 --- */
+    const chartDataJson = document.getElementById("chartDataContainer").getAttribute('data-chart-data');
+    const chartData = JSON.parse(chartDataJson);
+
+    const labels = chartData.series.map(item => item.label);
+    const counts = chartData.series.map(item => item.count);
+
+    const maxCount = chartData.maxCount > 0 ? chartData.maxCount : 10;
+
+    const ctx = document.getElementById('lessonChart').getContext('2d');
+
+    Chart.register(ChartDataLabels);
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: counts,
+                backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                borderRadius: 2,
+            }]
+        },
+        options: {
+            maintainAspectRatio: false,
+            responsive: true,
+            scales: {
+                x: {
+                    grid: { display: false }
+                },
+                y: {
+                    max: maxCount,
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: maxCount > 10 ? Math.ceil(maxCount / 5) : 1,
+                        callback: () => '' // Y軸メモリ非表示
+                    },
+                    grid: { display: false }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: context => context.raw + '回'
+                    }
+                },
+                datalabels: {
+                    anchor: 'end',
+                    align: 'top',
+                    color: '#000',
+                    font: { weight: 'bold', size: 14 },
+                    formatter: value => value
+                }
+            }
+        }
+    });
+
+    /* --- 初期表示 → 右端へ --- */
+    scrollToRight('#lessonChart');
+
+});
+</script>
+
+</head>
+
+<body>
+
+    <h2>レッスン履歴（統計情報）</h2>
+
+    <form id="filterForm">
+        <select name="storeId">
+            <option value="">全ての店舗</option>
+            <option th:each="s : ${stores}" th:value="${s.id}" th:text="${s.name}" th:selected="${storeId == s.id}"></option>
+        </select>
+        
+        <button type="submit">検索</button>
+    </form>
+	
+	<div id="chartDataContainer" 
+	     th:attr="data-chart-data=${#jsonUtils.toJson(chartData)}" 
+	     style="display: none;">
+	</div>
+
+	<div class="chart-section">
+	    <h3>レッスン回数グラフ</h3>
+	        
+	    <label><input type="radio" name="chartType" value="week" th:checked="${chartType == 'week'}"> 週別</label>
+	    <label><input type="radio" name="chartType" value="month" th:checked="${chartType == 'month'}"> 月別</label>
+
+	    <div style="max-height: 60vh; overflow-x: auto;">
+	        <canvas id="lessonChart"></canvas>
+	    </div>
+	        
+	    <p>※右端が最新、左にスクロールで過去に遡ります</p>
+	</div>
+
+    <hr>
+    
+    <h3>レッスン履歴一覧 (<span th:text="${count}"></span> 件)</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>実施日時</th>
+                <th>実施店舗</th>
+                <th>担当トレーナー</th>
+                <th>顧客</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="lesson : ${lessons}">
+				<td>
+				    <span th:text="${#temporals.format(lesson.startDate, 'yyyy/MM/dd')}"></span><br>
+				    <span th:text="${#temporals.format(lesson.startDate, 'HH:mm')} + ' - ' + ${#temporals.format(lesson.endDate, 'HH:mm')}"></span>
+				</td>
+                <td th:text="${lesson.storeName}"></td>
+                <td th:text="${lesson.trainerName}"></td>
+                <td th:text="${lesson.customerName}"></td>
+            </tr>
+        </tbody>
+    </table>
+
+</body>
+</html>

@@ -32,9 +32,7 @@ public class UserController {
 
 	private final AccountService service;
 
-	/**
-	 * --- ユーザー一覧（検索・絞り込み・並び替え対応） ---
-	 */
+	// --- ユーザー一覧（検索・絞り込み・並び替え対応） ---
 	@GetMapping
 	public String list(
 			@RequestParam(required = false) String keyword,
@@ -53,9 +51,7 @@ public class UserController {
 		return "users/list"; // ← 統一
 	}
 
-	/**
-	 * --- 作成 ---
-	 */
+	// --- 作成 ---
 	@PostMapping
 	@ResponseBody
 	public ResponseEntity<Void> create(
@@ -64,9 +60,7 @@ public class UserController {
 		return ResponseEntity.ok().build();
 	}
 
-	/**
-	 * --- 更新 ---
-	 */
+	//--- 更新 ---
 	@PutMapping("/{id}")
 	@ResponseBody
 	public ResponseEntity<Void> update(
@@ -76,9 +70,7 @@ public class UserController {
 		return ResponseEntity.ok().build();
 	}
 
-	/**
-	 * --- 有効/無効切替 ---
-	 */
+	// --- 有効/無効切替 ---
 	@PatchMapping("/{id}/active")
 	@ResponseBody
 	public ResponseEntity<Void> toggleActive(@PathVariable UUID id) {
@@ -86,9 +78,7 @@ public class UserController {
 		return ResponseEntity.ok().build();
 	}
 
-	/**
-	 * --- 削除 ---
-	 */
+	// --- 削除 ---
 	@DeleteMapping("/{id}")
 	@ResponseBody
 	public ResponseEntity<Void> delete(@PathVariable UUID id) {

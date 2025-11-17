@@ -4,10 +4,26 @@
 <meta charset="UTF-8">
 <title>ユーザー一覧</title>
 
+<style>
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    table th, table td {
+        border: 1px solid #ccc;
+        padding: 8px 10px;
+        text-align: left;
+    }
+    table th {
+        font-weight: bold;
+    }
+</style>
+
 <script>
 document.addEventListener("DOMContentLoaded", () => {
 
-    // フィルタ送信
+    // 検索フォーム
     document.getElementById("filterForm").onsubmit = (e) => {
         e.preventDefault();
         const params = new URLSearchParams(new FormData(e.target));
@@ -18,6 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
         location.href = "/users";
     };
 
+
     // 新規作成モーダル
     document.getElementById("openCreateModal").onclick = () => {
         document.getElementById("createForm").reset();
@@ -26,10 +43,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("createForm").onsubmit = async (e) => {
         e.preventDefault();
-
         const data = Object.fromEntries(new FormData(e.target));
 
-        // boolean → 正しく送る
         data.active = true;
 
         await fetch("/users", {
@@ -41,39 +56,46 @@ document.addEventListener("DOMContentLoaded", () => {
         location.reload();
     };
 
+
     // 有効/無効
     document.querySelectorAll(".toggleActive").forEach(btn => {
         btn.onclick = async () => {
-            await fetch(`/users/${btn.dataset.id}/active`, {method: "PATCH"});
+            await fetch(`/users/${btn.dataset.id}/active`, {method:"PATCH"});
             location.reload();
         };
     });
+
 
     // 削除
     document.querySelectorAll(".deleteBtn").forEach(btn => {
         btn.onclick = async () => {
             if (!confirm("削除しますか？")) return;
-            await fetch(`/users/${btn.dataset.id}`, {method: "DELETE"});
+            await fetch(`/users/${btn.dataset.id}`, {method:"DELETE"});
             location.reload();
         };
     });
 
+
     // 編集モーダル
     document.querySelectorAll(".editBtn").forEach(btn => {
-        btn.onclick = () => {
+        btn.onclick = async () => {
 
+            const id = btn.dataset.id;
             const form = document.getElementById("editForm");
-			
-			const userId = btn.dataset.id;
-			document.getElementById("edit-id-display").value = userId;
 
-            form.id.value    = userId;
-            form.name.value  = btn.dataset.name;
-            form.kana.value  = btn.dataset.kana;
-            form.email.value = btn.dataset.email;
+            // サーバーからユーザー取得
+            const res = await fetch(`/users/${id}`);
+            const user = await res.json();
 
-            // ★ enum と一致させるため value は大文字
-            form.role.value  = btn.dataset.role.toUpperCase();
+            form.id.value       = user.id;
+            document.getElementById("edit-id-display").value = user.id;
+
+            form.name.value     = user.name;
+            form.kana.value     = user.kana;
+            form.email.value    = user.email;
+            form.role.value     = user.role;
+
+            form.active.checked = user.active;
 
             document.getElementById("editModal").style.display = "block";
         };
@@ -82,40 +104,47 @@ document.addEventListener("DOMContentLoaded", () => {
     // 編集保存
     document.getElementById("editForm").onsubmit = async (e) => {
         e.preventDefault();
-
         const data = Object.fromEntries(new FormData(e.target));
 
+        data.active = e.target.active.checked;
+
         await fetch(`/users/${data.id}`, {
-            method: "PUT",
+            method:"PUT",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify(data)
         });
 
         location.reload();
     };
+	
+	// モーダルを閉じる
+	document.querySelectorAll(".closeModal").forEach(btn => {
+	    btn.onclick = () => {
+	        btn.closest(".modal").style.display = "none";
+	    };
+	});
+
 });
 </script>
 </head>
 
 <body>
-
+<!-- 新規作成ボタン -->
 <button id="openCreateModal">＋ 新規ユーザー作成</button>
 
+<!-- 検索フォーム -->
 <form id="filterForm">
-    <input type="text" name="keyword" placeholder="名前検索（漢字・ふりがな）"
-           th:value="${keyword}">
+    <input type="text" name="keyword" placeholder="名前検索（漢字・ふりがな）" th:value="${keyword}">
 
     <select name="role">
         <option value="">すべて</option>
-
-        <!-- ★ enum 名に合わせて大文字に修正 -->
-        <option value="ADMIN"   th:selected="${role == 'ADMIN'}">本部</option>
-        <option value="MANAGER" th:selected="${role == 'MANAGER'}">店長</option>
-        <option value="TRAINER" th:selected="${role == 'TRAINER'}">トレーナー</option>
+        <option value="ADMIN"   th:selected="${role == 'ADMIN'}">admin</option>
+        <option value="MANAGER" th:selected="${role == 'MANAGER'}">manager</option>
+        <option value="TRAINER" th:selected="${role == 'TRAINER'}">trainer</option>
     </select>
 
     <select name="sort">
-        <option value="created" th:selected="${sort == 'created'}">新着順</option>
+        <option value="created" th:selected="${sort == 'created'}">作成日順</option>
         <option value="kana"    th:selected="${sort == 'kana'}">50音順</option>
     </select>
 
@@ -125,6 +154,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 <p><span th:text="${count}"></span> 件が見つかりました</p>
 
+<!-- 一覧テーブル -->
 <table>
     <tr>
         <th>名前</th>
@@ -145,37 +175,31 @@ document.addEventListener("DOMContentLoaded", () => {
         </td>
 
         <td>
-            <button class="editBtn"
-                th:attr="data-id=${u.id},
-                         data-name=${u.name},
-                         data-kana=${u.kana},
-                         data-email=${u.email},
-                         data-role=${u.role}">
-                編集
-            </button>
-
-            <button class="deleteBtn" th:attr="data-id=${u.id}">削除</button>
+            <button class="editBtn" th:attr="data-id=${u.id}">編集</button>
+			<button class="deleteBtn" th:if="${!u.active}" th:attr="data-id=${u.id}">削除</button>
         </td>
     </tr>
 </table>
 
 
 <!-- 新規作成モーダル -->
-<div id="createModal" style="display:none;">
+<div id="createModal" class="modal" style="display:none;">
     <div>
+		<button class="closeModal">× 入力情報を保存せず一覧に戻る</button>
         <h2>新規ユーザー作成</h2>
         <form id="createForm">
-            <input name="name" placeholder="名前" required>
-            <input name="kana" placeholder="ふりがな" required>
-
+            <input name="name"  placeholder="名前" required>
+            <input name="kana"  placeholder="ふりがな" required>
             <input name="email" placeholder="メール" required>
-            <input name="pass" placeholder="パスワード" required>
 
-            <select name="role">
+            <select name="role" required>
+                <option value="">ロール選択</option>
                 <option value="ADMIN">admin</option>
                 <option value="MANAGER">manager</option>
                 <option value="TRAINER">trainer</option>
             </select>
+
+            <input name="pass" placeholder="パスワード" required>
 
             <button type="submit">保存</button>
         </form>
@@ -184,27 +208,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 <!-- 編集モーダル -->
-<div id="editModal" style="display:none;">
+<div id="editModal" class="modal" style="display:none;">
     <div>
+		<button class="closeModal">× 入力情報を保存せず一覧に戻る</button>
         <h2>ユーザー編集</h2>
         <form id="editForm">
             <input type="hidden" name="id">
-			<div class="form-group">
-			    <label for="edit-id-display">ユーザーID</label>
-			    <input type="text" id="edit-id-display" readonly disabled placeholder="UUID"> 
-			</div>
+
+            <label>ユーザーID</label>
+            <input id="edit-id-display" disabled>
 
             <input name="name" required placeholder="名前">
             <input name="kana" required placeholder="ふりがな">
+            <input name="email" required placeholder="メール">
 
-            <input name="email" required placeholder="メールアドレス">
-            <input type="password" name="pass" placeholder="パスワード変更時のみ入力">
-
-            <select name="role">
+            <select name="role" required>
                 <option value="ADMIN">admin</option>
                 <option value="MANAGER">manager</option>
                 <option value="TRAINER">trainer</option>
             </select>
+
+            <input type="password" name="pass" placeholder="パスワード（変更時のみ）">
 
             <button type="submit">保存</button>
         </form>
