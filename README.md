@@ -140,7 +140,7 @@ project-root/
 | email | varchar(255) |  | ○ | ○ | ○ | メールアドレス |
 | name | varchar(50) |  | ○ |  |  | 氏名 |
 | pass | varchar(60) |  | ○ |  |  | ハッシュ化パスワード（bcrypt、8〜16文字入力想定） |
-| role | enum('admin','manager','trainer') |  | ○ |  |  | 権限区分 |
+| role | user_role |  | ○ |  |  | 権限区分 |
 | is_active | boolean |  | ○ |  |  | 有効／無効 |
 
 ### Customers（顧客）
@@ -149,7 +149,7 @@ project-root/
 | id | uuid | ○ | ○ | ○ | ○ | 主キー |
 | kana | varchar(100) |  | ○ |  |  | フリガナ |
 | name | varchar(100) |  | ○ |  |  | 氏名 |
-| gender | enum('male','female') |  | ○ |  |  | 性別 |
+| gender | gender |  | ○ |  |  | 性別 |
 | birthday | date |  | ○ |  |  | 生年月日 |
 | height | numeric |  | ○ |  |  | 身長 |
 | email | varchar(255) |  | ○ | ○ |  | メールアドレス |
@@ -236,7 +236,12 @@ project-root/
 | consent_publication | boolean |  | ○ |  |  | 公開同意フラグ |
 | taken_at | timestamptz |  | ○ |  |  | 撮影日時 |
 | created_at | timestamptz |  | ○ |  |  | 追加日時 |
-| position | enum('front','right','back','left') |  | ○ |  |  | 撮影方向 |
+| position | posture_image_position |  | ○ |  |  | 撮影方向 |
+
+#### 列挙型の型定義（DB実体）
+- user_role: ['admin','manager','trainer']
+- gender: ['male','female']
+- posture_image_position: ['front','right','back','left']
 
 ### ER 図（Mermaid）
 ```mermaid
