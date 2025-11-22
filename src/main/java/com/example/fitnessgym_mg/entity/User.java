@@ -1,6 +1,7 @@
 package com.example.fitnessgym_mg.entity;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -10,7 +11,11 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -52,4 +57,11 @@ public class User {
 	public enum UserRole {
 		admin, manager, trainer;
 	}
+
+	@ManyToMany
+	@JoinTable(name = "user_stores", // 中間テーブル名
+			joinColumns = @JoinColumn(name = "user_id", nullable = false), // User側のFK
+			inverseJoinColumns = @JoinColumn(name = "store_id", nullable = false), // Store側のFK
+			uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "store_id" })) //複合ユニーク制約
+	private Set<Store> stores; // ユーザーが所属する店舗リスト
 }

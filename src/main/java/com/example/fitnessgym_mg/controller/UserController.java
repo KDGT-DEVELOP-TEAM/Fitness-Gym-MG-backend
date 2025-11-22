@@ -1,10 +1,12 @@
 package com.example.fitnessgym_mg.controller;
 
-import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -13,9 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
@@ -27,62 +27,101 @@ import lombok.RequiredArgsConstructor;
 
 @Controller
 @RequiredArgsConstructor
-@RequestMapping("/users")
 public class UserController {
 
 	private final AccountService service;
 
-	// --- ユーザー一覧（検索・絞り込み・並び替え対応） ---
-	@GetMapping
+	// --- ユーザー一覧（本部管理者 /admin/users, 店長 /manager/{storeId}/users）---
+	@GetMapping({ "/admin/users", "/manager/{storeId}/users" })
 	public String list(
+			@PathVariable(required = false) UUID storeId, // 店長アクセス時のみ取得
 			@RequestParam(required = false) String keyword,
 			@RequestParam(required = false) String role,
 			@RequestParam(defaultValue = "created") String sort,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size,
 			Model model) {
 
-		List<UserResponse> users = service.searchUsers(keyword, role, sort);
+		Pageable pageable = PageRequest.of(page, size);
 
-		model.addAttribute("users", users);
-		model.addAttribute("count", users.size());
+		Page<UserResponse> userPage = service.searchUsers(keyword, role, sort, storeId, pageable);
+
+		model.addAttribute("userPage", userPage);
+		model.addAttribute("currentPage", page);
 		model.addAttribute("keyword", keyword);
 		model.addAttribute("role", role);
 		model.addAttribute("sort", sort);
+		model.addAttribute("storeId", storeId); // Viewに渡す
 
-		return "users/list"; // ← 統一
+		return "users/list";
 	}
 
-	// --- 作成 ---
-	@PostMapping
+	// --- 作成 (API) ---
+	@PostMapping({ "/admin/users/create", "/manager/{storeId}/users/create" })
 	@ResponseBody
 	public ResponseEntity<Void> create(
-			@Valid @RequestBody UserRequest req) {
-		service.create(req);
+			@PathVariable(required = false) UUID pathStoreId,
+			@Valid @RequestBody UserRequest req,
+			@RequestParam(required = false) UUID storeId) { // 仮にクエリパラメータで受け取る場合
+
+		service.create(req, storeId);
 		return ResponseEntity.ok().build();
 	}
 
-	//--- 更新 ---
-	@PutMapping("/{id}")
+	// --- 詳細表示 (API) ---
+	@GetMapping({ "/admin/users/{id}/detail", "/manager/{storeId}/users/{id}/detail" })
+	@ResponseBody
+	public UserResponse getUser(
+			@PathVariable(required = false) UUID storeId,
+			@PathVariable UUID id) {
+
+		return service.findById(id, storeId);
+	}
+
+	//--- 更新 (API) ---
+	@PatchMapping({ "/admin/users/{id}/edit", "/manager/{storeId}/users/{id}/edit" })
 	@ResponseBody
 	public ResponseEntity<Void> update(
+			@PathVariable(required = false) UUID storeId,
 			@PathVariable UUID id,
 			@Valid @RequestBody UserRequest req) {
-		service.update(id, req);
+
+		service.update(id, req, storeId);
 		return ResponseEntity.ok().build();
 	}
 
-	// --- 有効/無効切替 ---
-	@PatchMapping("/{id}/active")
+	// --- ユーザーを無効化 (Disable) ---
+	@PatchMapping({ "/admin/users/{id}/disable", "/manager/{storeId}/users/{id}/disable" })
 	@ResponseBody
-	public ResponseEntity<Void> toggleActive(@PathVariable UUID id) {
-		service.toggleActive(id);
+	public ResponseEntity<Void> disableUser(
+			@PathVariable(required = false) UUID storeId,
+			@PathVariable UUID id) {
+
+		// サービス層の無効化メソッドを呼び出す
+		service.disableActive(id, storeId);
 		return ResponseEntity.ok().build();
 	}
 
-	// --- 削除 ---
-	@DeleteMapping("/{id}")
+	// --- ユーザーを有効化 (Enable) ---
+	@PatchMapping({ "/admin/users/{id}/enable", "/manager/{storeId}/users/{id}/enable" })
 	@ResponseBody
-	public ResponseEntity<Void> delete(@PathVariable UUID id) {
-		service.delete(id);
+	public ResponseEntity<Void> enableUser(
+			@PathVariable(required = false) UUID storeId,
+			@PathVariable UUID id) {
+
+		// サービス層の有効化メソッドを呼び出す
+		service.enableActive(id, storeId);
+		return ResponseEntity.ok().build();
+	}
+
+	// --- 削除 (API) ---
+	@DeleteMapping({ "/admin/users/{id}/delete", "/manager/{storeId}/users/{id}/delete" })
+	@ResponseBody
+	public ResponseEntity<Void> delete(
+			@PathVariable(required = false) UUID storeId,
+			@PathVariable UUID id) {
+
+		service.delete(id, storeId);
 		return ResponseEntity.ok().build();
 	}
 }

@@ -1,239 +1,351 @@
 <!DOCTYPE html>
 <html lang="ja" xmlns:th="http://www.thymeleaf.org">
+
 <head>
-<meta charset="UTF-8">
-<title>ユーザー一覧</title>
+	<meta charset="UTF-8">
+	<title>ユーザー一覧</title>
 
-<style>
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-    }
-    table th, table td {
-        border: 1px solid #ccc;
-        padding: 8px 10px;
-        text-align: left;
-    }
-    table th {
-        font-weight: bold;
-    }
-</style>
+	<style>
+		table {
+			width: 100%;
+			border-collapse: collapse;
+			margin-top: 20px;
+		}
 
-<script>
-document.addEventListener("DOMContentLoaded", () => {
+		table th,
+		table td {
+			border: 1px solid #ccc;
+			padding: 8px 10px;
+			text-align: left;
+		}
 
-    // 検索フォーム
-    document.getElementById("filterForm").onsubmit = (e) => {
-        e.preventDefault();
-        const params = new URLSearchParams(new FormData(e.target));
-        location.href = `/users?${params.toString()}`;
-    };
+		table th {
+			font-weight: bold;
+		}
 
-    document.getElementById("clearBtn").onclick = () => {
-        location.href = "/users";
-    };
+		#modalDeleteBtn {
+			background-color: #dc3545;
+			color: white;
+			border: none;
+			padding: 10px 15px;
+			cursor: pointer;
+			margin-top: 15px;
+		}
+
+		.required-label {
+			display: inline-block;
+			padding: 2px 6px;
+			margin-left: 5px;
+			font-size: 0.75em;
+			font-weight: bold;
+			color: white;
+			/* 白字 */
+			background-color: #dc3545;
+			/* 赤い背景色 */
+			border-radius: 3px;
+			vertical-align: middle;
+		}
+	</style>
+
+	<script th:inline="javascript">
+		/* <![CDATA[ */
+		// ★ 1. Controllerから現在のベースパスを取得する ★
+		const storeId = /*[[${storeId}]]*/ null;
+		const BASE_PATH = storeId
+			? `/manager/${storeId}/users`
+			: '/admin/users';
+		const API_BASE_PATH = BASE_PATH;
+		/* ]]> */
+
+		document.addEventListener("DOMContentLoaded", () => {
+
+			// モーダル内の削除ボタン要素を取得
+			const modalDeleteBtn = document.getElementById("modalDeleteBtn");
+
+			// --- 削除 (モーダル内のボタンにイベントを設定) ---
+			modalDeleteBtn.onclick = async () => {
+				const id = modalDeleteBtn.dataset.id;
+				if (!confirm("ユーザーを完全に削除しますか？ (有効ユーザーは削除できません)")) return;
+
+				// レスポンスを受け取り、成功/失敗をチェックする
+				const response = await fetch(`${API_BASE_PATH}/${id}/delete`, {method: "DELETE"});
+
+				if (response.ok) {
+					// 成功した場合 (HTTP 2xx)
+					location.reload();
+				} else {
+					// 失敗した場合 (HTTP 4xx/5xx - 関連データがある場合など)
+
+					// サーバーから返されたエラーメッセージを取得
+					let errorText = "関連データが存在するか、サーバーエラーが発生しました。";
+					try {
+						// Spring Bootのデフォルト設定では、IllegalStateExceptionのメッセージがレスポンスボディに含まれる
+						errorText = await response.text();
+					} catch (e) {
+						// レスポンスボディが空の場合など
+					}
+
+					// ユーザーにアラートで具体的な理由を通知
+					alert(`削除に失敗しました: ${errorText}`);
+				}
+			};
 
 
-    // 新規作成モーダル
-    document.getElementById("openCreateModal").onclick = () => {
-        document.getElementById("createForm").reset();
-        document.getElementById("createModal").style.display = "block";
-    };
+			// 検索フォーム
+			document.getElementById("filterForm").onsubmit = (e) => {
+				e.preventDefault();
+				const params = new URLSearchParams(new FormData(e.target));
+				location.href = `${BASE_PATH}?${params.toString()}`;
+			};
 
-    document.getElementById("createForm").onsubmit = async (e) => {
-        e.preventDefault();
-        const data = Object.fromEntries(new FormData(e.target));
-
-        data.active = true;
-
-        await fetch("/users", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify(data)
-        });
-
-        location.reload();
-    };
+			document.getElementById("clearBtn").onclick = () => {
+				location.href = BASE_PATH;
+			};
 
 
-    // 有効/無効
-    document.querySelectorAll(".toggleActive").forEach(btn => {
-        btn.onclick = async () => {
-            await fetch(`/users/${btn.dataset.id}/active`, {method:"PATCH"});
-            location.reload();
-        };
-    });
+			// 新規作成モーダル
+			document.getElementById("openCreateModal").onclick = () => {
+				document.getElementById("createForm").reset();
+				document.getElementById("createError").textContent = "";
+				document.getElementById("createModal").style.display = "block";
+			};
+
+			document.getElementById("createForm").onsubmit = async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target));
+				const errorDiv = document.getElementById("createError");
+				errorDiv.textContent = "";
+
+				data.active = true;
+
+				await fetch(`${API_BASE_PATH}/create`, {
+					method: "POST",
+					headers: {"Content-Type": "application/json"},
+					body: JSON.stringify(data)
+				});
+
+				if (response.ok) {
+					location.reload();
+				} else {
+					const errorText = await response.text();
+					errorDiv.textContent = `バリデーションエラー: ${errorText}`;
+				}
+			};
 
 
-    // 削除
-    document.querySelectorAll(".deleteBtn").forEach(btn => {
-        btn.onclick = async () => {
-            if (!confirm("削除しますか？")) return;
-            await fetch(`/users/${btn.dataset.id}`, {method:"DELETE"});
-            location.reload();
-        };
-    });
+			// 有効/無効
+			document.querySelectorAll(".toggleActive").forEach(btn => {
+				btn.onclick = async () => {
+					const id = btn.dataset.id;
+					const currentState = btn.textContent.trim(); // ボタンの現在のテキストを取得
+
+					let endpoint;
+
+					// 現在 '有効' なら、次は無効化(disable)を行う
+					if (currentState === '有効') {
+						endpoint = '/disable';
+					} else {
+						// 現在 '無効' なら、次は有効化(enable)を行う
+						endpoint = '/enable';
+					}
+
+					await fetch(`${API_BASE_PATH}/${id}${endpoint}`, {method: "PATCH"});
+					location.reload();
+				};
+			});
 
 
-    // 編集モーダル
-    document.querySelectorAll(".editBtn").forEach(btn => {
-        btn.onclick = async () => {
+			// 編集モーダル
+			document.querySelectorAll(".editBtn").forEach(btn => {
+				btn.onclick = async () => {
 
-            const id = btn.dataset.id;
-            const form = document.getElementById("editForm");
+					const id = btn.dataset.id;
+					const form = document.getElementById("editForm");
 
-            // サーバーからユーザー取得
-            const res = await fetch(`/users/${id}`);
-            const user = await res.json();
+					// サーバーからユーザー取得
+					const res = await fetch(`${API_BASE_PATH}/${id}/detail`);
+					const user = await res.json();
 
-            form.id.value       = user.id;
-            document.getElementById("edit-id-display").value = user.id;
+					document.getElementById("editError").textContent = "";
 
-            form.name.value     = user.name;
-            form.kana.value     = user.kana;
-            form.email.value    = user.email;
-            form.role.value     = user.role;
+					form.id.value = user.id;
+					document.getElementById("edit-id-display").value = user.id;
 
-            form.active.checked = user.active;
+					form.name.value = user.name;
+					form.kana.value = user.kana;
+					form.email.value = user.email;
+					form.role.value = user.role;
 
-            document.getElementById("editModal").style.display = "block";
-        };
-    });
+					form.active.checked = user.active;
 
-    // 編集保存
-    document.getElementById("editForm").onsubmit = async (e) => {
-        e.preventDefault();
-        const data = Object.fromEntries(new FormData(e.target));
+					// 【★削除ボタンの状態制御★】
+					if (user.active) {
+						// 有効な場合は非表示
+						modalDeleteBtn.style.display = 'none';
+						modalDeleteBtn.dataset.id = '';
+					} else {
+						// 無効な場合は表示し、IDを設定
+						modalDeleteBtn.style.display = 'block';
+						modalDeleteBtn.dataset.id = id;
+					}
 
-        data.active = e.target.active.checked;
+					document.getElementById("editModal").style.display = "block";
+				};
+			});
 
-        await fetch(`/users/${data.id}`, {
-            method:"PUT",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify(data)
-        });
+			// 編集保存
+			document.getElementById("editForm").onsubmit = async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target));
+				const errorDiv = document.getElementById("editError");
+				errorDiv.textContent = "";
 
-        location.reload();
-    };
-	
-	// モーダルを閉じる
-	document.querySelectorAll(".closeModal").forEach(btn => {
-	    btn.onclick = () => {
-	        btn.closest(".modal").style.display = "none";
-	    };
-	});
+				data.active = e.target.active.checked;
 
-});
-</script>
+				await fetch(`${API_BASE_PATH}/${data.id}/edit`, {
+					method: "PATCH",
+					headers: {"Content-Type": "application/json"},
+					body: JSON.stringify(data)
+				});
+
+				if (response.ok) {
+					location.reload();
+				} else {
+					const errorText = await response.text();
+					errorDiv.textContent = `バリデーションエラー: ${errorText}`;
+				}
+			};
+
+			// モーダルを閉じる
+			document.querySelectorAll(".closeModal").forEach(btn => {
+				btn.onclick = () => {
+					btn.closest(".modal").style.display = "none";
+				};
+			});
+
+		});
+	</script>
 </head>
 
 <body>
-<!-- 新規作成ボタン -->
-<button id="openCreateModal">＋ 新規ユーザー作成</button>
+	<button id="openCreateModal">＋ 新規ユーザー作成</button>
 
-<!-- 検索フォーム -->
-<form id="filterForm">
-    <input type="text" name="keyword" placeholder="名前検索（漢字・ふりがな）" th:value="${keyword}">
+	<form id="filterForm">
+		<input type="text" name="keyword" placeholder="名前検索（漢字・ふりがな）" th:value="${keyword}">
 
-    <select name="role">
-        <option value="">すべて</option>
-        <option value="ADMIN"   th:selected="${role == 'ADMIN'}">admin</option>
-        <option value="MANAGER" th:selected="${role == 'MANAGER'}">manager</option>
-        <option value="TRAINER" th:selected="${role == 'TRAINER'}">trainer</option>
-    </select>
+		<select name="role">
+			<option value="">すべて</option>
+			<option value="ADMIN" th:selected="${role == 'ADMIN'}">admin</option>
+			<option value="MANAGER" th:selected="${role == 'MANAGER'}">manager</option>
+			<option value="TRAINER" th:selected="${role == 'TRAINER'}">trainer</option>
+		</select>
 
-    <select name="sort">
-        <option value="created" th:selected="${sort == 'created'}">作成日順</option>
-        <option value="kana"    th:selected="${sort == 'kana'}">50音順</option>
-    </select>
+		<select name="sort">
+			<option value="created" th:selected="${sort == 'created'}">登録日順</option>
+		</select>
 
-    <button type="submit">検索</button>
-    <button type="button" id="clearBtn">クリア</button>
-</form>
+		<button type="submit">検索</button>
+		<button type="button" id="clearBtn">クリア</button>
+	</form>
 
-<p><span th:text="${count}"></span> 件が見つかりました</p>
+	<p><span th:text="${count}"></span> 件が見つかりました</p>
 
-<!-- 一覧テーブル -->
-<table>
-    <tr>
-        <th>名前</th>
-        <th>ロール</th>
-        <th>有効</th>
-        <th>操作</th>
-    </tr>
+	<div th:if="${userPage.content.isEmpty()}">該当するユーザーは見つかりませんでした</div>
 
-    <tr th:each="u : ${users}">
-        <td th:text="${u.name}"></td>
-        <td th:text="${u.role}"></td>
+	<table>
+		<tr>
+			<th>名前</th>
+			<th>ロール</th>
+			<th>有効/無効</th>
+			<th>操作</th>
+		</tr>
 
-        <td>
-            <button class="toggleActive"
-                    th:attr="data-id=${u.id}"
-                    th:text="${u.active} ? '有効' : '無効'">
-            </button>
-        </td>
+		<tr th:each="u : ${userPage.content}">
+			<td th:text="${u.name}"></td>
+			<td th:text="${u.role}"></td>
 
-        <td>
-            <button class="editBtn" th:attr="data-id=${u.id}">編集</button>
-			<button class="deleteBtn" th:if="${!u.active}" th:attr="data-id=${u.id}">削除</button>
-        </td>
-    </tr>
-</table>
+			<td>
+				<button class="toggleActive" th:attr="data-id=${u.id}" th:text="${u.active} ? '有効' : '無効'">
+				</button>
+			</td>
 
+			<td>
+				<button class="editBtn" th:attr="data-id=${u.id}">詳細/編集</button>
+			</td>
+		</tr>
+	</table>
 
-<!-- 新規作成モーダル -->
-<div id="createModal" class="modal" style="display:none;">
-    <div>
-		<button class="closeModal">× 入力情報を保存せず一覧に戻る</button>
-        <h2>新規ユーザー作成</h2>
-        <form id="createForm">
-            <input name="name"  placeholder="名前" required>
-            <input name="kana"  placeholder="ふりがな" required>
-            <input name="email" placeholder="メール" required>
+	<div class="pagination">
+		<a th:if="${userPage.hasPrevious()}"
+			th:href="@{${BASE_PATH}(page=${userPage.number - 1}, keyword=${keyword}, role=${role}, sort=${sort}, size=10)}">前へ</a>
 
-            <select name="role" required>
-                <option value="">ロール選択</option>
-                <option value="ADMIN">admin</option>
-                <option value="MANAGER">manager</option>
-                <option value="TRAINER">trainer</option>
-            </select>
+		<span th:text="${userPage.number + 1}"></span> /
+		<span th:text="${userPage.totalPages}"></span>
 
-            <input name="pass" placeholder="パスワード" required>
-
-            <button type="submit">保存</button>
-        </form>
-    </div>
-</div>
+		<a th:if="${userPage.hasNext()}"
+			th:href="@{${BASE_PATH}(page=${userPage.number + 1}, keyword=${keyword}, role=${role}, sort=${sort}, size=10)}">次へ</a>
+	</div>
 
 
-<!-- 編集モーダル -->
-<div id="editModal" class="modal" style="display:none;">
-    <div>
-		<button class="closeModal">× 入力情報を保存せず一覧に戻る</button>
-        <h2>ユーザー編集</h2>
-        <form id="editForm">
-            <input type="hidden" name="id">
+	<div id="createModal" class="modal" style="display:none;">
+		<div>
+			<button class="closeModal">× 入力情報を保存せず一覧に戻る</button>
+			<h2>新規ユーザー作成</h2>
+			<div id="createError" style="color: red; margin-bottom: 10px;"></div>
+			<form id="createForm">
+				<input name="name" placeholder="氏名" required> <span class="required-label">必須</span>
+				<input name="kana" placeholder="フリガナ" required> <span class="required-label">必須</span>
+				<input name="email" placeholder="メール" required> <span class="required-label">必須</span>
 
-            <label>ユーザーID</label>
-            <input id="edit-id-display" disabled>
+				<select name="role" required>
+					<option value="">ロール選択</option>
+					<option value="ADMIN">admin</option>
+					<option value="MANAGER">manager</option>
+					<option value="TRAINER">trainer</option>
+				</select> <span class="required-label">必須</span>
 
-            <input name="name" required placeholder="名前">
-            <input name="kana" required placeholder="ふりがな">
-            <input name="email" required placeholder="メール">
+				<input name="pass" placeholder="パスワード" required> <span class="required-label">必須</span>
 
-            <select name="role" required>
-                <option value="ADMIN">admin</option>
-                <option value="MANAGER">manager</option>
-                <option value="TRAINER">trainer</option>
-            </select>
+				<button type="submit">保存</button>
+			</form>
+		</div>
+	</div>
 
-            <input type="password" name="pass" placeholder="パスワード（変更時のみ）">
 
-            <button type="submit">保存</button>
-        </form>
-    </div>
-</div>
+	<div id="editModal" class="modal" style="display:none;">
+		<div>
+			<button class="closeModal">× 入力情報を保存せず一覧に戻る</button>
+			<h2>ユーザー編集</h2>
+			<div id="editError" style="color: red; margin-bottom: 10px;"></div>
+			<form id="editForm">
+				<input type="hidden" name="id">
+
+				<label>ユーザーID</label>
+				<input id="edit-id-display" disabled>
+
+				<input name="name" required placeholder="氏名"> <span class="required-label">必須</span>
+				<input name="kana" required placeholder="フリガナ"> <span class="required-label">必須</span>
+				<input name="email" required placeholder="メール"> <span class="required-label">必須</span>
+
+				<select name="role" required>
+					<option value="ADMIN">admin</option>
+					<option value="MANAGER">manager</option>
+					<option value="TRAINER">trainer</option>
+				</select> <span class="required-label">必須</span>
+
+				<label>
+					<input type="checkbox" name="active"> 有効
+				</label>
+
+				<input type="password" name="pass" placeholder="パスワード（変更時のみ）">
+
+				<button type="submit">保存</button>
+			</form>
+
+			<hr> <button id="modalDeleteBtn" style="display:none;">ユーザーを削除</button>
+		</div>
+	</div>
 
 </body>
+
 </html>

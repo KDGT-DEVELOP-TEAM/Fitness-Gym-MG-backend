@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,33 +30,40 @@ public class LessonService {
 
 	private final LessonRepository lessonRepository;
 
-	// --- レッスン一覧の検索と絞り込み ---
-	public List<LessonResponse> searchLessons(String storeId, String keyword) {
+	// --- レッスン一覧の検索と絞り込み (Pageable対応に修正) ---
+	// ★ Pageable を引数に追加し、戻り値を Page に変更 ★
+	public Page<LessonResponse> searchLessons(UUID storeId, String keyword, Pageable pageable) {
 
-		List<Lesson> lessons;
+		Page<Lesson> lessonPage;
 		LocalDateTime now = LocalDateTime.now();
 
+		// ソートは Repository メソッド名で定義されているため、Pageableにはサイズとページ番号のみを渡す
+		// findByStoreIdAndEndDateBefore... (ソート済み) を使用するため、Pageableはソート情報なしでOK
+
 		// 1. 絞り込み (店舗ID + 終了日時)
-		if (storeId != null && !storeId.isEmpty()) {
-			// 店舗IDで絞り込み、終了日時が現在時刻より前のものを取得 (DBでソート済み)
-			UUID storeUuid = UUID.fromString(storeId);
-			// findByStoreIdAndEndDateBeforeOrderByStartDateDesc を使用
-			lessons = lessonRepository.findByStoreIdAndEndDateBeforeOrderByStartDateDesc(storeUuid, now);
+		if (storeId != null) {
+			// 店舗IDで絞り込み
+			// Repositoryに findPageByStoreIdAndEndDateBeforeOrderByStartDateDesc(UUID, LocalDateTime, Pageable) が必要
+			lessonPage = lessonRepository.findPageByStoreIdAndEndDateBefore(storeId, now, pageable);
 		} else {
-			// 店舗絞り込みなし: 終了日時が現在時刻より前のものを取得 (DBでソート済み)
-			lessons = lessonRepository.findByEndDateBeforeOrderByStartDateDesc(now);
+			// 店舗絞り込みなし
+			// Repositoryに findPageByEndDateBeforeOrderByStartDateDesc(LocalDateTime, Pageable) が必要
+			lessonPage = lessonRepository.findPageByEndDateBefore(now, pageable);
 		}
 
-		return lessons.stream()
-				.map(LessonResponse::fromEntity)
-				.toList();
+		// ※ keywordによる絞り込みロジックは省略 (ここでは実装しない)
+
+		// 2. マッピング
+		return lessonPage.map(LessonResponse::fromEntity);
 	}
 
 	// --- レッスン回数グラフデータの作成 ---
-	public LessonResponse.LessonChartData getLessonChartData(String storeId, String type) {
+	// ★ storeIdをUUIDに変更 ★
+	public LessonResponse.LessonChartData getLessonChartData(UUID storeId, String type) {
 
 		LocalDateTime now = LocalDateTime.now();
-		UUID storeUuid = (storeId != null && !storeId.isEmpty()) ? UUID.fromString(storeId) : null;
+		// ControllerからUUIDで渡されるため、変換は不要
+		UUID storeUuid = storeId;
 
 		// 1. 期間タイプの決定とJPQL呼び出し
 		String intervalType;
@@ -69,14 +78,12 @@ public class LessonService {
 
 		// DBから集計結果を取得 [0: 期間開始日時, 1: 回数]
 		List<Object[]> rawChartData = lessonRepository.countLessonsGroupedByPeriod(
-				intervalType, now, storeUuid);
+				intervalType, now, storeUuid); // storeUuid (UUID型) を渡す
 
 		// 2. 結果の整形 (LessonChartDataの生成)
 		List<Map<String, Object>> series = new ArrayList<>();
 		int maxCount = 0;
 
-		// DBから降順（新しい順）で取得しているため、後で reverse は不要だが、
-		// グラフ描画要件（右が最新）と合わせるため、処理順序は保持します。
 		for (Object[] row : rawChartData) {
 			// PostgreSQLはTIMESTAMP型を返すため、LocalDateTimeに変換
 			java.sql.Timestamp periodTimestamp = (java.sql.Timestamp) row[0];
@@ -113,9 +120,7 @@ public class LessonService {
 			series.add(dataPoint);
 		}
 
-		// グラフの要件に従い、「右が最新」にするため、リストを逆順にする (DBで降順取得 -> Javaで逆順追加)
-		// DBで降順取得（最新が先頭）しているため、Java Stream時代のロジックを踏襲し、
-		// 最終的な表示順（右が最新）にするために、リストを反転させます。
+		// グラフの要件に従い、「右が最新」にするため、リストを逆順にする
 		java.util.Collections.reverse(series);
 
 		LessonChartData chartData = new LessonChartData();
