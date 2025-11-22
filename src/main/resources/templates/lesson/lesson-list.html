@@ -136,75 +136,86 @@
 
 	<h2>統計情報</h2>
 
-	<form id="filterForm">
-		<select name="storeId">
-			<option value="">全ての店舗</option>
-			<option th:each="s : ${stores}" th:value="${s.id}" th:text="${s.name}"
-				th:selected="${storeId != null and storeId.toString() == s.id.toString()}"></option>
-		</select>
+	<div th:if="${storeId == null}">
+			<form id="filterForm">
+				<select name="storeId">
+					<option value="">全ての店舗</option>
+					<option th:each="s : ${stores}" th:value="${s.id}" th:text="${s.name}"
+						th:selected="${storeId != null and storeId.toString() == s.id.toString()}"></option>
+				</select>
 
-		<button type="submit">検索</button>
-	</form>
-
-	<div id="chartDataContainer" th:attr="data-chart-data=${#jsonUtils.toJson(chartData)}" style="display: none;">
-	</div>
-
-	<div class="chart-section">
-		<h3>レッスン回数グラフ</h3>
-
-		<label><input type="radio" name="chartType" value="week" th:checked="${chartType == 'week'}"> 週別</label>
-		<label><input type="radio" name="chartType" value="month" th:checked="${chartType == 'month'}"> 月別</label>
-
-		<div style="max-height: 60vh; overflow-x: auto;">
-			<canvas id="lessonChart"></canvas>
+				<button type="submit">検索</button>
+			</form>
+		</div>
+		
+		<div th:unless="${storeId == null}">
+			<form id="filterForm">
+				<p>
+					所属店舗: <span th:each="s : ${stores}" th:if="${storeId != null and storeId.toString() == s.id.toString()}" th:text="${s.name}"></span>
+				</p>
+				<input type="hidden" name="storeId" th:value="${storeId}" />
+				<button type="submit" style="display: none;">検索</button>
+			</form>
+		</div>
+	    <div id="chartDataContainer" th:attr="data-chart-data=${#jsonUtils.toJson(chartData)}" style="display: none;">
 		</div>
 
-		<p>※右端が最新、左にスクロールで過去に遡ります</p>
-	</div>
+		<div class="chart-section">
+			<h3>レッスン回数グラフ</h3>
 
-	<hr>
+			<label><input type="radio" name="chartType" value="week" th:checked="${chartType == 'week'}"> 週別</label>
+			<label><input type="radio" name="chartType" value="month" th:checked="${chartType == 'month'}"> 月別</label>
 
-	<h3>レッスン履歴一覧 (<span th:text="${lessonPage.totalElements}"></span> 件)</h3>
+			<div style="max-height: 60vh; overflow-x: auto;">
+				<canvas id="lessonChart"></canvas>
+			</div>
 
-	<div th:if="${lessonPage.content.isEmpty()}">該当するレッスンデータはありません</div>
+			<p>※右端が最新、左にスクロールで過去に遡ります</p>
+		</div>
 
-	<table>
-		<thead>
-			<tr>
-				<th>実施日時</th>
-				<th>実施店舗</th>
-				<th>担当トレーナー</th>
-				<th>顧客</th>
-				<th>操作</th>
-			</tr>
-		</thead>
-		<tbody>
-			<tr th:each="lesson : ${lessonPage.content}">
-				<td>
-					<span th:text="${#temporals.format(lesson.startDate, 'yyyy/MM/dd')}"></span><br>
-					<span
-						th:text="${#temporals.format(lesson.startDate, 'HH:mm')} + ' - ' + ${#temporals.format(lesson.endDate, 'HH:mm')}"></span>
-				</td>
-				<td th:text="${lesson.storeName}"></td>
-				<td th:text="${lesson.trainerName}"></td>
-				<td th:text="${lesson.customerName}"></td>
-				<td>
-					<a th:href="@{${BASE_PATH} + '/' + ${lesson.id}}">詳細</a>
-				</td>
-			</tr>
-		</tbody>
-	</table>
+		<hr>
 
-	<div class="pagination" th:if="${lessonPage.totalPages > 1}">
-		<a th:if="${lessonPage.hasPrevious()}"
-			th:href="@{${BASE_PATH}(page=${lessonPage.number - 1}, storeId=${storeId}, keyword=${keyword}, chartType=${chartType}, size=10)}">前へ</a>
+		<h3>レッスン履歴一覧 (<span th:text="${lessonPage.totalElements}"></span> 件)</h3>
 
-		<span th:text="${lessonPage.number + 1}"></span> /
-		<span th:text="${lessonPage.totalPages}"></span>
+		<div th:if="${lessonPage.content.isEmpty()}">該当するレッスンデータはありません</div>
 
-		<a th:if="${lessonPage.hasNext()}"
-			th:href="@{${BASE_PATH}(page=${lessonPage.number + 1}, storeId=${storeId}, keyword=${keyword}, chartType=${chartType}, size=10)}">次へ</a>
-	</div>
+		<table>
+			<thead>
+				<tr>
+					<th>実施日時</th>
+					<th>実施店舗</th>
+					<th>担当トレーナー</th>
+					<th>顧客</th>
+					<th>操作</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr th:each="lesson : ${lessonPage.content}">
+					<td>
+						<span th:text="${#temporals.format(lesson.startDate, 'yyyy/MM/dd')}"></span><br>
+						<span
+							th:text="${#temporals.format(lesson.startDate, 'HH:mm')} + ' - ' + ${#temporals.format(lesson.endDate, 'HH:mm')}"></span>
+					</td>
+					<td th:text="${lesson.storeName}"></td>
+					<td th:text="${lesson.trainerName}"></td>
+					<td th:text="${lesson.customerName}"></td>
+					<td>
+						<a th:href="@{${BASE_PATH} + '/' + ${lesson.id}}">詳細</a>
+					</td>
+				</tr>
+			</tbody>
+		</table>
+
+		<div class="pagination" th:if="${lessonPage.totalPages > 1}">
+			<a th:if="${lessonPage.hasPrevious()}"
+				th:href="@{${BASE_PATH}(page=${lessonPage.number - 1}, storeId=${storeId}, keyword=${keyword}, chartType=${chartType}, size=10)}">前へ</a>
+
+			<span th:text="${lessonPage.number + 1}"></span> /
+			<span th:text="${lessonPage.totalPages}"></span>
+
+			<a th:if="${lessonPage.hasNext()}"
+				th:href="@{${BASE_PATH}(page=${lessonPage.number + 1}, storeId=${storeId}, keyword=${keyword}, chartType=${chartType}, size=10)}">次へ</a>
+		</div>
 
 </body>
 

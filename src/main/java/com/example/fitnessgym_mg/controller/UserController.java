@@ -1,5 +1,7 @@
 package com.example.fitnessgym_mg.controller;
 
+import java.util.Collections; // Collections.emptySet() のために追加
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
@@ -21,6 +23,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.example.fitnessgym_mg.dto.request.UserRequest;
 import com.example.fitnessgym_mg.dto.response.UserResponse;
+import com.example.fitnessgym_mg.entity.Store;
+import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.service.AccountService;
 
 import lombok.RequiredArgsConstructor;
@@ -30,11 +34,12 @@ import lombok.RequiredArgsConstructor;
 public class UserController {
 
 	private final AccountService service;
+	private final StoreRepository storeRepository;
 
 	// --- ユーザー一覧（本部管理者 /admin/users, 店長 /manager/{storeId}/users）---
 	@GetMapping({ "/admin/users", "/manager/{storeId}/users" })
 	public String list(
-			@PathVariable(required = false) UUID storeId, // 店長アクセス時のみ取得
+			@PathVariable(required = false) UUID storeId,
 			@RequestParam(required = false) String keyword,
 			@RequestParam(required = false) String role,
 			@RequestParam(defaultValue = "created") String sort,
@@ -46,12 +51,18 @@ public class UserController {
 
 		Page<UserResponse> userPage = service.searchUsers(keyword, role, sort, storeId, pageable);
 
+		// 新規作成/編集モーダルのための全店舗リストを取得
+		List<Store> allStores = storeRepository.findAll();
+		model.addAttribute("stores", allStores);
+
 		model.addAttribute("userPage", userPage);
+		// ★ カウント情報をUserPageから取得する ★
+		model.addAttribute("count", userPage.getTotalElements());
 		model.addAttribute("currentPage", page);
 		model.addAttribute("keyword", keyword);
 		model.addAttribute("role", role);
 		model.addAttribute("sort", sort);
-		model.addAttribute("storeId", storeId); // Viewに渡す
+		model.addAttribute("storeId", storeId);
 
 		return "users/list";
 	}
@@ -61,10 +72,11 @@ public class UserController {
 	@ResponseBody
 	public ResponseEntity<Void> create(
 			@PathVariable(required = false) UUID pathStoreId,
-			@Valid @RequestBody UserRequest req,
-			@RequestParam(required = false) UUID storeId) { // 仮にクエリパラメータで受け取る場合
+			@Valid @RequestBody UserRequest req) {
 
-		service.create(req, storeId);
+		// ★ 修正: req.getStoreIds() をサービスに渡す ★
+		// null チェックと空セットの提供
+		service.create(req, req.getStoreIds() != null ? req.getStoreIds() : Collections.emptySet());
 		return ResponseEntity.ok().build();
 	}
 
@@ -82,11 +94,13 @@ public class UserController {
 	@PatchMapping({ "/admin/users/{id}/edit", "/manager/{storeId}/users/{id}/edit" })
 	@ResponseBody
 	public ResponseEntity<Void> update(
-			@PathVariable(required = false) UUID storeId,
+			@PathVariable(required = false) UUID pathStoreId,
 			@PathVariable UUID id,
 			@Valid @RequestBody UserRequest req) {
 
-		service.update(id, req, storeId);
+		// ★ 修正: req.getStoreIds() をサービスに渡す ★
+		// null チェックと空セットの提供
+		service.update(id, req, req.getStoreIds() != null ? req.getStoreIds() : Collections.emptySet());
 		return ResponseEntity.ok().build();
 	}
 
@@ -97,7 +111,6 @@ public class UserController {
 			@PathVariable(required = false) UUID storeId,
 			@PathVariable UUID id) {
 
-		// サービス層の無効化メソッドを呼び出す
 		service.disableActive(id, storeId);
 		return ResponseEntity.ok().build();
 	}
@@ -109,7 +122,6 @@ public class UserController {
 			@PathVariable(required = false) UUID storeId,
 			@PathVariable UUID id) {
 
-		// サービス層の有効化メソッドを呼び出す
 		service.enableActive(id, storeId);
 		return ResponseEntity.ok().build();
 	}

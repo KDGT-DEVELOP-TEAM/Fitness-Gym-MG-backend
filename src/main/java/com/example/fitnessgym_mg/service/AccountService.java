@@ -1,7 +1,9 @@
 package com.example.fitnessgym_mg.service;
 
+import java.util.Collections;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors; // StoreエンティティのSetに変換するために追加
 
 import jakarta.persistence.criteria.JoinType;
 
@@ -35,22 +37,19 @@ public class AccountService {
 	private final PasswordEncoder passwordEncoder;
 	private final LessonRepository lessonRepository;
 
-	// --- ユーザー検索（storeIdによる中間テーブル経由の絞り込み対応） ---
+	// --- ユーザー検索 ---
 	@Transactional(readOnly = true)
 	public Page<UserResponse> searchUsers(
 			String keyword,
 			String role,
 			String sort,
-			UUID storeId,
+			UUID storeId, // 検索条件のstoreIdは単一でOK
 			Pageable pageable) {
 
-		// 1. Specificationの構築
 		Specification<User> spec = (root, query, cb) -> null;
 
-		// --- 1-1. 店舗IDによる絞り込み (中間テーブル Store_Users 経由) ---
+		// --- 1-1. 店舗IDによる絞り込み (中間テーブル user_stores 経由) ---
 		if (storeId != null) {
-			// User -> Store の結合を行い、Store IDが一致するユーザーに絞り込みます。
-			// Root(User).join("stores").get("id") が storeId と equal である
 			spec = spec.and((root, query, cb) -> cb.equal(root.join("stores", JoinType.INNER).get("id"), storeId));
 		}
 
@@ -68,7 +67,6 @@ public class AccountService {
 				UserRole roleEnum = UserRole.valueOf(role.toUpperCase());
 				spec = spec.and((root, query, cb) -> cb.equal(root.get("role"), roleEnum));
 			} catch (IllegalArgumentException ignored) {
-				// 不正なロールは無視
 			}
 		}
 
@@ -84,13 +82,27 @@ public class AccountService {
 	}
 
 	// ユーザー作成
-	public void create(UserRequest req, UUID storeId) {
+	public void create(UserRequest req, Set<UUID> storeIds) {
 
-		// 1. 店長ロールのバリデーション (単一の storeId チェック)
+		// 1. 店長ロールのバリデーション (単一の店舗必須)
 		if (req.getRole() == UserRole.manager) {
-			if (storeId == null) {
-				throw new IllegalArgumentException("店長ユーザーには、割り当てる店舗を一つ選択する必要があります。");
+			// 店長の場合、店舗IDが1つだけ存在することを確認
+			if (storeIds == null || storeIds.size() != 1) { // 必須チェックをサイズチェックに変更
+				throw new IllegalArgumentException("店長ユーザーには、割り当てる店舗を一つだけ選択する必要があります。");
 			}
+		} else if (req.getRole() == UserRole.trainer) {
+			// トレーナーの場合、店舗は0個以上でOK。ただし、Setがnullの場合は空Setとして扱う
+			if (storeIds == null) {
+				storeIds = Collections.emptySet();
+			}
+		} else {
+			// ADMINの場合、店舗は不要
+			storeIds = Collections.emptySet();
+		}
+
+		// パスワードの必須チェック (UserRequestで@NotBlankを外したため、ここで補完)
+		if (req.getPass() == null || req.getPass().trim().isEmpty()) {
+			throw new IllegalArgumentException("パスワードは必須です。");
 		}
 
 		// 2. ユーザーの基本情報設定
@@ -103,27 +115,35 @@ public class AccountService {
 		user.setPass(passwordEncoder.encode(req.getPass()));
 
 		// 3. 店舗の紐づけ
-		if (storeId != null) {
-			// 単一のStoreエンティティを取得
-			Store store = storeRepository.findById(storeId)
-					.orElseThrow(() -> new RuntimeException("指定された店舗IDが見つかりません: " + storeId));
+		Set<Store> storesToAssign = Collections.emptySet();
 
-			// Userエンティティのstoresコレクションに、この単一のStoreをセット
-			user.setStores(Set.of(store));
+		if (storeIds != null && !storeIds.isEmpty()) {
+			storesToAssign = storeRepository.findAllById(storeIds).stream().collect(Collectors.toSet());
+
+			// 全てのIDが見つかったかチェック
+			if (storesToAssign.size() != storeIds.size()) {
+				throw new RuntimeException("指定された店舗IDの一部が見つかりません。");
+			}
 		}
 
+		user.setStores(storesToAssign);
 		userRepository.save(user);
 	}
 
-	// 更新（権限チェックを追加）
-	public void update(UUID id, UserRequest req, UUID storeId) {
-		User user = findUserById(id, storeId); // 権限チェック付き取得
+	// 更新
+	public void update(UUID id, UserRequest req, Set<UUID> storeIds) {
+		User user = findUserById(id, null);
 
-		// 1. 店長ロールのバリデーション (単一の storeId チェック)
+		// StoreIdsのnullチェック (フロントから空配列[]が来る想定だが念のため)
+		if (storeIds == null) {
+			storeIds = Collections.emptySet();
+		}
+
+		// 1. 店長ロールのバリデーション (単一の店舗必須)
 		if (req.getRole() == UserRole.manager) {
-			// 更新後のロールがMANAGERの場合、紐づけ情報 (storeId) が必須
-			if (storeId == null) {
-				throw new IllegalArgumentException("店長ユーザーには、割り当てる店舗を一つ選択する必要があります。");
+			// 店長の場合、店舗IDが1つだけ存在することを確認
+			if (storeIds.size() != 1) {
+				throw new IllegalArgumentException("店長ユーザーには、割り当てる店舗を一つだけ選択する必要があります。");
 			}
 		}
 
@@ -138,92 +158,84 @@ public class AccountService {
 			user.setPass(passwordEncoder.encode(req.getPass()));
 		}
 
-		// 2. 店舗の紐づけ情報の上書き
-		if (storeId != null) {
-			Store store = storeRepository.findById(storeId)
-					.orElseThrow(() -> new RuntimeException("指定された店舗IDが見つかりません: " + storeId));
-			user.setStores(Set.of(store));
-		} else {
-			// storeId が null で、かつロールが ADMIN/TRAINER の場合、紐づけを解除する
-			user.setStores(Set.of());
+		// 2. 店舗の紐づけ情報の上書き (findAllByIdで一括取得)
+		Set<Store> storesToAssign = Collections.emptySet();
+
+		if (!storeIds.isEmpty()) {
+			// findAllByIdはIterable<Store>を返すため、Setに変換
+			storesToAssign = storeRepository.findAllById(storeIds).stream().collect(Collectors.toSet());
+
+			// 全てのIDが見つかったかチェック
+			if (storesToAssign.size() != storeIds.size()) {
+				throw new RuntimeException("指定された店舗IDの一部が見つかりません。");
+			}
 		}
 
+		user.setStores(storesToAssign);
 		userRepository.save(user);
 	}
 
-	// --- ユーザーを有効化 ---
+	// --- ユーザーを有効化 (既存コード維持) ---
 	public void enableActive(UUID id, UUID storeId) {
-		User user = findUserById(id, storeId); // 権限チェック付き取得
-
-		// 既に有効ならスキップ（あるいは処理続行）
+		User user = findUserById(id, storeId);
 		if (user.isActive()) {
-			return; // 既に有効
+			return;
 		}
-
 		user.setActive(true);
 		userRepository.save(user);
 	}
 
-	// --- ユーザーを無効化 ---
+	// --- ユーザーを無効化 (既存コード維持) ---
 	public void disableActive(UUID id, UUID storeId) {
-		User user = findUserById(id, storeId); // 権限チェック付き取得
-
-		// 既に無効ならスキップ
+		User user = findUserById(id, storeId);
 		if (!user.isActive()) {
-			return; // 既に無効
+			return;
 		}
-
 		user.setActive(false);
 		userRepository.save(user);
 	}
 
-	// 削除（権限チェックを追加）
+	// 削除（既存コード維持）
 	public void delete(UUID id, UUID storeId) {
-		User user = findUserById(id, storeId); // 権限チェック付き取得
+		User user = findUserById(id, storeId);
 
-		// 有効ユーザーは削除不可
 		if (user.isActive()) {
 			throw new IllegalStateException("有効ユーザーは削除できません");
 		}
 
 		if (hasRelatedData(id)) {
-			// 関連データが存在する場合、例外をスローして削除を拒否
 			throw new IllegalStateException("このユーザーにはレッスン履歴が紐づいているため、削除できません。無効化してください。");
 		}
 
 		userRepository.delete(user);
 	}
 
-	// idでアカウント情報を取得（権限チェックを追加）
+	// idでアカウント情報を取得（既存コード維持）
 	@Transactional(readOnly = true)
 	public UserResponse findById(UUID id, UUID storeId) {
 		User user = findUserById(id, storeId);
 		return UserResponse.fromEntity(user);
 	}
 
-	// --- ヘルパーメソッド ---
+	// --- ヘルパーメソッド (findUserById, createSort, hasRelatedDataは既存コード維持) ---
 
-	// IDでUserエンティティを取得し、storeIdが提供されていれば中間テーブル経由の権限チェックを行う
 	private User findUserById(UUID id, UUID storeId) {
 		User user = userRepository.findById(id)
-				// ★ RuntimeExceptionに置き換え ★
 				.orElseThrow(() -> new RuntimeException("User not found with id: " + id));
 
 		// 店長の場合 (storeId != null)、操作対象のユーザーが自分の店舗に属するかチェック
 		if (storeId != null) {
-			// Userが持つ stores コレクションに、該当 storeId が存在するか確認
+			// ユーザーが自分の店舗に属さない場合は拒否
 			boolean isAssignedToStore = user.getStores().stream()
 					.anyMatch(store -> store.getId().equals(storeId));
 
 			if (!isAssignedToStore) {
-				// 権限外のユーザーへの操作は拒否
 				throw new RuntimeException("User not found (or access denied) with id: " + id);
 			}
 		}
 		return user;
 	}
 
-	// 複合ソートを生成するヘルパーメソッド（ロール順序 + 登録日時降順）
 	private Sort createSort(String sort) {
 		// 1. ロール順序による昇順ソート
 		Sort primarySort = Sort.by("roleOrder").ascending();
@@ -240,12 +252,7 @@ public class AccountService {
 		return primarySort.and(secondarySort);
 	}
 
-	// --- ヘルパーメソッド: 関連データの存在チェック ---
-	/**
-	 * 指定されたユーザーIDに関連するデータ（レッスン履歴）が存在するか確認する
-	 */
 	private boolean hasRelatedData(UUID userId) {
-		// レッスンデータとの紐づきチェック
 		return lessonRepository.countByUserId(userId) > 0;
 	}
 }
