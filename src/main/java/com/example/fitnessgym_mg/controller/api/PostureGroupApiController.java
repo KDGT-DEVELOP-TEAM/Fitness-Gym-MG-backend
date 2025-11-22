@@ -1,4 +1,4 @@
-package com.example.fitnessgym_mg.controller;
+package com.example.fitnessgym_mg.controller.api;
 
 import java.util.Comparator;
 import java.util.List;
@@ -28,7 +28,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/customers/{customerId}/posture_groups")
 @RequiredArgsConstructor
-public class PostureGroupController {
+public class PostureGroupApiController {
 
     // 画像の表示順序（front → right → back → left）
     private static final Map<PostureImagePosition, Integer> POSITION_ORDER = Map.of(

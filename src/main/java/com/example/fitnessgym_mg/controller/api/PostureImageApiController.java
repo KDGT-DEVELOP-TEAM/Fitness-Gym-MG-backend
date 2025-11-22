@@ -1,4 +1,4 @@
-package com.example.fitnessgym_mg.controller;
+package com.example.fitnessgym_mg.controller.api;
 
 import java.util.UUID;
 
@@ -19,7 +19,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/posture_images")
 @RequiredArgsConstructor
-public class PostureImageController {
+public class PostureImageApiController {
 
     private final PostureImageService postureImageService;
 

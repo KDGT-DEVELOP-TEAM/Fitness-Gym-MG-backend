@@ -1,10 +1,10 @@
-package com.example.fitnessgym_mg.controller;
+package com.example.fitnessgym_mg.controller.api;
 
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/customers")
-public class CustomerController {
+@RequestMapping("/api/trainings")
+public class TrainingApiController {
 }
 
