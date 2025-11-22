@@ -23,6 +23,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * DB posture_groupsテーブルとマッピングするエンティティ
+ * 1回のレッスンで撮影した姿勢画像のグループを表す
+ * CascadeType.ALL: 子のPostureImageを自動的に保存・削除
+ * orphanRemoval: このグループから削除された画像をDBからも削除
+ */
 @Getter
 @Setter
 @Builder
@@ -50,6 +56,8 @@ public class PostureGroup {
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    // 姿勢画像リスト（撮影日時の昇順で取得）
+    // CascadeType.ALL: このグループ保存時に子画像も自動保存、削除時も自動削除
     @OneToMany(mappedBy = "postureGroup", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("takenAt ASC")
     @Builder.Default

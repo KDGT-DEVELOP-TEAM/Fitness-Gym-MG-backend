@@ -1,11 +1,8 @@
 <!DOCTYPE html>
 <!--
-  姿勢画像一覧ページテンプレート
-  機能: 指定された顧客の姿勢画像グループ一覧を表示（ページネーション対応）
-  エンドポイント: GET /customers/{customerId}/posture_groups
-  API: GET /api/customers/{customerId}/posture_groups (JSON形式で姿勢画像グループデータを取得)
-  認証: セッションにuserIdが存在しない場合はログインページにリダイレクト
-  動作: JavaScriptでAPIからデータを取得し、動的に一覧を表示
+  姿勢画像一覧ページ
+  動作: JavaScriptで /api/customers/{customerId}/posture_groups を呼び出し
+        APIから取得したJSONデータを動的に表示
 -->
 <html xmlns:th="http://www.thymeleaf.org" lang="ja">
   <head>
@@ -68,17 +65,17 @@
         let currentPage = 1;
         let groups = [];
 
-        // Supabase Storageの公開URLベース
+        // Storageの公開URL生成
+        // posturesバケットの公開URLベース
         const SUPABASE_PUBLIC_BASE = 'https://cwybkjzapzrxtcyvctuk.supabase.co/storage/v1/object/public/postures';
 
-        // storageKeyをSupabaseの公開URLに変換
+        // storageKey（相対パスまたは完全URL）をStorage公開URLに変換
         const toPublicUrl = (storageKey) => {
           if (!storageKey) return '';
-          // storageKeyが既に完全なURLの場合はそのまま返す
           if (storageKey.startsWith('http://') || storageKey.startsWith('https://')) {
-            return storageKey;
+            return storageKey; // 既に完全URLの場合
           }
-          // 相対パスの場合はSupabaseの公開URLに変換
+          // 相対パスの場合はStorage公開URLベースに結合
           return `${SUPABASE_PUBLIC_BASE}${storageKey.startsWith('/') ? storageKey : '/' + storageKey}`;
         };
 
@@ -107,7 +104,7 @@
           img.loading = 'lazy';
 
           const caption = document.createElement('figcaption');
-          caption.textContent = image.title ?? image.position ?? '画像';
+          caption.textContent = image.position ?? '画像';
 
           figure.appendChild(img);
           figure.appendChild(caption);
@@ -182,6 +179,7 @@
           });
         };
 
+        // APIから姿勢画像グループ一覧を取得
         const fetchGroups = async () => {
           try {
             const response = await fetch(`/api/customers/${customerId}/posture_groups`);
@@ -189,7 +187,7 @@
               const errorText = await response.text();
               throw new Error(`HTTP ${response.status}: ${errorText || 'Unknown error'}`);
             }
-            groups = await response.json();
+            groups = await response.json(); // APIからのJSONレスポンスをパース
             console.log('Fetched groups:', groups);
             renderGroups();
           } catch (error) {

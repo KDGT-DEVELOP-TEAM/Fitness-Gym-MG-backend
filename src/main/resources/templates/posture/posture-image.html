@@ -1,14 +1,9 @@
 <!DOCTYPE html>
 <!--
-  姿勢画像比較ページテンプレート
-  機能: 姿勢画像を左右で比較表示（比較元と比較対象を選択可能）
-  エンドポイント: GET /customers/{customerId}/posture/compare
-  API: GET /api/customers/{customerId}/posture_groups (JSON形式で姿勢画像グループデータを取得)
-  認証: セッションにuserIdが存在しない場合はログインページにリダイレクト
-  動作: 
-    - URLパラメータ（groupId, imageId）から比較元を決定
-    - JavaScriptでAPIからデータを取得し、左右の画像を表示
-    - レッスン選択と前後ボタンで比較対象を切り替え可能
+  姿勢画像比較ページ
+  動作: JavaScriptで /api/customers/{customerId}/posture_groups を呼び出し
+        APIから取得した画像データを左右比較表示
+        URLパラメータ（groupId, imageId）で比較元を指定
 -->
 <html xmlns:th="http://www.thymeleaf.org" lang="ja">
   <head>
@@ -86,19 +81,20 @@
         const initialGroupId = urlParams.get('groupId');
         const initialImageId = urlParams.get('imageId');
 
+        // 姿勢画像の表示順序
         const PAGE_ORDER = ['front', 'right', 'back', 'left'];
 
-        // Supabase Storageの公開URLベース
+        // Storageの公開URL生成
+        // posturesバケットの公開URLベース
         const SUPABASE_PUBLIC_BASE = 'https://cwybkjzapzrxtcyvctuk.supabase.co/storage/v1/object/public/postures';
 
-        // storageKeyをSupabaseの公開URLに変換
+        // storageKey（相対パスまたは完全URL）をStorage公開URLに変換
         const toPublicUrl = (storageKey) => {
           if (!storageKey) return '';
-          // storageKeyが既に完全なURLの場合はそのまま返す
           if (storageKey.startsWith('http://') || storageKey.startsWith('https://')) {
-            return storageKey;
+            return storageKey; // 既に完全URLの場合
           }
-          // 相対パスの場合はSupabaseの公開URLに変換
+          // 相対パスの場合はStorage公開URLベースに結合
           return `${SUPABASE_PUBLIC_BASE}${storageKey.startsWith('/') ? storageKey : '/' + storageKey}`;
         };
 
@@ -230,14 +226,15 @@
           });
         });
 
+        // APIから姿勢画像グループ一覧を取得して比較画像を初期化
         const fetchGroups = async () => {
           try {
             const response = await fetch(`/api/customers/${customerId}/posture_groups`);
             if (!response.ok) {
               throw new Error(`Failed to load posture groups: ${response.status}`);
             }
-            state.groups = await response.json();
-            initializeState();
+            state.groups = await response.json(); // APIからのJSONレスポンスをパース
+            initializeState(); // 左右の比較画像を初期設定
           } catch (error) {
             console.error(error);
             errorState.hidden = false;

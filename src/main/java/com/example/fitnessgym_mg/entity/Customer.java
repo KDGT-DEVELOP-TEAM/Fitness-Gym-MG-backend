@@ -25,6 +25,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * DB customersテーブルとマッピングするエンティティ
+ * ジムの顧客情報を表す
+ * CascadeType.ALL: PostureGroupsを自動保存・削除
+ */
 @Getter
 @Setter
 @Builder
@@ -69,6 +74,7 @@ public class Customer {
     @Column(name = "taboo", length = 100)
     private String taboo;
 
+    // 初回姿勢画像グループへの参照（任意）
     @Column(name = "first_posture_group_id")
     private UUID firstPostureGroupId;
 
@@ -81,6 +87,8 @@ public class Customer {
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
+    // この顧客の姿勢画像グループリスト
+    // CascadeType.ALL: Customer削除時にPostureGroupsもDBから削除
     @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<PostureGroup> postureGroups = new ArrayList<>();

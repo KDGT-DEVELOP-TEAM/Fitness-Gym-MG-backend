@@ -19,6 +19,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * DB posture_imagesテーブルとマッピングするエンティティ
+ * PostureGroupに紐づく個別の姿勢画像を表す
+ * 親（PostureGroup）削除時にカスケード削除される
+ */
 @Getter
 @Setter
 @Builder
@@ -32,14 +37,14 @@ public class PostureImage {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    // PostureGroupとの多対一関連（LAZY読み込み）
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "posture_group_id")
     private PostureGroup postureGroup;
 
-    @Column(name = "title", nullable = false)
-    private String title;
-
-    @Column(name = "storage_key", nullable = false)
+    // Storage内の画像パス（バケット内の相対パスまたは完全URL）
+    // UNIQUE制約により重複登録を防止
+    @Column(name = "storage_key", nullable = false, unique = true)
     private String storageKey;
 
     @Column(name = "consent_publication", nullable = false)
@@ -51,6 +56,7 @@ public class PostureImage {
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    // 撮影方向（front/right/back/left）
     @Column(name = "position", length = 10, nullable = false)
     private PostureImagePosition position;
 }

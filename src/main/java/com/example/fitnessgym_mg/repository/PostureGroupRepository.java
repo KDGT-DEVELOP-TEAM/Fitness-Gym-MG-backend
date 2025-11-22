@@ -9,8 +9,18 @@ import org.springframework.data.repository.query.Param;
 
 import com.example.fitnessgym_mg.entity.PostureGroup;
 
+/**
+ * DB posture_groupsテーブルへのアクセスリポジトリ
+ */
 public interface PostureGroupRepository extends JpaRepository<PostureGroup, UUID> {
 
+    /**
+     * 顧客IDに紐づく姿勢画像グループ一覧を取得
+     * JOIN FETCH: N+1問題を回避するため関連データを1回のクエリでDBから取得
+     * - customer, lesson: 必須関連なのでJOIN FETCH
+     * - images: 任意関連なのでLEFT JOIN FETCH（画像がない場合もグループを取得）
+     * ソート順: レッスン開始日の降順 → 撮影日時の降順（最新順）
+     */
     @Query("""
             SELECT DISTINCT pg
             FROM PostureGroup pg

@@ -22,18 +22,15 @@ import com.example.fitnessgym_mg.service.PostureGroupService;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 姿勢画像グループ関連のREST APIコントローラー
- * 姿勢画像グループのデータ取得APIを提供
+ * 姿勢画像グループREST APIエンドポイント
+ * DBから取得したエンティティをJSON形式で返す
  */
 @RestController
 @RequestMapping("/api/customers/{customerId}/posture_groups")
 @RequiredArgsConstructor
 public class PostureGroupController {
 
-    /**
-     * 姿勢画像の位置順序（front → right → back → left）
-     * 画像を表示する際の順序を定義
-     */
+    // 画像の表示順序（front → right → back → left）
     private static final Map<PostureImagePosition, Integer> POSITION_ORDER = Map.of(
             PostureImagePosition.FRONT, 0,
             PostureImagePosition.RIGHT, 1,
@@ -44,10 +41,9 @@ public class PostureGroupController {
     private final PostureGroupService postureGroupService;
 
     /**
-     * 指定された顧客の姿勢画像グループ一覧を取得
      * GET /api/customers/{customerId}/posture_groups
-     * @param customerId 顧客ID
-     * @return 姿勢画像グループのレスポンスリスト（JSON形式）
+     * 顧客の姿勢画像グループ一覧をJSON形式で返す
+     * フロー: DB取得 → Entity → DTO変換 → JSON
      */
     @GetMapping
     public ResponseEntity<List<PostureGroupResponse>> listGroups(@PathVariable UUID customerId) {
@@ -58,11 +54,7 @@ public class PostureGroupController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 姿勢画像グループエンティティをレスポンスDTOに変換
-     * @param postureGroup 姿勢画像グループエンティティ
-     * @return 姿勢画像グループレスポンスDTO
-     */
+    // Entity → DTO変換（クライアント向けJSONデータ構造に変換）
     private PostureGroupResponse toResponse(PostureGroup postureGroup) {
         return PostureGroupResponse.builder()
                 .id(postureGroup.getId())
@@ -73,18 +65,12 @@ public class PostureGroupController {
                 .build();
     }
 
-    /**
-     * 姿勢画像エンティティリストをレスポンスDTOリストに変換
-     * 画像は位置順（front → right → back → left）でソート
-     * @param images 姿勢画像エンティティリスト
-     * @return 姿勢画像レスポンスDTOリスト
-     */
+    // 画像リストをDTO変換し位置順でソート
     private List<PostureImageResponse> toImageResponses(List<PostureImage> images) {
         return images.stream()
                 .sorted(Comparator.comparingInt(image -> POSITION_ORDER.getOrDefault(image.getPosition(), Integer.MAX_VALUE)))
                 .map(image -> PostureImageResponse.builder()
                         .id(image.getId())
-                        .title(image.getTitle())
                         .storageKey(image.getStorageKey())
                         .consentPublication(image.isConsentPublication())
                         .takenAt(image.getTakenAt())

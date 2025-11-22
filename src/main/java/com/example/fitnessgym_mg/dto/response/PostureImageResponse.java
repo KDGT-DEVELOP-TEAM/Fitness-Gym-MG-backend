@@ -17,7 +17,6 @@ import lombok.Setter;
 public class PostureImageResponse {
 
     private UUID id;
-    private String title;
     private String storageKey;
     private boolean consentPublication;
     private OffsetDateTime takenAt;

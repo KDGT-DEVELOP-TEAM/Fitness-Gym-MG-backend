@@ -131,49 +131,51 @@ project-root/
 | カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
 | --- | --- | --- | --- | --- | --- | --- |
 | id | uuid | ○ | ○ | ○ | ○ | 主キー |
-| name | varchar(100) |  | ○ | ○ |  | 店舗名 |
+| name | varchar |  | ○ | ○ |  | 店舗名 |
 
 ### Users（ユーザー）
 | カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
 | --- | --- | --- | --- | --- | --- | --- |
 | id | uuid | ○ | ○ | ○ | ○ | 主キー |
-| email | varchar(255) |  | ○ | ○ | ○ | メールアドレス |
-| name | varchar(50) |  | ○ |  |  | 氏名 |
-| pass | varchar(60) |  | ○ |  |  | ハッシュ化パスワード（bcrypt、8〜16文字入力想定） |
+| email | varchar |  | ○ | ○ | ○ | メールアドレス（CHECK制約あり） |
+| kana | varchar |  | ○ |  |  | フリガナ |
+| name | varchar |  | ○ |  |  | 氏名 |
+| pass | varchar |  | ○ |  |  | ハッシュ化パスワード（bcrypt） |
 | role | user_role |  | ○ |  |  | 権限区分 |
 | is_active | boolean |  | ○ |  |  | 有効／無効 |
+| created_at | timestamptz |  | ○ |  |  | 登録日時 |
 
 ### Customers（顧客）
 | カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
 | --- | --- | --- | --- | --- | --- | --- |
 | id | uuid | ○ | ○ | ○ | ○ | 主キー |
-| kana | varchar(100) |  | ○ |  |  | フリガナ |
-| name | varchar(100) |  | ○ |  |  | 氏名 |
+| kana | varchar |  | ○ |  |  | フリガナ |
+| name | varchar |  | ○ |  |  | 氏名 |
 | gender | gender |  | ○ |  |  | 性別 |
 | birthday | date |  | ○ |  |  | 生年月日 |
 | height | numeric |  | ○ |  |  | 身長 |
-| email | varchar(255) |  | ○ | ○ |  | メールアドレス |
-| phone | varchar(12) |  | ○ |  |  | 電話番号 |
-| address | varchar(200) |  | ○ |  |  | 住所 |
-| medical | varchar(100) |  |  |  |  | 医療・既往歴 |
-| taboo | varchar(100) |  |  |  |  | 禁忌事項 |
-| first_posture_group_id | uuid |  | ○ |  |  | FK → `posture_groups`（初回姿勢画像） |
-| memo | varchar(500) |  |  |  |  | 自由記入メモ |
-| created_at | timestamptz |  | ○ |  | ○ | 登録日時 |
+| email | varchar |  | ○ | ○ |  | メールアドレス |
+| phone | varchar |  | ○ |  |  | 電話番号 |
+| address | varchar |  | ○ |  |  | 住所 |
+| medical | varchar |  |  |  |  | 医療・既往歴 |
+| taboo | varchar |  |  |  |  | 禁忌事項 |
+| first_posture_group_id | uuid |  |  |  |  | FK → `posture_groups`（初回姿勢画像） |
+| memo | varchar |  |  |  |  | 自由記入メモ |
+| created_at | timestamptz |  | ○ |  |  | 登録日時 |
 | is_active | boolean |  | ○ |  |  | 有効／無効 |
 
 ### Lessons（レッスン）
 | カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
 | --- | --- | --- | --- | --- | --- | --- |
 | id | uuid | ○ | ○ | ○ | ○ | 主キー |
-| store_id | uuid |  | ○ |  | ○ | FK → `stores` |
+| store_id | uuid |  | ○ |  |  | FK → `stores` |
 | user_id | uuid |  | ○ |  |  | FK → `users`（担当トレーナー） |
-| customer_id | uuid |  | ○ |  | ○ | FK → `customers` |
+| customer_id | uuid |  | ○ |  |  | FK → `customers` |
 | posture_group_id | uuid |  |  |  |  | FK → `posture_groups`（レッスン時姿勢） |
-| condition | varchar(50) |  |  |  |  | 体調メモ |
+| condition | varchar |  |  |  |  | 体調メモ |
 | weight | numeric |  |  |  |  | 体重 |
-| meal | varchar(150) |  |  |  |  | 食事内容 |
-| memo | varchar(500) |  |  |  |  | レッスンメモ |
+| meal | varchar |  |  |  |  | 食事内容 |
+| memo | varchar |  |  |  |  | レッスンメモ |
 | start_date | timestamptz |  |  |  |  | レッスン開始日時 |
 | end_date | timestamptz |  |  |  |  | レッスン終了日時 |
 | next_date | timestamptz |  |  |  |  | 次回予約日時 |
@@ -184,19 +186,19 @@ project-root/
 ### Trainings（トレーニング）
 | カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
 | --- | --- | --- | --- | --- | --- | --- |
-| lesson_id | uuid | ○ | ○ |  | ○ | 複合PK（lesson_id + order_no）、FK → `lessons` |
+| lesson_id | uuid | ○ | ○ |  |  | 複合PK（lesson_id + order_no）、FK → `lessons` |
 | order_no | int | ○ | ○ |  |  | 複合PK（lesson_id + order_no） |
-| name | varchar(20) |  | ○ |  |  | 種目名 |
+| name | varchar |  | ○ |  |  | 種目名 |
 | reps | int |  | ○ |  |  | 回数 |
 
 ### Logs（監査ログ）
 | カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
 | --- | --- | --- | --- | --- | --- | --- |
 | id | uuid | ○ | ○ | ○ | ○ | 主キー |
-| user_id | uuid |  | ○ |  | ○ | FK → `users` |
+| user_id | uuid |  | ○ |  |  | FK → `users` |
 | action | varchar |  | ○ |  |  | 操作内容 |
 | target_table | varchar |  | ○ |  |  | 対象テーブル |
-| target_id | uuid |  | ○ |  | ○ | 対象レコードID |
+| target_id | uuid |  | ○ |  |  | 対象レコードID |
 | created_at | timestamptz |  | ○ |  |  | 操作日時 |
 
 ### Store_Customers（店舗×顧客）
@@ -221,8 +223,8 @@ project-root/
 | カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
 | --- | --- | --- | --- | --- | --- | --- |
 | id | uuid | ○ | ○ | ○ | ○ | 主キー |
-| customer_id | uuid |  | ○ |  | ○ | FK → `customers` |
-| lesson_id | uuid |  | ○ |  | ○ | FK → `lessons` |
+| customer_id | uuid |  | ○ |  |  | FK → `customers` |
+| lesson_id | uuid |  | ○ |  |  | FK → `lessons` |
 | captured_at | timestamptz |  | ○ |  |  | 撮影日時 |
 | created_at | timestamptz |  | ○ |  |  | 追加日時 |
 
@@ -230,9 +232,8 @@ project-root/
 | カラム名 | 型 | 主キー | NOT NULL | UNIQUE | INDEX | 備考 |
 | --- | --- | --- | --- | --- | --- | --- |
 | id | uuid | ○ | ○ | ○ | ○ | 主キー |
-| posture_group_id | uuid |  | ○ |  | ○ | FK → `posture_groups` |
-| title | text |  | ○ |  |  | 画像タイトル |
-| storage_key | varchar |  | ○ |  |  | ストレージ上のパス |
+| posture_group_id | uuid |  | ○ |  |  | FK → `posture_groups` |
+| storage_key | varchar |  | ○ | ○ |  | ストレージ上のパス |
 | consent_publication | boolean |  | ○ |  |  | 公開同意フラグ |
 | taken_at | timestamptz |  | ○ |  |  | 撮影日時 |
 | created_at | timestamptz |  | ○ |  |  | 追加日時 |

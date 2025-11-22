@@ -10,17 +10,17 @@ import org.springframework.web.bind.annotation.PathVariable;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 姿勢画像関連のビューコントローラー
- * 姿勢画像一覧・比較画面の表示を担当
+ * 姿勢画像HTMLページコントローラー
+ * Thymeleafテンプレートを返し、JavaScriptがAPIからデータ取得
  */
 @Controller
 @RequiredArgsConstructor
 public class PostureViewController {
 
     /**
-     * 姿勢画像一覧ページを表示
      * GET /customers/{customerId}/posture_groups
-     * 指定された顧客の姿勢画像グループ一覧を表示
+     * posture/posture-group.htmlを返す（画像一覧ページ）
+     * JS内で /api/customers/{customerId}/posture_groups を呼びデータ取得
      */
     @GetMapping("/customers/{customerId}/posture_groups")
     public String postureGroupPage(@PathVariable UUID customerId, Model model) {
@@ -29,9 +29,9 @@ public class PostureViewController {
     }
 
     /**
-     * 姿勢画像比較ページを表示
      * GET /customers/{customerId}/posture/compare
-     * 指定された顧客の姿勢画像を左右で比較表示
+     * posture/posture-image.htmlを返す（画像比較ページ）
+     * JS内で /api/customers/{customerId}/posture_groups を呼びデータ取得
      */
     @GetMapping("/customers/{customerId}/posture/compare")
     public String postureComparePage(@PathVariable UUID customerId, Model model) {
