@@ -65,8 +65,8 @@ public class CustomerService {
 		return customerPage.map(CustomerResponse::fromEntity);
 	}
 
-	// --- 顧客作成（店長操作の場合、storeIdを意識する） ---
-	public void create(CustomerRequest req, UUID storeId) {
+	// --- 顧客作成 ---
+	public void create(CustomerRequest req) {
 		Customer customer = new Customer();
 
 		// 必須項目を設定
@@ -89,10 +89,6 @@ public class CustomerService {
 
 		// システム設定
 		customer.setActive(true); // is_active は新規作成時は有効 (true)
-
-		// NOTE: 多対多の場合、Customer保存後に Store_Customers テーブルへの登録処理が必要です。
-		// ここでは、Customerエンティティのみ保存。中間テーブル登録は呼び出し元に委ねるか、
-		// 別のService層で実行すると想定します。
 
 		customerRepository.save(customer);
 	}
@@ -142,7 +138,7 @@ public class CustomerService {
 	}
 
 	// --- 削除（権限チェックを追加） ---
-	public void delete(UUID id, UUID storeId) { // ★ storeId を追加 ★
+	public void delete(UUID id, UUID storeId) {
 		Customer customer = findCustomerById(id, storeId); // 権限チェック付き取得
 
 		// 有効ユーザーは削除不可
@@ -160,7 +156,7 @@ public class CustomerService {
 
 	// IDでエンティティを取得する（編集モーダル初期表示用など、権限チェックを追加）
 	@Transactional(readOnly = true)
-	public Customer findById(UUID id, UUID storeId) { // ★ storeId を追加 ★
+	public Customer findById(UUID id, UUID storeId) {
 		return findCustomerById(id, storeId);
 	}
 
@@ -174,17 +170,17 @@ public class CustomerService {
 				// RuntimeExceptionに置き換え
 				.orElseThrow(() -> new RuntimeException("Customer not found with id: " + id));
 
-		// 店長の場合 (storeId != null)、操作対象の顧客が自分の店舗に属するかチェック
-		if (storeId != null) {
-			// Customerが持つ stores コレクションに、該当 storeId が存在するか確認
-			boolean isAssignedToStore = customer.getStores().stream()
-					.anyMatch(store -> store.getId().equals(storeId));
-
-			if (!isAssignedToStore) {
-				// 権限外の顧客への操作は拒否
-				throw new RuntimeException("Customer not found (or access denied) with id: " + id);
-			}
-		}
+		//		// 店長の場合 (storeId != null)、操作対象の顧客が自分の店舗に属するかチェック
+		//		if (storeId != null) {
+		//			// Customerが持つ stores コレクションに、該当 storeId が存在するか確認
+		//			boolean isAssignedToStore = customer.getStores().stream()
+		//					.anyMatch(store -> store.getId().equals(storeId));
+		//
+		//			if (!isAssignedToStore) {
+		//				// 権限外の顧客への操作は拒否
+		//				throw new RuntimeException("Customer not found (or access denied) with id: " + id);
+		//			}
+		//		}
 		return customer;
 	}
 

@@ -175,7 +175,7 @@ public class AccountService {
 		userRepository.save(user);
 	}
 
-	// --- ユーザーを有効化 (既存コード維持) ---
+	// --- ユーザーを有効化 ---
 	public void enableActive(UUID id, UUID storeId) {
 		User user = findUserById(id, storeId);
 		if (user.isActive()) {
@@ -185,7 +185,7 @@ public class AccountService {
 		userRepository.save(user);
 	}
 
-	// --- ユーザーを無効化 (既存コード維持) ---
+	// --- ユーザーを無効化 ---
 	public void disableActive(UUID id, UUID storeId) {
 		User user = findUserById(id, storeId);
 		if (!user.isActive()) {
@@ -195,7 +195,7 @@ public class AccountService {
 		userRepository.save(user);
 	}
 
-	// 削除（既存コード維持）
+	// 削除
 	public void delete(UUID id, UUID storeId) {
 		User user = findUserById(id, storeId);
 
@@ -210,29 +210,29 @@ public class AccountService {
 		userRepository.delete(user);
 	}
 
-	// idでアカウント情報を取得（既存コード維持）
+	// idでアカウント情報を取得
 	@Transactional(readOnly = true)
 	public UserResponse findById(UUID id, UUID storeId) {
 		User user = findUserById(id, storeId);
 		return UserResponse.fromEntity(user);
 	}
 
-	// --- ヘルパーメソッド (findUserById, createSort, hasRelatedDataは既存コード維持) ---
+	// --- ヘルパーメソッド ---
 
 	private User findUserById(UUID id, UUID storeId) {
 		User user = userRepository.findById(id)
 				.orElseThrow(() -> new RuntimeException("User not found with id: " + id));
 
-		// 店長の場合 (storeId != null)、操作対象のユーザーが自分の店舗に属するかチェック
-		if (storeId != null) {
-			// ユーザーが自分の店舗に属さない場合は拒否
-			boolean isAssignedToStore = user.getStores().stream()
-					.anyMatch(store -> store.getId().equals(storeId));
-
-			if (!isAssignedToStore) {
-				throw new RuntimeException("User not found (or access denied) with id: " + id);
-			}
-		}
+		//		// 店長の場合 (storeId != null)、操作対象のユーザーが自分の店舗に属するかチェック
+		//		if (storeId != null) {
+		//			// ユーザーが自分の店舗に属さない場合は拒否
+		//			boolean isAssignedToStore = user.getStores().stream()
+		//					.anyMatch(store -> store.getId().equals(storeId));
+		//
+		//			if (!isAssignedToStore) {
+		//				throw new RuntimeException("User not found (or access denied) with id: " + id);
+		//			}
+		//		}
 		return user;
 	}
 

@@ -64,10 +64,9 @@ public class CustomerController {
 	@PostMapping({ "/admin/customers/create", "/manager/{storeId}/customers/create" })
 	@ResponseBody
 	public ResponseEntity<Void> create(
-			@PathVariable(required = false) UUID storeId, // 店長の場合に取得
 			@Valid @RequestBody CustomerRequest req) {
 
-		service.create(req, storeId);
+		service.create(req);
 		return ResponseEntity.ok().build();
 	}
 

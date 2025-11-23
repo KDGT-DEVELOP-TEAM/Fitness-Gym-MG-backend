@@ -74,7 +74,6 @@ public class UserController {
 			@PathVariable(required = false) UUID pathStoreId,
 			@Valid @RequestBody UserRequest req) {
 
-		// ★ 修正: req.getStoreIds() をサービスに渡す ★
 		// null チェックと空セットの提供
 		service.create(req, req.getStoreIds() != null ? req.getStoreIds() : Collections.emptySet());
 		return ResponseEntity.ok().build();
@@ -98,7 +97,6 @@ public class UserController {
 			@PathVariable UUID id,
 			@Valid @RequestBody UserRequest req) {
 
-		// ★ 修正: req.getStoreIds() をサービスに渡す ★
 		// null チェックと空セットの提供
 		service.update(id, req, req.getStoreIds() != null ? req.getStoreIds() : Collections.emptySet());
 		return ResponseEntity.ok().build();
