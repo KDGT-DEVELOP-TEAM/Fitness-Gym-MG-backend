@@ -1,9 +1,22 @@
 <!DOCTYPE html>
-<html lang="ja" th:replace="layout/base :: content">
-  <body>
-    <section>
-      <h1>Login Page Placeholder</h1>
-    </section>
-  </body>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>ログイン</title>
+</head>
+<body>
+<h2>ログイン</h2>
+<form th:action="@{/login}" th:object="${loginRequest}" method="post">
+    <p>
+        <label>メールアドレス</label>
+        <input type="email" th:field="*{email}" required />
+    </p>
+    <p>
+        <label>パスワード</label>
+        <input type="password" th:field="*{password}" required />
+    </p>
+    <p th:if="${error}" th:text="${error}" style="color:red;"></p>
+    <button type="submit">ログイン</button>
+</form>
+<p><a th:href="@{/forgot-password}">パスワードを忘れた場合</a></p>
+</body>
 </html>
-
