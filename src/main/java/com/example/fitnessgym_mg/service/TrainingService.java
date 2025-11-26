@@ -15,6 +15,10 @@ import com.example.fitnessgym_mg.repository.TrainingRepository;
 
 import lombok.RequiredArgsConstructor;
 
+/**
+ * トレーニング管理サービス
+ * トレーニング種目の作成（レッスンに紐づけて保存）、レッスンに紐づくトレーニング種目の取得を担当
+ */
 @Service
 @RequiredArgsConstructor
 public class TrainingService {
@@ -23,7 +27,12 @@ public class TrainingService {
     private final LessonRepository lessonRepository;
 
     /**
-     * トレーニング2種目を作成
+     * トレーニング種目を作成
+     * 
+     * 処理の流れ：
+     * 1. レッスンIDでレッスンエンティティを取得
+     * 2. 各TrainingRequest（DTO）からTrainingエンティティを作成
+     * 3. 各Trainingエンティティをデータベースに保存
      */
     @Transactional
     public void createTrainings(UUID lessonId, List<TrainingRequest> trainingRequests) {
@@ -47,6 +56,11 @@ public class TrainingService {
 
     /**
      * レッスンIDでトレーニング一覧を取得
+     * 
+     * 処理の流れ：
+     * 1. レッスンIDでトレーニング種目を取得（順序番号の小さい順）
+     * 2. 各TrainingエンティティをTrainingResponse（DTO）に変換
+     * 3. TrainingResponseのリストを返す
      */
     public List<TrainingResponse> getTrainingsByLessonId(UUID lessonId) {
         return trainingRepository.findByIdLessonIdOrderByIdOrderNoAsc(lessonId)
@@ -55,11 +69,14 @@ public class TrainingService {
                 .toList();
     }
 
+    /**
+     * TrainingエンティティをTrainingResponse（DTO）に変換
+     */
     private TrainingResponse toResponse(Training training) {
         return TrainingResponse.builder()
-                .orderNo(training.getId().getOrderNo())
-                .name(training.getName())
-                .reps(training.getReps())
+                .orderNo(training.getId().getOrderNo())  // 順序番号（複合主キーの一部）
+                .name(training.getName())  // トレーニング名称
+                .reps(training.getReps())  // 回数
                 .build();
     }
 }

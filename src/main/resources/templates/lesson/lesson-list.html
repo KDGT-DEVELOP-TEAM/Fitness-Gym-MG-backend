@@ -10,11 +10,78 @@
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
+            background-color: #f5f5f5;
         }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        
+        .customer-info {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .button-group {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        button, .button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        button:hover, .button:hover {
+            background: #0056b3;
+        }
+        
+        .button-secondary {
+            background: #6c757d;
+        }
+        
+        .button-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .button-success {
+            background: #28a745;
+        }
+        
+        .button-success:hover {
+            background: #218838;
+        }
+        
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
         table {
             width: 100%;
             border-collapse: collapse;
-            background: white;
         }
         th, td {
             padding: 12px;
@@ -36,22 +103,6 @@
         .detail-link:hover {
             text-decoration: underline;
         }
-        .button-group {
-            margin-bottom: 20px;
-        }
-        button, .button {
-            padding: 10px 20px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-        }
-        button:hover, .button:hover {
-            background: #0056b3;
-        }
         .no-data {
             padding: 40px;
             text-align: center;
@@ -60,21 +111,42 @@
     </style>
 </head>
 <body>
-    <h1>レッスン履歴一覧</h1>
+    <!-- ヘッダー -->
+    <div class="header" th:if="${customer != null}">
+        <h1 th:text="${customer.name} + ' さんのレッスン履歴'"></h1>
+        <div class="customer-info">
+            <span th:if="${customer.kana}" th:text="${customer.kana}"></span>
+        </div>
+    </div>
     
-    <div class="button-group">
+    <div class="header" th:if="${customer == null}">
+        <h1>レッスン履歴一覧</h1>
+    </div>
+    
+    <!-- ナビゲーションボタン -->
+    <div class="button-group" th:if="${customerId != null}">
+        <a th:href="@{${storeId != null ? '/manager/' + storeId + '/customers/' + customerId : (T(org.springframework.security.core.context.SecurityContextHolder).getContext().getAuthentication().getAuthorities().stream().anyMatch(a -> a.getAuthority().equals('ROLE_TRAINER')) ? '/trainer/customers/' + customerId : '/admin/customers/' + customerId)}}" 
+           class="button button-secondary">
+            👤 顧客プロフィール
+        </a>
+        
         <a th:href="@{${storeId != null ? '/manager/' + storeId + '/lessons/new?customerId=' + customerId : '/admin/lessons/new?customerId=' + customerId}}" 
-           class="button" th:if="${customerId != null}">
-            新規レッスン入力
+           class="button button-success">
+            ➕ 新規レッスン入力
+        </a>
+        
+        <a th:href="@{${storeId != null ? '/manager/' + storeId + '/postures/groups?customerId=' + customerId : '/admin/postures/groups?customerId=' + customerId}}" 
+           class="button">
+            📸 姿勢画像一覧
         </a>
     </div>
     
-    <div th:if="${lessons != null and !lessons.isEmpty()}">
+    <!-- レッスン履歴テーブル -->
+    <div th:if="${lessons != null and !lessons.isEmpty()}" class="table-container">
         <table>
             <thead>
                 <tr>
                     <th>実施日時</th>
-                    <th>顧客名</th>
                     <th>トレーナー</th>
                     <th>店舗</th>
                     <th>体重</th>
@@ -84,7 +156,6 @@
             <tbody>
                 <tr th:each="lesson : ${lessons}">
                     <td th:text="${#temporals.format(lesson.startDate, 'yyyy/MM/dd HH:mm')}"></td>
-                    <td th:text="${lesson.customerName}"></td>
                     <td th:text="${lesson.trainerName}"></td>
                     <td th:text="${lesson.storeName}"></td>
                     <td>
@@ -102,8 +173,10 @@
         </table>
     </div>
     
-    <div th:if="${lessons == null or lessons.isEmpty()}" class="no-data">
-        レッスン履歴がありません
+    <div th:if="${lessons == null or lessons.isEmpty()}" class="table-container">
+        <div class="no-data">
+            レッスン履歴がありません
+        </div>
     </div>
 </body>
 </html>

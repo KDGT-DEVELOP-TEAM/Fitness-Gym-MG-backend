@@ -30,6 +30,10 @@ import com.example.fitnessgym_mg.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
+/**
+ * レッスン管理サービス
+ * 新規レッスンの作成、顧客のレッスン履歴一覧の取得、レッスン詳細情報の取得を担当
+ */
 @Service
 @RequiredArgsConstructor
 public class LessonService {
@@ -43,7 +47,12 @@ public class LessonService {
 
     /**
      * 新規レッスンを作成
-     * Lessonエンティティとトレーニング2種目を保存
+     * 
+     * 処理の流れ：
+     * 1. LessonRequest（DTO）から関連エンティティ（Customer、Store、User）を取得
+     * 2. Lessonエンティティを作成して保存
+     * 3. 保存されたLessonのIDを使って、Trainingエンティティを作成して保存
+     * 4. 保存されたLessonを返す
      */
     @Transactional
     public Lesson createLesson(LessonRequest request) {
@@ -65,7 +74,7 @@ public class LessonService {
                 ? userRepository.findById(request.getNextTrainerId()).orElse(null) 
                 : null;
 
-        // Lessonエンティティ作成
+        // Lessonエンティティを作成
         Lesson lesson = Lesson.builder()
                 .customer(customer)
                 .store(store)
@@ -82,10 +91,10 @@ public class LessonService {
                 .createdAt(OffsetDateTime.now())
                 .build();
         
-        // Lesson保存
+        // Lessonをデータベースに保存
         Lesson savedLesson = lessonRepository.save(lesson);
         
-        // トレーニング保存
+        // トレーニング種目を保存
         if (request.getTrainings() != null && !request.getTrainings().isEmpty()) {
             for (TrainingRequest trainingRequest : request.getTrainings()) {
                 Training training = Training.builder()
@@ -106,26 +115,47 @@ public class LessonService {
     }
 
     /**
+     * 顧客IDでレッスン履歴一覧を取得
+     * 
+     * 処理の流れ：
+     * 1. 指定された顧客のレッスン一覧を取得（開始日時の新しい順）
+     * 2. 各レッスンに対して、関連するトレーニング種目と姿勢画像グループを取得
+     * 3. Lessonエンティティと関連データをLessonResponse（DTO）に変換
+     * 4. LessonResponseのリストを返す
+     */
+    public List<LessonResponse> getLessonsByCustomerId(UUID customerId) {
+        List<Lesson> lessons = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId);
+        
+        return lessons.stream()
+                .map(lesson -> {
+                    List<Training> trainings = trainingRepository.findByIdLessonIdOrderByIdOrderNoAsc(lesson.getId());
+                    List<PostureGroup> postureGroups = postureGroupRepository.findByLessonIdOrderByCapturedAtDesc(lesson.getId());
+                    return toLessonResponse(lesson, trainings, postureGroups);
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
      * レッスン詳細を取得
-     * Lesson、Training、PostureGroupを含む詳細データを取得してLessonResponseに変換
+     * 
+     * 処理の流れ：
+     * 1. レッスンIDでレッスンエンティティを取得
+     * 2. そのレッスンに関連するトレーニング種目を取得
+     * 3. そのレッスンに関連する姿勢画像グループを取得
+     * 4. すべてのデータをLessonResponse（DTO）に変換して返す
      */
     public LessonResponse getLessonDetail(UUID lessonId) {
-        // Lessonを取得
         Lesson lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new RuntimeException("レッスンが見つかりません: " + lessonId));
         
-        // Trainingを取得
         List<Training> trainings = trainingRepository.findByIdLessonIdOrderByIdOrderNoAsc(lessonId);
-        
-        // PostureGroupを取得（あれば）
         List<PostureGroup> postureGroups = postureGroupRepository.findByLessonIdOrderByCapturedAtDesc(lessonId);
         
-        // LessonResponseに変換
         return toLessonResponse(lesson, trainings, postureGroups);
     }
 
     /**
-     * Lesson → LessonResponse変換
+     * LessonエンティティをLessonResponse（DTO）に変換
      */
     private LessonResponse toLessonResponse(Lesson lesson, List<Training> trainings, List<PostureGroup> postureGroups) {
         Customer customer = lesson.getCustomer();
@@ -134,7 +164,7 @@ public class LessonService {
         Store nextStore = lesson.getNextStore();
         User nextTrainer = lesson.getNextTrainer();
         
-        // Trainingリストを変換
+        // TrainingリストをTrainingResponseリストに変換
         List<TrainingResponse> trainingResponses = trainings.stream()
                 .map(t -> TrainingResponse.builder()
                         .orderNo(t.getId().getOrderNo())
@@ -143,7 +173,7 @@ public class LessonService {
                         .build())
                 .collect(Collectors.toList());
         
-        // PostureImageリストを変換（全PostureGroupから全画像を取得）
+        // PostureImageリストをPostureImageResponseリストに変換
         List<PostureImageResponse> postureImageResponses = postureGroups.stream()
                 .flatMap(pg -> pg.getImages().stream())
                 .map(pi -> PostureImageResponse.builder()
@@ -157,13 +187,6 @@ public class LessonService {
         
         return LessonResponse.builder()
                 .id(lesson.getId())
-                .customerId(customer.getId())
-                .customerName(customer.getName())
-                .customerHeight(customer.getHeight())
-                .storeId(store.getId())
-                .storeName(store.getName())
-                .trainerId(trainer.getId())
-                .trainerName(trainer.getName())
                 .condition(lesson.getCondition())
                 .weight(lesson.getWeight())
                 .meal(lesson.getMeal())
@@ -171,11 +194,18 @@ public class LessonService {
                 .startDate(lesson.getStartDate())
                 .endDate(lesson.getEndDate())
                 .nextDate(lesson.getNextDate())
+                .createdAt(lesson.getCreatedAt())
+                .customerId(customer.getId())
+                .customerName(customer.getName())
+                .customerHeight(customer.getHeight())
+                .storeId(store.getId())
+                .storeName(store.getName())
+                .trainerId(trainer.getId())
+                .trainerName(trainer.getName())
                 .nextStoreId(nextStore != null ? nextStore.getId() : null)
                 .nextStoreName(nextStore != null ? nextStore.getName() : null)
                 .nextTrainerId(nextTrainer != null ? nextTrainer.getId() : null)
                 .nextTrainerName(nextTrainer != null ? nextTrainer.getName() : null)
-                .createdAt(lesson.getCreatedAt())
                 .trainings(trainingResponses)
                 .postureImages(postureImageResponses)
                 .build();
