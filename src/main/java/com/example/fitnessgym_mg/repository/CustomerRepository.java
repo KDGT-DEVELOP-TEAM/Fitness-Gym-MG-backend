@@ -10,7 +10,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.fitnessgym_mg.entity.Customer;
-import com.example.fitnessgym_mg.entity.User;
 
 public interface CustomerRepository extends JpaRepository<Customer, UUID>, JpaSpecificationExecutor<Customer> {
 	// keyword 単体検索（名前・かなに対して部分一致）
@@ -20,7 +19,7 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID>, JpaSp
 			       OR c.name LIKE CONCAT('%', :keyword, '%')
 			       OR c.kana LIKE CONCAT('%', :keyword, '%'))
 			""")
-	Page<User> findByKeyword(
+	Page<Customer> findByKeyword(
 			@Param("keyword") String keyword,
 			Pageable pageable);
 }
