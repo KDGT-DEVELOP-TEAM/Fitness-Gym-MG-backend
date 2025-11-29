@@ -1,9 +1,413 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="ja" th:replace="layout/base :: content">
-  <body>
-    <section>
-      <h1>User List Placeholder</h1>
-    </section>
-  </body>
-</html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>ユーザー一覧</title>
 
+<style>
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    table th, table td {
+        border: 1px solid #ccc;
+        padding: 8px 10px;
+        text-align: left;
+    }
+    table th {
+        font-weight: bold;
+    }
+    #modalDeleteBtn {
+        background-color: #dc3545;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        cursor: pointer;
+        margin-top: 15px;
+    }
+	.required-label {
+		    display: inline-block;
+		    padding: 2px 6px;
+		    margin-left: 5px;
+		    font-size: 0.75em;
+		    font-weight: bold;
+		    color: white;
+		    background-color: #dc3545;
+		    border-radius: 3px;
+		    vertical-align: middle;
+		}
+</style>
+
+<script th:inline="javascript">
+/* <![CDATA[ */
+// ★ 1. Controllerから現在のベースパスを取得する ★
+const storeId = /*[[${storeId}]]*/ null; 
+const BASE_PATH = storeId 
+    ? `/manager/${storeId}/users` 
+    : '/admin/users'; 
+const API_BASE_PATH = BASE_PATH;
+/* ]]> */
+
+document.addEventListener("DOMContentLoaded", () => {
+    
+    const modalDeleteBtn = document.getElementById("modalDeleteBtn");
+    
+	// --- 削除 (モーダル内のボタンにイベントを設定) ---
+	    modalDeleteBtn.onclick = async () => {
+	        const id = modalDeleteBtn.dataset.id;
+	        if (!confirm("ユーザーを完全に削除しますか？ (有効ユーザーは削除できません)")) return;
+	        
+	        const response = await fetch(`${API_BASE_PATH}/${id}/delete`, {method:"DELETE"});
+	        
+	        if (response.ok) {
+	            location.reload();
+	        } else {
+	            let errorText = "関連データが存在するか、サーバーエラーが発生しました。"; 
+	            try {
+	                errorText = await response.text();
+	            } catch (e) {
+	            }
+	            alert(`削除に失敗しました: ${errorText}`);
+	        }
+	    };
+
+
+    // 検索フォーム
+    document.getElementById("filterForm").onsubmit = (e) => {
+        e.preventDefault();
+        const params = new URLSearchParams(new FormData(e.target));
+        location.href = `${BASE_PATH}?${params.toString()}`;
+    };
+
+    document.getElementById("clearBtn").onclick = () => {
+        location.href = BASE_PATH;
+    };
+
+    // --- ロールによる店舗選択の必須/非必須制御関数 ---
+    // 複数選択になっても、MANAGERの場合は最低1つは必須とするロジックは変わらない
+    function toggleStoreRequired(prefix, selectedRole) {
+        const storeSelect = document.getElementById(prefix + 'StoreId');
+        const requiredLabel = document.getElementById(prefix + 'StoreRequiredLabel');
+        
+        // MANAGER の場合のみ必須にする (Admin/Trainerは不要)
+        if (selectedRole === 'MANAGER') {
+            storeSelect.required = true;
+            requiredLabel.style.display = 'inline-block';
+        } else {
+            storeSelect.required = false;
+            requiredLabel.style.display = 'none';
+        }
+    }
+
+    // --- フォームデータの複数選択値を配列として取得するヘルパー関数 ---
+    function getFormDataWithMultipleSelect(form) {
+        const formData = new FormData(form);
+        const data = {};
+
+        for (const [key, value] of formData.entries()) {
+            if (key === 'storeIds') {
+                // multiple select の場合、値を配列として処理
+                if (!data[key]) {
+                    data[key] = [];
+                }
+                data[key].push(value);
+            } else {
+                data[key] = value;
+            }
+        }
+        
+        // storeIds が FormData に存在しない場合 (何も選択されなかった場合) に空の配列を設定
+        if (!data.storeIds) {
+            data.storeIds = [];
+        } else if (!Array.isArray(data.storeIds)) {
+            // 単一選択の場合も配列として扱う
+            data.storeIds = [data.storeIds];
+        }
+
+        // storeIdsが空の配列の場合、バックエンドで処理できるよう null/[] の状態を維持
+        return data;
+    }
+
+
+    // 新規作成モーダル
+    document.getElementById("openCreateModal").onclick = () => {
+        document.getElementById("createForm").reset();
+        document.getElementById("createError").textContent = "";
+        document.getElementById("createModal").style.display = "block";
+        
+        // モーダル開時、初期状態に戻す
+        toggleStoreRequired('create', document.getElementById('createRole').value);
+    };
+    
+    // ロール選択が変わったら必須チェックを切り替える
+    document.getElementById('createRole').addEventListener('change', (e) => {
+        toggleStoreRequired('create', e.target.value);
+    });
+
+    document.getElementById("createForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const data = getFormDataWithMultipleSelect(e.target);
+        const errorDiv = document.getElementById("createError");
+        errorDiv.textContent = "";
+
+        data.active = true;
+
+        const response = await fetch(`${API_BASE_PATH}/create`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(data) 
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            const errorText = await response.text();
+            errorDiv.textContent = `バリデーションエラー: ${errorText}`;
+        }
+    };
+
+
+	// 有効/無効
+	    document.querySelectorAll(".toggleActive").forEach(btn => {
+	        btn.onclick = async () => {
+	            const id = btn.dataset.id;
+	            const currentState = btn.textContent.trim(); 
+	            
+	            let endpoint;
+	            
+	            if (currentState === '有効') {
+	                endpoint = '/disable';
+	            } else {
+	                endpoint = '/enable';
+	            }
+
+	            await fetch(`${API_BASE_PATH}/${id}${endpoint}`, {method:"PATCH"});
+	            location.reload();
+	        };
+	    });
+
+
+    // 編集モーダル
+    document.querySelectorAll(".editBtn").forEach(btn => {
+        btn.onclick = async () => {
+
+            const id = btn.dataset.id;
+            const form = document.getElementById("editForm");
+            const res = await fetch(`${API_BASE_PATH}/${id}/detail`);
+            const user = await res.json();
+            
+            document.getElementById("editError").textContent = "";
+
+            form.id.value       = user.id;
+            document.getElementById("edit-id-display").value = user.id;
+
+            form.name.value     = user.name;
+            form.kana.value     = user.kana;
+            form.email.value    = user.email;
+            form.role.value     = user.role;
+            form.active.checked = user.active;
+
+            const editStoreSelect = form.querySelector('#editStoreId');
+            
+            // 既存の選択状態を全て解除
+            Array.from(editStoreSelect.options).forEach(opt => opt.selected = false); 
+
+            // user.storeIds (Set<UUID>) をループして選択状態にする
+            if (user.storeIds && user.storeIds.length > 0) {
+                user.storeIds.forEach(storeId => {
+                    const option = editStoreSelect.querySelector(`option[value="${storeId}"]`);
+                    if (option) {
+                        option.selected = true; // 該当IDのオプションを選択状態にする
+                    }
+                });
+            }
+            
+            // 削除ボタンの状態制御
+            if (user.active) {
+                modalDeleteBtn.style.display = 'none';
+                modalDeleteBtn.dataset.id = '';
+            } else {
+                modalDeleteBtn.style.display = 'block';
+                modalDeleteBtn.dataset.id = id;
+            }
+
+            // 編集モーダル開時にも必須制御を実行
+            toggleStoreRequired('edit', user.role);
+
+            document.getElementById("editModal").style.display = "block";
+        };
+    });
+    
+    // 編集モーダル：ロール選択が変わったら必須チェックを切り替える
+    document.getElementById('editRole').addEventListener('change', (e) => {
+        toggleStoreRequired('edit', e.target.value);
+    });
+
+    // 編集保存
+    document.getElementById("editForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const data = getFormDataWithMultipleSelect(e.target);
+        const errorDiv = document.getElementById("editError");
+        errorDiv.textContent = "";
+
+        data.active = e.target.active.checked;
+
+        const response = await fetch(`${API_BASE_PATH}/${data.id}/edit`, {
+            method:"PATCH", 
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            const errorText = await response.text();
+            errorDiv.textContent = `バリデーションエラー: ${errorText}`;
+        }
+    };
+	
+	// モーダルを閉じる
+	document.querySelectorAll(".closeModal").forEach(btn => {
+	    btn.onclick = () => {
+	        btn.closest(".modal").style.display = "none";
+	    };
+	});
+
+});
+</script>
+</head>
+
+<body>
+<button id="openCreateModal">＋ 新規ユーザー作成</button>
+
+<form id="filterForm">
+    <input type="text" name="keyword" placeholder="名前検索（漢字・ふりがな）" th:value="${keyword}">
+
+    <select name="role">
+        <option value="">すべて</option>
+        <option value="ADMIN"   th:selected="${role == 'ADMIN'}">admin</option>
+        <option value="MANAGER" th:selected="${role == 'MANAGER'}">manager</option>
+        <option value="TRAINER" th:selected="${role == 'TRAINER'}">trainer</option>
+    </select>
+
+    <select name="sort">
+        <option value="created" th:selected="${sort == 'created'}">登録日順</option>
+    </select>
+
+    <button type="submit">検索</button>
+    <button type="button" id="clearBtn">クリア</button>
+</form>
+
+<p><span th:text="${count}"></span> 件が見つかりました</p>
+
+<div th:if="${userPage.content.isEmpty()}">該当するユーザーは見つかりませんでした</div>
+
+<table>
+    <tr>
+        <th>名前</th>
+        <th>ロール</th>
+        <th>有効/無効</th>
+        <th>操作</th>
+    </tr>
+
+    <tr th:each="u : ${userPage.content}">
+        <td th:text="${u.name}"></td>
+        <td th:text="${u.role}"></td>
+
+        <td>
+            <button class="toggleActive"
+                    th:attr="data-id=${u.id}"
+                    th:text="${u.active} ? '有効' : '無効'">
+            </button>
+        </td>
+
+        <td>
+            <button class="editBtn" th:attr="data-id=${u.id}">詳細/編集</button>
+			</td>
+    </tr>
+</table>
+
+<div class="pagination">
+    <a th:if="${userPage.hasPrevious()}"
+       th:href="@{${BASE_PATH}(page=${userPage.number - 1}, keyword=${keyword}, role=${role}, sort=${sort}, size=10)}">前へ</a>
+
+    <span th:text="${userPage.number + 1}"></span> /
+    <span th:text="${userPage.totalPages}"></span>
+
+    <a th:if="${userPage.hasNext()}"
+       th:href="@{${BASE_PATH}(page=${userPage.number + 1}, keyword=${keyword}, role=${role}, sort=${sort}, size=10)}">次へ</a>
+</div>
+
+
+<div id="createModal" class="modal" style="display:none;">
+    <div>
+		<button class="closeModal">× 入力情報を保存せず一覧に戻る</button>
+        <h2>新規ユーザー作成</h2>
+		<div id="createError" style="color: red; margin-bottom: 10px;"></div>
+        <form id="createForm">
+            <input name="name"  placeholder="氏名" required> <span class="required-label">必須</span>
+            <input name="kana"  placeholder="フリガナ" required> <span class="required-label">必須</span>
+            <input name="email" placeholder="メール" required> <span class="required-label">必須</span>
+
+            <select name="role" id="createRole" required>
+                <option value="">ロール選択</option>
+                <option value="ADMIN">admin</option>
+                <option value="MANAGER">manager</option>
+                <option value="TRAINER">trainer</option>
+            </select> <span class="required-label">必須</span>
+            
+            <select name="storeIds" id="createStoreId" style="margin-top: 10px;" multiple> 
+                <option value="">所属店舗を選択</option>
+                <option th:each="s : ${stores}" th:value="${s.id}" th:text="${s.name}"></option>
+            </select>
+            <span id="createStoreRequiredLabel" class="required-label" style="display:none;">必須</span>
+            <input name="pass" placeholder="パスワード" required> <span class="required-label">必須</span>
+
+            <button type="submit">保存</button>
+        </form>
+    </div>
+</div>
+
+
+<div id="editModal" class="modal" style="display:none;">
+    <div>
+		<button class="closeModal">× 入力情報を保存せず一覧に戻る</button>
+        <h2>ユーザー編集</h2>
+		<div id="editError" style="color: red; margin-bottom: 10px;"></div>
+        <form id="editForm">
+            <input type="hidden" name="id">
+
+            <label>ユーザーID</label>
+            <input id="edit-id-display" disabled>
+
+            <input name="name" required placeholder="氏名"> <span class="required-label">必須</span>
+            <input name="kana" required placeholder="フリガナ"> <span class="required-label">必須</span>
+            <input name="email" required placeholder="メール"> <span class="required-label">必須</span>
+
+            <select name="role" id="editRole" required>
+                <option value="ADMIN">admin</option>
+                <option value="MANAGER">manager</option>
+                <option value="TRAINER">trainer</option>
+            </select> <span class="required-label">必須</span>
+            
+            <select name="storeIds" id="editStoreId" style="margin-top: 10px;" multiple> 
+                <option value="">所属店舗を選択</option>
+                <option th:each="s : ${stores}" th:value="${s.id}" th:text="${s.name}"></option>
+            </select>
+            <span id="editStoreRequiredLabel" class="required-label" style="display:none;">必須</span>
+            <label>
+			  <input type="checkbox" name="active"> 有効
+			</label>
+
+            <input type="password" name="pass" placeholder="パスワード（変更時のみ）">
+
+            <button type="submit">保存</button>
+        </form>
+        
+        <hr> <button id="modalDeleteBtn" style="display:none;">ユーザーを削除</button>
+    </div>
+</div>
+
+</body>
+</html>
