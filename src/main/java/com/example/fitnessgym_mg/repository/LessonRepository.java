@@ -23,7 +23,7 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	// --- 2. グラフデータ集計 (既存を維持) ---
 	// PostgreSQLの date_trunc を利用し、期間（週/月）別にレッスン回数を集計する。
 	@Query(value = "SELECT date_trunc(:type, l.start_date) as period_start, COUNT(*) " +
-			"FROM lesson l " +
+			"FROM lessons l " +
 			"WHERE l.end_date < :now AND " +
 			" (:storeId IS NULL OR l.store_id = :storeId) " +
 			"GROUP BY period_start " +

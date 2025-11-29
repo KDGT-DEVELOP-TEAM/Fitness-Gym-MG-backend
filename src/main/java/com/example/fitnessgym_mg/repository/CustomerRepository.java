@@ -17,8 +17,8 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID>, JpaSp
 	@Query("""
 			SELECT c FROM Customer c
 			WHERE (:keyword IS NULL OR :keyword = ''
-			       OR c.name LIKE %:keyword%
-			       OR c.kana LIKE %:keyword%)
+			       OR c.name LIKE CONCAT('%', :keyword, '%')
+			       OR c.kana LIKE CONCAT('%', :keyword, '%'))
 			""")
 	Page<User> findByKeyword(
 			@Param("keyword") String keyword,

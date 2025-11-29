@@ -10,14 +10,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.fitnessgym_mg.entity.User;
+import com.example.fitnessgym_mg.entity.User.UserRole;
 
 public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificationExecutor<User> {
 	// keyword 単体検索（名前・かなに対して部分一致）
 	@Query("""
 			SELECT u FROM User u
 			WHERE (:keyword IS NULL OR :keyword = ''
-			       OR u.name LIKE %:keyword%
-			       OR u.kana LIKE %:keyword%)
+			       OR u.name LIKE CONCAT('%', :keyword, '%')
+			       OR u.kana LIKE CONCAT('%', :keyword, '%'))
 			""")
 	Page<User> findByKeyword(
 			@Param("keyword") String keyword,
@@ -33,9 +34,9 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
 			""")
 	Page<User> findByKeywordAndRole(
 			@Param("keyword") String keyword,
-			@Param("role") String role,
+			@Param("role") UserRole role,
 			Pageable pageable);
 
 	// roleで検索
-	Page<User> findByRole(String role, Pageable sortedPageable);
+	Page<User> findByRole(UserRole role, Pageable sortedPageable);
 }

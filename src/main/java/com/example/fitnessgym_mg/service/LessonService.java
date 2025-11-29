@@ -6,9 +6,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -17,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.fitnessgym_mg.dto.response.LessonResponse;
+import com.example.fitnessgym_mg.dto.response.LessonResponse.ChartSeries;
 import com.example.fitnessgym_mg.dto.response.LessonResponse.LessonChartData;
 import com.example.fitnessgym_mg.entity.Lesson;
 import com.example.fitnessgym_mg.repository.LessonRepository;
@@ -51,44 +50,38 @@ public class LessonService {
 			lessonPage = lessonRepository.findPageByEndDateBefore(now, pageable);
 		}
 
-		// ※ keywordによる絞り込みロジックは省略 (ここでは実装しない)
-
 		// 2. マッピング
 		return lessonPage.map(LessonResponse::fromEntity);
 	}
 
 	// --- レッスン回数グラフデータの作成 ---
-	// ★ storeIdをUUIDに変更 ★
-	public LessonResponse.LessonChartData getLessonChartData(UUID storeId, String type) {
+	public LessonChartData getLessonChartData(UUID storeId, String type) {
 
 		LocalDateTime now = LocalDateTime.now();
-		// ControllerからUUIDで渡されるため、変換は不要
 		UUID storeUuid = storeId;
 
 		// 1. 期間タイプの決定とJPQL呼び出し
 		String intervalType;
 		if ("week".equals(type)) {
-			// PostgreSQLの date_trunc('week', ...) を使用
 			intervalType = "week";
 		} else {
-			// PostgreSQLの date_trunc('month', ...) を使用
 			intervalType = "month";
-			type = "month"; // typeの値を念のため統一
+			type = "month";
 		}
 
 		// DBから集計結果を取得 [0: 期間開始日時, 1: 回数]
 		List<Object[]> rawChartData = lessonRepository.countLessonsGroupedByPeriod(
-				intervalType, now, storeUuid); // storeUuid (UUID型) を渡す
+				intervalType, now, storeUuid);
 
 		// 2. 結果の整形 (LessonChartDataの生成)
-		List<Map<String, Object>> series = new ArrayList<>();
+		List<ChartSeries> series = new ArrayList<>();
 		int maxCount = 0;
 
 		for (Object[] row : rawChartData) {
 			// PostgreSQLはTIMESTAMP型を返すため、LocalDateTimeに変換
 			java.sql.Timestamp periodTimestamp = (java.sql.Timestamp) row[0];
 			LocalDateTime periodStartAt = periodTimestamp.toInstant()
-					.atZone(ZoneId.systemDefault()) // タイムゾーンを考慮
+					.atZone(ZoneId.systemDefault())
 					.toLocalDateTime();
 
 			long count = ((Number) row[1]).longValue();
@@ -113,11 +106,10 @@ public class LessonService {
 				maxCount = currentCount;
 			}
 
-			Map<String, Object> dataPoint = new HashMap<>();
-			dataPoint.put("label", label);
-			dataPoint.put("count", count);
-			dataPoint.put("countLabel", count + "回");
-			series.add(dataPoint);
+			ChartSeries chartSeries = new ChartSeries();
+			chartSeries.setPeriod(label); // ラベルを periodStart (期間の表示名) として使用
+			chartSeries.setCount(count);
+			series.add(chartSeries);
 		}
 
 		// グラフの要件に従い、「右が最新」にするため、リストを逆順にする

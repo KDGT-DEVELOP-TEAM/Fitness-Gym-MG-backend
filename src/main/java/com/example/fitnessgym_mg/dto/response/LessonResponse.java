@@ -2,7 +2,6 @@ package com.example.fitnessgym_mg.dto.response;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import com.example.fitnessgym_mg.entity.Lesson;
@@ -44,9 +43,17 @@ public class LessonResponse {
 
 	// グラフデータを格納するための内部クラス
 	@Data
+	public static class ChartSeries {
+		// PostgreSQLのdate_truncから取得される開始期間
+		private String period;
+		private long count; // long count;
+	}
+
+	@Data
 	public static class LessonChartData {
-		private List<Map<String, Object>> series;
+		private List<ChartSeries> series;
 		private int maxCount;
 		private String type;
 	}
+
 }
