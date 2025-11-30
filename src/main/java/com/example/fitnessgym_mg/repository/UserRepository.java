@@ -1,5 +1,6 @@
 package com.example.fitnessgym_mg.repository;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -13,6 +14,17 @@ import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.User.UserRole;
 
 public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificationExecutor<User> {
+	
+	/**
+	 * メールアドレスでユーザーを検索（認証用）
+	 */
+	Optional<User> findByEmail(String email);
+	
+	/**
+	 * メールアドレスでアクティブなユーザーを検索（認証用）
+	 */
+	Optional<User> findByEmailAndIsActiveTrue(String email);
+	
 	// keyword 単体検索（名前・かなに対して部分一致）
 	@Query("""
 			SELECT u FROM User u

@@ -44,6 +44,13 @@ public class LessonController {
      * GET /admin/lessons/new
      * GET /manager/{storeId}/lessons/new
      * 新規レッスン入力フォーム表示
+     * 
+     * 処理の流れ：
+     * 1. 顧客情報を取得
+     * 2. 店舗一覧を取得（管理者は全店舗、店長は所属店舗のみ）
+     * 3. トレーナー一覧を取得
+     * 4. フォーム用の空のリクエストオブジェクトを作成
+     * 5. 画面に表示するデータをModelに設定して返す
      */
     @GetMapping({"/admin/lessons/new", "/manager/{storeId}/lessons/new"})
     public String newLessonForm(
@@ -55,18 +62,16 @@ public class LessonController {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
         
-        // 店舗一覧を取得
+        // 店舗一覧を取得（管理者は全店舗、店長は所属店舗のみ）
         List<Store> stores;
         if (storeId != null) {
-            // Manager: 所属店舗のみ
             stores = List.of(storeRepository.findById(storeId)
                     .orElseThrow(() -> new RuntimeException("店舗が見つかりません")));
         } else {
-            // Admin: 全店舗
             stores = storeRepository.findAll();
         }
         
-        // トレーナー一覧を取得（全ユーザー、実際は権限でフィルタすべき）
+        // トレーナー一覧を取得
         List<User> trainers = userRepository.findAll();
         
         // 空のリクエストオブジェクトを作成
@@ -74,7 +79,6 @@ public class LessonController {
                 .customerId(customerId)
                 .build();
         
-        // データをモデルに設定
         model.addAttribute("customer", customer);
         model.addAttribute("stores", stores);
         model.addAttribute("trainers", trainers);
@@ -88,6 +92,13 @@ public class LessonController {
      * POST /admin/lessons
      * POST /manager/{storeId}/lessons
      * レッスン保存処理
+     * 
+     * 処理の流れ：
+     * 1. フォームから送信されたデータをバリデーション
+     * 2. バリデーションエラーがある場合、エラーメッセージと共にフォーム画面に戻る
+     * 3. バリデーションが成功した場合、レッスン情報を保存
+     * 4. 保存成功後、成功メッセージを設定してリダイレクト
+     * 5. エラーが発生した場合、エラーメッセージと共にフォーム画面に戻る
      */
     @PostMapping({"/admin/lessons", "/manager/{storeId}/lessons"})
     public String createLesson(
@@ -164,9 +175,53 @@ public class LessonController {
     }
 
     /**
+     * GET /admin/history/{customerId}
+     * GET /manager/{storeId}/history/{customerId}
+     * GET /trainer/history/{customerId}
+     * レッスン履歴一覧画面表示
+     * 
+     * 処理の流れ：
+     * 1. 顧客情報を取得
+     * 2. その顧客のレッスン履歴を取得（開始日時の新しい順）
+     * 3. 画面に表示するデータをModelに設定して返す
+     * 4. エラーが発生した場合、エラーメッセージを設定して顧客選択画面にリダイレクト
+     */
+    @GetMapping({"/admin/history/{customerId}", "/manager/{storeId}/history/{customerId}", "/trainer/history/{customerId}"})
+    public String lessonHistory(
+            @PathVariable(required = false) UUID storeId,
+            @PathVariable UUID customerId,
+            Model model) {
+        
+        try {
+            // 顧客情報を取得
+            Customer customer = customerRepository.findById(customerId)
+                    .orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
+            
+            // レッスン履歴を取得
+            List<LessonResponse> lessons = lessonService.getLessonsByCustomerId(customerId);
+            
+            model.addAttribute("customer", customer);
+            model.addAttribute("lessons", lessons);
+            model.addAttribute("customerId", customerId);
+            model.addAttribute("storeId", storeId);
+            
+            return "lesson/lesson-list";
+            
+        } catch (RuntimeException e) {
+            model.addAttribute("errorMessage", "履歴の取得に失敗しました: " + e.getMessage());
+            return "redirect:/trainer/customers";
+        }
+    }
+
+    /**
      * GET /admin/lessons/{lessonId}
      * GET /manager/{storeId}/lessons/{lessonId}
      * レッスン詳細画面表示
+     * 
+     * 処理の流れ：
+     * 1. レッスンIDでレッスン詳細情報を取得（トレーニング種目、姿勢画像を含む）
+     * 2. 画面に表示するデータをModelに設定して返す
+     * 3. エラーが発生した場合、エラーメッセージを設定してリダイレクト
      */
     @GetMapping({"/admin/lessons/{lessonId}", "/manager/{storeId}/lessons/{lessonId}"})
     public String lessonDetail(
@@ -178,17 +233,14 @@ public class LessonController {
             // レッスン詳細データを取得
             LessonResponse lessonResponse = lessonService.getLessonDetail(lessonId);
             
-            // モデルに設定
             model.addAttribute("lesson", lessonResponse);
             model.addAttribute("storeId", storeId);
             
             return "lesson/lesson-detail";
             
         } catch (RuntimeException e) {
-            // エラーメッセージを設定
             model.addAttribute("errorMessage", "レッスンの取得に失敗しました: " + e.getMessage());
             
-            // エラー画面またはリダイレクト
             if (storeId != null) {
                 return "redirect:/manager/" + storeId + "/lessons";
             } else {

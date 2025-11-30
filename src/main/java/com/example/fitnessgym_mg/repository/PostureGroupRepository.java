@@ -35,15 +35,15 @@ public interface PostureGroupRepository extends JpaRepository<PostureGroup, UUID
     List<PostureGroup> findAllWithImagesByCustomerId(@Param("customerId") UUID customerId);
     
     /**
-     * レッスンIDで姿勢画像グループを取得（撮影日時降順）
+     * レッスンIDに紐づく姿勢画像グループ一覧を取得（撮影日時の降順）
      */
     List<PostureGroup> findByLessonIdOrderByCapturedAtDesc(UUID lessonId);
     
     /**
-     * 顧客IDで姿勢画像グループを取得（撮影日時降順）
+     * 顧客IDに紐づく姿勢画像グループ一覧を取得（撮影日時の降順）
      * 注: findAllWithImagesByCustomerId()と機能が重複するため、用途に応じて使い分け
-     * - 最適化が必要な場合: findAllWithImagesByCustomerId()を使用
-     * - シンプルな検索が必要な場合: findByCustomerIdOrderByCapturedAtDesc()を使用
+     * - findAllWithImagesByCustomerId(): JOIN FETCHで最適化（関連データも取得）
+     * - findByCustomerIdOrderByCapturedAtDesc(): シンプルな検索（関連データは遅延読み込み）
      */
     List<PostureGroup> findByCustomerIdOrderByCapturedAtDesc(UUID customerId);
 }
