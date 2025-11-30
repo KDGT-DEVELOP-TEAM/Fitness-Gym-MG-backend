@@ -1,5 +1,8 @@
 package com.example.fitnessgym_mg.controller.api;
 
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -56,10 +59,17 @@ public class PostureGroupApiController {
 
     // Entity → DTO変換（クライアント向けJSONデータ構造に変換）
     private PostureGroupResponse toResponse(PostureGroup postureGroup) {
+        OffsetDateTime lessonStartDate = null;
+        if (postureGroup.getLesson() != null && postureGroup.getLesson().getStartDate() != null) {
+            // LocalDateTimeをOffsetDateTimeに変換（システムのデフォルトタイムゾーンを使用）
+            LocalDateTime localDateTime = postureGroup.getLesson().getStartDate();
+            lessonStartDate = localDateTime.atZone(ZoneId.systemDefault()).toOffsetDateTime();
+        }
+        
         return PostureGroupResponse.builder()
                 .id(postureGroup.getId())
                 .lessonId(postureGroup.getLesson() != null ? postureGroup.getLesson().getId() : null)
-                .lessonStartDate(postureGroup.getLesson() != null ? postureGroup.getLesson().getStartDate() : null)
+                .lessonStartDate(lessonStartDate)
                 .capturedAt(postureGroup.getCapturedAt())
                 .images(toImageResponses(postureGroup.getImages()))
                 .build();
@@ -67,16 +77,30 @@ public class PostureGroupApiController {
 
     // 画像リストをDTO変換し位置順でソート
     private List<PostureImageResponse> toImageResponses(List<PostureImage> images) {
+        if (images == null || images.isEmpty()) {
+            return List.of();
+        }
         return images.stream()
-                .sorted(Comparator.comparingInt(image -> POSITION_ORDER.getOrDefault(image.getPosition(), Integer.MAX_VALUE)))
-                .map(image -> PostureImageResponse.builder()
-                        .id(image.getId())
-                        .storageKey(image.getStorageKey())
-                        .consentPublication(image.isConsentPublication())
-                        .takenAt(image.getTakenAt())
-                        .position(image.getPosition() != null ? image.getPosition().getCode() : null)
-                        .build())
+                .sorted(Comparator.comparingInt(image -> 
+                    image.getPosition() != null 
+                        ? POSITION_ORDER.getOrDefault(image.getPosition(), Integer.MAX_VALUE)
+                        : Integer.MAX_VALUE))
+                .map(this::toImageResponse)
                 .collect(Collectors.toList());
+    }
+
+    // PostureImageエンティティからDTOに変換（nullセーフ）
+    private PostureImageResponse toImageResponse(PostureImage image) {
+        if (image == null) {
+            return null;
+        }
+        return PostureImageResponse.builder()
+                .id(image.getId())
+                .storageKey(image.getStorageKey())
+                .consentPublication(image.isConsentPublication())
+                .takenAt(image.getTakenAt())
+                .position(image.getPosition() != null ? image.getPosition().getCode() : null)
+                .build();
     }
 }
 

@@ -1,4 +1,4 @@
-package com.example.fitnessgym_mg.controller;
+package com.example.fitnessgym_mg.controller.api;
 
 import java.util.UUID;
 
@@ -30,7 +30,7 @@ import lombok.RequiredArgsConstructor;
 
 @Controller
 @RequiredArgsConstructor
-public class CustomerController {
+public class CustomerApiController {
 
 	private final CustomerService service;
 
