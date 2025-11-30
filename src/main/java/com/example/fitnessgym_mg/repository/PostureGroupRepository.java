@@ -6,12 +6,14 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import com.example.fitnessgym_mg.entity.PostureGroup;
 
 /**
  * DB posture_groupsテーブルへのアクセスリポジトリ
  */
+@Repository
 public interface PostureGroupRepository extends JpaRepository<PostureGroup, UUID> {
 
     /**
@@ -31,5 +33,18 @@ public interface PostureGroupRepository extends JpaRepository<PostureGroup, UUID
             ORDER BY l.startDate DESC, pg.capturedAt DESC
             """)
     List<PostureGroup> findAllWithImagesByCustomerId(@Param("customerId") UUID customerId);
+    
+    /**
+     * レッスンIDで姿勢画像グループを取得（撮影日時降順）
+     */
+    List<PostureGroup> findByLessonIdOrderByCapturedAtDesc(UUID lessonId);
+    
+    /**
+     * 顧客IDで姿勢画像グループを取得（撮影日時降順）
+     * 注: findAllWithImagesByCustomerId()と機能が重複するため、用途に応じて使い分け
+     * - 最適化が必要な場合: findAllWithImagesByCustomerId()を使用
+     * - シンプルな検索が必要な場合: findByCustomerIdOrderByCapturedAtDesc()を使用
+     */
+    List<PostureGroup> findByCustomerIdOrderByCapturedAtDesc(UUID customerId);
 }
 
