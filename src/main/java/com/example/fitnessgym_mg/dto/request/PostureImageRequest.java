@@ -1,5 +1,5 @@
 package com.example.fitnessgym_mg.dto.request;
 
-public class LessonRequest {
+public class PostureImageRequest {
 }
 

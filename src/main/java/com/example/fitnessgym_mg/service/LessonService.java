@@ -1,214 +1,124 @@
 package com.example.fitnessgym_mg.service;
 
-import java.time.OffsetDateTime;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
-import com.example.fitnessgym_mg.dto.request.LessonRequest;
-import com.example.fitnessgym_mg.dto.request.TrainingRequest;
 import com.example.fitnessgym_mg.dto.response.LessonResponse;
-import com.example.fitnessgym_mg.dto.response.PostureImageResponse;
-import com.example.fitnessgym_mg.dto.response.TrainingResponse;
-import com.example.fitnessgym_mg.entity.Customer;
+import com.example.fitnessgym_mg.dto.response.LessonResponse.ChartSeries;
+import com.example.fitnessgym_mg.dto.response.LessonResponse.LessonChartData;
 import com.example.fitnessgym_mg.entity.Lesson;
-import com.example.fitnessgym_mg.entity.PostureGroup;
-import com.example.fitnessgym_mg.entity.PostureImage;
-import com.example.fitnessgym_mg.entity.Store;
-import com.example.fitnessgym_mg.entity.Training;
-import com.example.fitnessgym_mg.entity.User;
-import com.example.fitnessgym_mg.repository.CustomerRepository;
 import com.example.fitnessgym_mg.repository.LessonRepository;
-import com.example.fitnessgym_mg.repository.PostureGroupRepository;
-import com.example.fitnessgym_mg.repository.StoreRepository;
-import com.example.fitnessgym_mg.repository.TrainingRepository;
-import com.example.fitnessgym_mg.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
-/**
- * レッスン管理サービス
- * 新規レッスンの作成、顧客のレッスン履歴一覧の取得、レッスン詳細情報の取得を担当
- */
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class LessonService {
 
-    private final LessonRepository lessonRepository;
-    private final TrainingRepository trainingRepository;
-    private final CustomerRepository customerRepository;
-    private final StoreRepository storeRepository;
-    private final UserRepository userRepository;
-    private final PostureGroupRepository postureGroupRepository;
+	private final LessonRepository lessonRepository;
 
-    /**
-     * 新規レッスンを作成
-     * 
-     * 処理の流れ：
-     * 1. LessonRequest（DTO）から関連エンティティ（Customer、Store、User）を取得
-     * 2. Lessonエンティティを作成して保存
-     * 3. 保存されたLessonのIDを使って、Trainingエンティティを作成して保存
-     * 4. 保存されたLessonを返す
-     */
-    @Transactional
-    public Lesson createLesson(LessonRequest request) {
-        // 関連エンティティを取得
-        Customer customer = customerRepository.findById(request.getCustomerId())
-                .orElseThrow(() -> new RuntimeException("顧客が見つかりません: " + request.getCustomerId()));
-        
-        Store store = storeRepository.findById(request.getStoreId())
-                .orElseThrow(() -> new RuntimeException("店舗が見つかりません: " + request.getStoreId()));
-        
-        User trainer = userRepository.findById(request.getTrainerId())
-                .orElseThrow(() -> new RuntimeException("トレーナーが見つかりません: " + request.getTrainerId()));
-        
-        Store nextStore = request.getNextStoreId() != null 
-                ? storeRepository.findById(request.getNextStoreId()).orElse(null) 
-                : null;
-        
-        User nextTrainer = request.getNextTrainerId() != null 
-                ? userRepository.findById(request.getNextTrainerId()).orElse(null) 
-                : null;
+	// --- レッスン一覧の検索と絞り込み (Pageable対応に修正) ---
+	// ★ Pageable を引数に追加し、戻り値を Page に変更 ★
+	public Page<LessonResponse> searchLessons(UUID storeId, String keyword, Pageable pageable) {
 
-        // Lessonエンティティを作成
-        Lesson lesson = Lesson.builder()
-                .customer(customer)
-                .store(store)
-                .trainer(trainer)
-                .condition(request.getCondition())
-                .weight(request.getWeight())
-                .meal(request.getMeal())
-                .memo(request.getMemo())
-                .startDate(request.getStartDate())
-                .endDate(request.getEndDate())
-                .nextDate(request.getNextDate())
-                .nextStore(nextStore)
-                .nextTrainer(nextTrainer)
-                .createdAt(OffsetDateTime.now())
-                .build();
-        
-        // Lessonをデータベースに保存
-        Lesson savedLesson = lessonRepository.save(lesson);
-        
-        // トレーニング種目を保存
-        if (request.getTrainings() != null && !request.getTrainings().isEmpty()) {
-            for (TrainingRequest trainingRequest : request.getTrainings()) {
-                Training training = Training.builder()
-                        .id(Training.TrainingId.builder()
-                                .lessonId(savedLesson.getId())
-                                .orderNo(trainingRequest.getOrderNo())
-                                .build())
-                        .lesson(savedLesson)
-                        .name(trainingRequest.getName())
-                        .reps(trainingRequest.getReps())
-                        .build();
-                
-                trainingRepository.save(training);
-            }
-        }
-        
-        return savedLesson;
-    }
+		Page<Lesson> lessonPage;
+		LocalDateTime now = LocalDateTime.now();
 
-    /**
-     * 顧客IDでレッスン履歴一覧を取得
-     * 
-     * 処理の流れ：
-     * 1. 指定された顧客のレッスン一覧を取得（開始日時の新しい順）
-     * 2. 各レッスンに対して、関連するトレーニング種目と姿勢画像グループを取得
-     * 3. Lessonエンティティと関連データをLessonResponse（DTO）に変換
-     * 4. LessonResponseのリストを返す
-     */
-    public List<LessonResponse> getLessonsByCustomerId(UUID customerId) {
-        List<Lesson> lessons = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId);
-        
-        return lessons.stream()
-                .map(lesson -> {
-                    List<Training> trainings = trainingRepository.findByIdLessonIdOrderByIdOrderNoAsc(lesson.getId());
-                    List<PostureGroup> postureGroups = postureGroupRepository.findByLessonIdOrderByCapturedAtDesc(lesson.getId());
-                    return toLessonResponse(lesson, trainings, postureGroups);
-                })
-                .collect(Collectors.toList());
-    }
+		// ソートは Repository メソッド名で定義されているため、Pageableにはサイズとページ番号のみを渡す
+		// findByStoreIdAndEndDateBefore... (ソート済み) を使用するため、Pageableはソート情報なしでOK
 
-    /**
-     * レッスン詳細を取得
-     * 
-     * 処理の流れ：
-     * 1. レッスンIDでレッスンエンティティを取得
-     * 2. そのレッスンに関連するトレーニング種目を取得
-     * 3. そのレッスンに関連する姿勢画像グループを取得
-     * 4. すべてのデータをLessonResponse（DTO）に変換して返す
-     */
-    public LessonResponse getLessonDetail(UUID lessonId) {
-        Lesson lesson = lessonRepository.findById(lessonId)
-                .orElseThrow(() -> new RuntimeException("レッスンが見つかりません: " + lessonId));
-        
-        List<Training> trainings = trainingRepository.findByIdLessonIdOrderByIdOrderNoAsc(lessonId);
-        List<PostureGroup> postureGroups = postureGroupRepository.findByLessonIdOrderByCapturedAtDesc(lessonId);
-        
-        return toLessonResponse(lesson, trainings, postureGroups);
-    }
+		// 1. 絞り込み (店舗ID + 終了日時)
+		if (storeId != null) {
+			// 店舗IDで絞り込み
+			// Repositoryに findPageByStoreIdAndEndDateBeforeOrderByStartDateDesc(UUID, LocalDateTime, Pageable) が必要
+			lessonPage = lessonRepository.findPageByStoreIdAndEndDateBefore(storeId, now, pageable);
+		} else {
+			// 店舗絞り込みなし
+			// Repositoryに findPageByEndDateBeforeOrderByStartDateDesc(LocalDateTime, Pageable) が必要
+			lessonPage = lessonRepository.findPageByEndDateBefore(now, pageable);
+		}
 
-    /**
-     * LessonエンティティをLessonResponse（DTO）に変換
-     */
-    private LessonResponse toLessonResponse(Lesson lesson, List<Training> trainings, List<PostureGroup> postureGroups) {
-        Customer customer = lesson.getCustomer();
-        Store store = lesson.getStore();
-        User trainer = lesson.getTrainer();
-        Store nextStore = lesson.getNextStore();
-        User nextTrainer = lesson.getNextTrainer();
-        
-        // TrainingリストをTrainingResponseリストに変換
-        List<TrainingResponse> trainingResponses = trainings.stream()
-                .map(t -> TrainingResponse.builder()
-                        .orderNo(t.getId().getOrderNo())
-                        .name(t.getName())
-                        .reps(t.getReps())
-                        .build())
-                .collect(Collectors.toList());
-        
-        // PostureImageリストをPostureImageResponseリストに変換
-        List<PostureImageResponse> postureImageResponses = postureGroups.stream()
-                .flatMap(pg -> pg.getImages().stream())
-                .map(pi -> PostureImageResponse.builder()
-                        .id(pi.getId())
-                        .storageKey(pi.getStorageKey())
-                        .position(pi.getPosition() != null ? pi.getPosition().getCode() : null)
-                        .takenAt(pi.getTakenAt())
-                        .consentPublication(pi.isConsentPublication())
-                        .build())
-                .collect(Collectors.toList());
-        
-        return LessonResponse.builder()
-                .id(lesson.getId())
-                .condition(lesson.getCondition())
-                .weight(lesson.getWeight())
-                .meal(lesson.getMeal())
-                .memo(lesson.getMemo())
-                .startDate(lesson.getStartDate())
-                .endDate(lesson.getEndDate())
-                .nextDate(lesson.getNextDate())
-                .createdAt(lesson.getCreatedAt())
-                .customerId(customer.getId())
-                .customerName(customer.getName())
-                .customerHeight(customer.getHeight())
-                .storeId(store.getId())
-                .storeName(store.getName())
-                .trainerId(trainer.getId())
-                .trainerName(trainer.getName())
-                .nextStoreId(nextStore != null ? nextStore.getId() : null)
-                .nextStoreName(nextStore != null ? nextStore.getName() : null)
-                .nextTrainerId(nextTrainer != null ? nextTrainer.getId() : null)
-                .nextTrainerName(nextTrainer != null ? nextTrainer.getName() : null)
-                .trainings(trainingResponses)
-                .postureImages(postureImageResponses)
-                .build();
-    }
+		// 2. マッピング
+		return lessonPage.map(LessonResponse::fromEntity);
+	}
+
+	// --- レッスン回数グラフデータの作成 ---
+	public LessonChartData getLessonChartData(UUID storeId, String type) {
+
+		LocalDateTime now = LocalDateTime.now();
+		UUID storeUuid = storeId;
+
+		// 1. 期間タイプの決定とJPQL呼び出し
+		String intervalType;
+		if ("week".equals(type)) {
+			intervalType = "week";
+		} else {
+			intervalType = "month";
+			type = "month";
+		}
+
+		// DBから集計結果を取得 [0: 期間開始日時, 1: 回数]
+		List<Object[]> rawChartData = lessonRepository.countLessonsGroupedByPeriod(
+				intervalType, now, storeUuid);
+
+		// 2. 結果の整形 (LessonChartDataの生成)
+		List<ChartSeries> series = new ArrayList<>();
+		int maxCount = 0;
+
+		for (Object[] row : rawChartData) {
+			// PostgreSQLはTIMESTAMP型を返すため、LocalDateTimeに変換
+			java.sql.Timestamp periodTimestamp = (java.sql.Timestamp) row[0];
+			LocalDateTime periodStartAt = periodTimestamp.toInstant()
+					.atZone(ZoneId.systemDefault())
+					.toLocalDateTime();
+
+			long count = ((Number) row[1]).longValue();
+
+			// ラベルの生成
+			String label;
+			if ("week".equals(type)) {
+				// PostgreSQLの date_trunc('week') は通常、月曜日を返す（ただし設定依存）。
+				// Java側でラベル整形を行う
+				LocalDate startDate = periodStartAt.toLocalDate();
+				LocalDate endDate = startDate.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+				label = startDate.getMonthValue() + "/" + startDate.getDayOfMonth() +
+						" - " + endDate.getMonthValue() + "/" + endDate.getDayOfMonth();
+			} else {
+				// 月別
+				label = periodStartAt.getYear() + "/" + periodStartAt.getMonthValue();
+			}
+
+			// maxCountの更新
+			int currentCount = (int) count;
+			if (currentCount > maxCount) {
+				maxCount = currentCount;
+			}
+
+			ChartSeries chartSeries = new ChartSeries();
+			chartSeries.setPeriod(label); // ラベルを periodStart (期間の表示名) として使用
+			chartSeries.setCount(count);
+			series.add(chartSeries);
+		}
+
+		// グラフの要件に従い、「右が最新」にするため、リストを逆順にする
+		java.util.Collections.reverse(series);
+
+		LessonChartData chartData = new LessonChartData();
+		chartData.setSeries(series);
+		chartData.setMaxCount(maxCount);
+		chartData.setType(type);
+		return chartData;
+	}
 }
-
