@@ -1,70 +1,59 @@
 package com.example.fitnessgym_mg.dto.response;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import com.example.fitnessgym_mg.entity.Lesson;
 
-@Getter
-@Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+import lombok.Data;
+
+@Data
 public class LessonResponse {
-    
-    private UUID id;
-    
-    // 関連エンティティ情報
-    private UUID customerId;
-    private String customerName;
-    private BigDecimal customerHeight;  // BMI計算用
-    
-    private UUID storeId;
-    private String storeName;
-    
-    private UUID trainerId;
-    private String trainerName;
-    
-    // レッスン情報
-    private String condition;
-    private BigDecimal weight;
-    private String meal;
-    private String memo;
-    
-    private OffsetDateTime startDate;
-    private OffsetDateTime endDate;
-    
-    // 次回予約情報
-    private OffsetDateTime nextDate;
-    private UUID nextStoreId;
-    private String nextStoreName;
-    private UUID nextTrainerId;
-    private String nextTrainerName;
-    
-    private OffsetDateTime createdAt;
-    
-    // 関連データ
-    private List<TrainingResponse> trainings;
-    private List<PostureImageResponse> postureImages;
-    
-    /**
-     * BMI計算（体重 ÷ 身長² ）
-     * 体重または身長がnullの場合はnullを返す
-     */
-    public BigDecimal getBmi() {
-        if (weight == null || customerHeight == null || customerHeight.compareTo(BigDecimal.ZERO) == 0) {
-            return null;
-        }
-        // BMI = 体重(kg) ÷ (身長(m) × 身長(m))
-        // 身長はcmで保存されているため100で割る
-        BigDecimal heightInMeters = customerHeight.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
-        return weight.divide(heightInMeters.multiply(heightInMeters), 2, RoundingMode.HALF_UP);
-    }
+
+	private UUID id;
+
+	// 実施日時
+	private LocalDateTime startDate;
+	private LocalDateTime endDate;
+
+	// 実施店舗
+	private String storeName;
+
+	// 担当トレーナー
+	private String trainerName;
+
+	// 顧客
+	private String customerName;
+
+	// Lesson エンティティから DTO に変換する
+	public static LessonResponse fromEntity(Lesson lesson) {
+		LessonResponse r = new LessonResponse();
+		r.setId(lesson.getId());
+		r.setStartDate(lesson.getStartDate());
+		r.setEndDate(lesson.getEndDate());
+
+		// 関連エンティティから名前を取得（※関連がロードされている前提）
+		r.setStoreName(lesson.getStore().getName());
+		r.setTrainerName(lesson.getTrainer().getName());
+		r.setCustomerName(lesson.getCustomer().getName());
+
+		return r;
+	}
+
+	// グラフデータを格納するための内部クラス
+	@Data
+	public static class ChartSeries {
+		// PostgreSQLのdate_truncから取得される開始期間
+		private String period;
+		private long count; // long count;
+	}
+
+	@Data
+	public static class LessonChartData {
+		private List<ChartSeries> series;
+		private int maxCount;
+		private String type;
+	}
+
 }

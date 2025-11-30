@@ -1,110 +1,222 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>レッスン履歴一覧 | フィットネスジム管理システム</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-        }
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-        th {
-            background-color: #007bff;
-            color: white;
-        }
-        tr:hover {
-            background-color: #f5f5f5;
-        }
-        .detail-link {
-            color: #007bff;
-            text-decoration: none;
-            font-weight: bold;
-        }
-        .detail-link:hover {
-            text-decoration: underline;
-        }
-        .button-group {
-            margin-bottom: 20px;
-        }
-        button, .button {
-            padding: 10px 20px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-        }
-        button:hover, .button:hover {
-            background: #0056b3;
-        }
-        .no-data {
-            padding: 40px;
-            text-align: center;
-            color: #999;
-        }
-    </style>
-</head>
-<body>
-    <h1>レッスン履歴一覧</h1>
-    
-    <div class="button-group">
-        <a th:href="@{${storeId != null ? '/manager/' + storeId + '/lessons/new?customerId=' + customerId : '/admin/lessons/new?customerId=' + customerId}}" 
-           class="button" th:if="${customerId != null}">
-            新規レッスン入力
-        </a>
-    </div>
-    
-    <div th:if="${lessons != null and !lessons.isEmpty()}">
-        <table>
-            <thead>
-                <tr>
-                    <th>実施日時</th>
-                    <th>顧客名</th>
-                    <th>トレーナー</th>
-                    <th>店舗</th>
-                    <th>体重</th>
-                    <th>詳細</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr th:each="lesson : ${lessons}">
-                    <td th:text="${#temporals.format(lesson.startDate, 'yyyy/MM/dd HH:mm')}"></td>
-                    <td th:text="${lesson.customerName}"></td>
-                    <td th:text="${lesson.trainerName}"></td>
-                    <td th:text="${lesson.storeName}"></td>
-                    <td>
-                        <span th:if="${lesson.weight != null}" th:text="${lesson.weight} + ' kg'"></span>
-                        <span th:if="${lesson.weight == null}">-</span>
-                    </td>
-                    <td>
-                        <a th:href="@{${storeId != null ? '/manager/' + storeId + '/lessons/' + lesson.id : '/admin/lessons/' + lesson.id}}" 
-                           class="detail-link">
-                            詳細を見る
-                        </a>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-    
-    <div th:if="${lessons == null or lessons.isEmpty()}" class="no-data">
-        レッスン履歴がありません
-    </div>
-</body>
-</html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
 
+<head>
+	<meta charset="UTF-8">
+	<title>統計情報</title>
+
+	<style>
+		table {
+			width: 100%;
+			border-collapse: collapse;
+			margin-top: 20px;
+		}
+
+		table th,
+		table td {
+			border: 1px solid #ccc;
+			padding: 8px 10px;
+			text-align: left;
+		}
+
+		table th {
+			font-weight: bold;
+		}
+	</style>
+
+	<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0/dist/chartjs-plugin-datalabels.min.js"></script>
+
+	<script th:inline="javascript">
+		/* <![CDATA[ */
+		// ★ 修正: Controllerから渡される動的なBASE_PATHを取得 ★
+		// 例: /admin/lessons または /manager/{storeId}/lessons
+		const BASE_PATH = /*[[${BASE_PATH}]]*/ '/lessons';
+		/* ]]> */
+
+		document.addEventListener("DOMContentLoaded", () => {
+
+			/* 共通関数：右端へスクロール */
+			function scrollToRight(selector) {
+				const elem = document.querySelector(selector).parentElement;
+				elem.scrollLeft = elem.scrollWidth;
+			}
+
+			/* --- フィルタ送信 (共通) --- */
+			const filterForm = document.getElementById("filterForm");
+			filterForm.onsubmit = (e) => {
+				e.preventDefault();
+				const params = new URLSearchParams(new FormData(e.target));
+
+				// 現在選択中のグラフタイプも付与
+				params.set('chartType', document.querySelector('input[name="chartType"]:checked').value);
+
+				// ★ 修正: 動的な BASE_PATH を使用して遷移 ★
+				location.href = `${BASE_PATH}?${params.toString()}`;
+			};
+
+
+			/* --- グラフ切り替え（週 ⇄ 月） --- */
+			document.querySelectorAll('input[name="chartType"]').forEach(radio => {
+				radio.onchange = () => {
+					// フォーム送信（ → ページがリロード → Chart.js を描画 ）
+					filterForm.dispatchEvent(new Event('submit', {cancelable: true}));
+				};
+			});
+
+
+			/* --- Chart.js 描画処理 --- */
+			const chartDataJson = document.getElementById("chartDataContainer").getAttribute('data-chart-data');
+			const chartData = JSON.parse(chartDataJson);
+
+			const labels = chartData.series.map(item => item.label);
+			const counts = chartData.series.map(item => item.count);
+
+			// 最大カウントが0の場合、グラフの最大値を10に設定して表示崩れを防ぐ
+			const maxCount = chartData.maxCount > 0 ? chartData.maxCount : 10;
+
+			const ctx = document.getElementById('lessonChart').getContext('2d');
+
+			Chart.register(ChartDataLabels);
+
+			new Chart(ctx, {
+				type: 'bar',
+				data: {
+					labels: labels,
+					datasets: [{
+						data: counts,
+						backgroundColor: 'rgba(75, 192, 192, 0.8)',
+						borderRadius: 2,
+					}]
+				},
+				options: {
+					maintainAspectRatio: false,
+					responsive: true,
+					scales: {
+						x: {
+							grid: {display: false}
+						},
+						y: {
+							max: maxCount,
+							beginAtZero: true,
+							ticks: {
+								stepSize: maxCount > 10 ? Math.ceil(maxCount / 5) : 1,
+								callback: () => '' // Y軸メモリ非表示
+							},
+							grid: {display: false}
+						}
+					},
+					plugins: {
+						legend: {display: false},
+						tooltip: {
+							callbacks: {
+								label: context => context.raw + '回'
+							}
+						},
+						datalabels: {
+							anchor: 'end',
+							align: 'top',
+							color: '#000',
+							font: {weight: 'bold', size: 14},
+							formatter: value => value
+						}
+					}
+				}
+			});
+
+			/* --- 初期表示 → 右端へ --- */
+			scrollToRight('#lessonChart');
+
+		});
+	</script>
+
+</head>
+
+<body>
+
+	<h2>統計情報</h2>
+
+	<div th:if="${storeId == null}">
+			<form id="filterForm">
+				<select name="storeId">
+					<option value="">全ての店舗</option>
+					<option th:each="s : ${stores}" th:value="${s.id}" th:text="${s.name}"
+						th:selected="${storeId != null and storeId.toString() == s.id.toString()}"></option>
+				</select>
+
+				<button type="submit">検索</button>
+			</form>
+		</div>
+		
+		<div th:unless="${storeId == null}">
+			<form id="filterForm">
+				<p>
+					所属店舗: <span th:each="s : ${stores}" th:if="${storeId != null and storeId.toString() == s.id.toString()}" th:text="${s.name}"></span>
+				</p>
+				<input type="hidden" name="storeId" th:value="${storeId}" />
+				<button type="submit" style="display: none;">検索</button>
+			</form>
+		</div>
+	    <div id="chartDataContainer" th:attr="data-chart-data=${#jsonUtils.toJson(chartData)}" style="display: none;">
+		</div>
+
+		<div class="chart-section">
+			<h3>レッスン回数グラフ</h3>
+
+			<label><input type="radio" name="chartType" value="week" th:checked="${chartType == 'week'}"> 週別</label>
+			<label><input type="radio" name="chartType" value="month" th:checked="${chartType == 'month'}"> 月別</label>
+
+			<div style="max-height: 60vh; overflow-x: auto;">
+				<canvas id="lessonChart"></canvas>
+			</div>
+
+			<p>※右端が最新、左にスクロールで過去に遡ります</p>
+		</div>
+
+		<hr>
+
+		<h3>レッスン履歴一覧 (<span th:text="${lessonPage.totalElements}"></span> 件)</h3>
+
+		<div th:if="${lessonPage.content.isEmpty()}">該当するレッスンデータはありません</div>
+
+		<table>
+			<thead>
+				<tr>
+					<th>実施日時</th>
+					<th>実施店舗</th>
+					<th>担当トレーナー</th>
+					<th>顧客</th>
+					<th>操作</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr th:each="lesson : ${lessonPage.content}">
+					<td>
+						<span th:text="${#temporals.format(lesson.startDate, 'yyyy/MM/dd')}"></span><br>
+						<span
+							th:text="${#temporals.format(lesson.startDate, 'HH:mm')} + ' - ' + ${#temporals.format(lesson.endDate, 'HH:mm')}"></span>
+					</td>
+					<td th:text="${lesson.storeName}"></td>
+					<td th:text="${lesson.trainerName}"></td>
+					<td th:text="${lesson.customerName}"></td>
+					<td>
+						<a th:href="@{${BASE_PATH} + '/' + ${lesson.id}}">詳細</a>
+					</td>
+				</tr>
+			</tbody>
+		</table>
+
+		<div class="pagination" th:if="${lessonPage.totalPages > 1}">
+			<a th:if="${lessonPage.hasPrevious()}"
+				th:href="@{${BASE_PATH}(page=${lessonPage.number - 1}, storeId=${storeId}, keyword=${keyword}, chartType=${chartType}, size=10)}">前へ</a>
+
+			<span th:text="${lessonPage.number + 1}"></span> /
+			<span th:text="${lessonPage.totalPages}"></span>
+
+			<a th:if="${lessonPage.hasNext()}"
+				th:href="@{${BASE_PATH}(page=${lessonPage.number + 1}, storeId=${storeId}, keyword=${keyword}, chartType=${chartType}, size=10)}">次へ</a>
+		</div>
+
+</body>
+
+</html>
