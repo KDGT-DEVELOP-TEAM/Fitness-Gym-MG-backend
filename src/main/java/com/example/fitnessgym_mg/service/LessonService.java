@@ -195,7 +195,7 @@ public class LessonService {
 		// 姿勢画像取得
 		List<PostureGroup> postureGroups = postureGroupRepository.findByLessonIdOrderByCapturedAtDesc(lessonId);
 		List<PostureImageResponse> postureImages = postureGroups.stream()
-			.flatMap(pg -> pg.getPostureImages().stream())
+			.flatMap(pg -> pg.getImages().stream())
 			.map(PostureImageResponse::fromEntity)
 			.collect(Collectors.toList());
 		
@@ -222,5 +222,15 @@ public class LessonService {
 		response.setPostureImages(postureImages);
 		
 		return response;
+	}
+
+	// --- 顧客IDでレッスン履歴を取得 ---
+	/**
+	 * 顧客IDに紐づくレッスン履歴を開始日時の降順で取得し、LessonResponseに変換
+	 */
+	public List<LessonResponse> getLessonsByCustomerId(UUID customerId) {
+		return lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId).stream()
+				.map(LessonResponse::fromEntity)
+				.collect(Collectors.toList());
 	}
 }

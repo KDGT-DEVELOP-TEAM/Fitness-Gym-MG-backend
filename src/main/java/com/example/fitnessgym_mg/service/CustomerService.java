@@ -1,6 +1,8 @@
 package com.example.fitnessgym_mg.service;
 
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import jakarta.persistence.criteria.JoinType;
 
@@ -17,6 +19,7 @@ import com.example.fitnessgym_mg.dto.response.CustomerResponse;
 import com.example.fitnessgym_mg.entity.Customer;
 import com.example.fitnessgym_mg.repository.CustomerRepository;
 import com.example.fitnessgym_mg.repository.LessonRepository;
+import com.example.fitnessgym_mg.repository.UserCustomerRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -27,6 +30,7 @@ public class CustomerService {
 
 	private final CustomerRepository customerRepository;
 	private final LessonRepository lessonRepository;
+	private final UserCustomerRepository userCustomerRepository;
 
 	// --- 顧客一覧検索（ページネーション対応） ---
 	@Transactional(readOnly = true)
@@ -158,6 +162,29 @@ public class CustomerService {
 	@Transactional(readOnly = true)
 	public Customer findById(UUID id, UUID storeId) {
 		return findCustomerById(id, storeId);
+	}
+
+	// --- トレーナー用顧客取得 ---
+	/**
+	 * トレーナーIDでそのトレーナーが担当している顧客リストを取得
+	 * UserCustomerRepositoryを使用して中間テーブル経由で取得し、CustomerResponseに変換
+	 */
+	@Transactional(readOnly = true)
+	public List<CustomerResponse> getCustomersByTrainer(UUID trainerId) {
+		return userCustomerRepository.findByUserIdWithCustomer(trainerId).stream()
+				.map(uc -> CustomerResponse.fromEntity(uc.getCustomer()))
+				.collect(Collectors.toList());
+	}
+
+	// --- 顧客IDで顧客詳細を取得（CustomerResponse形式） ---
+	/**
+	 * 顧客IDで顧客情報を取得し、CustomerResponseに変換
+	 */
+	@Transactional(readOnly = true)
+	public CustomerResponse getCustomerById(UUID customerId) {
+		Customer customer = customerRepository.findById(customerId)
+				.orElseThrow(() -> new RuntimeException("顧客が見つかりません: " + customerId));
+		return CustomerResponse.fromEntity(customer);
 	}
 
 	// --- ヘルパーメソッド ---

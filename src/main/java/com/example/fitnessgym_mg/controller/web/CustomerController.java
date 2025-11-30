@@ -47,7 +47,7 @@ public class CustomerController {
      */
     @GetMapping("/trainer/customers")
     public String trainerCustomerList(
-            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(required = false) String search,
             Model model) {
         
         // ログインユーザー（トレーナー）を取得
@@ -144,7 +144,7 @@ public class CustomerController {
         
         try {
             // 顧客情報を更新
-            customerService.updateCustomer(customerId, request);
+            customerService.update(customerId, request, storeId);
             
             // 成功メッセージ
             redirectAttributes.addFlashAttribute("successMessage", "顧客情報を更新しました");
