@@ -67,12 +67,12 @@ public class CustomUserDetailsService implements UserDetailsService {
      * ユーザーのroleフィールドから権限を生成
      * 
      * 処理の流れ：
-     * 1. ユーザーのroleフィールドを取得（例："admin"）
-     * 2. 大文字に変換して"ROLE_"プレフィックスを付ける（例："ROLE_ADMIN"）
+     * 1. ユーザーのroleフィールドを取得（UserRole型のEnum）
+     * 2. Enumのname()メソッドで文字列に変換し、大文字に変換して"ROLE_"プレフィックスを付ける（例："ROLE_ADMIN"）
      * 3. SimpleGrantedAuthorityオブジェクトを作成して返す
      */
     private Collection<? extends GrantedAuthority> getAuthorities(User user) {
-        String role = user.getRole();
+        String role = user.getRole().name(); // UserRole EnumをStringに変換
         String authority = "ROLE_" + role.toUpperCase();
         return Collections.singletonList(new SimpleGrantedAuthority(authority));
     }

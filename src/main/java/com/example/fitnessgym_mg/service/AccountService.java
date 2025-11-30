@@ -253,6 +253,6 @@ public class AccountService {
 	}
 
 	private boolean hasRelatedData(UUID userId) {
-		return lessonRepository.countByUserId(userId) > 0;
+		return lessonRepository.countByTrainerId(userId) > 0;
 	}
 }

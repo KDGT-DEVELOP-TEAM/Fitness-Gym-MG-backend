@@ -140,7 +140,7 @@ project-root/
 | email | varchar |  | ○ | ○ | ○ | メールアドレス（CHECK制約あり） |
 | kana | varchar |  | ○ |  |  | フリガナ |
 | name | varchar |  | ○ |  |  | 氏名 |
-| pass | varchar |  | ○ |  |  | ハッシュ化パスワード（bcrypt） |
+| pass | varchar(255) |  | ○ |  |  | ハッシュ化パスワード（bcrypt、60文字） |
 | role | user_role |  | ○ |  |  | 権限区分 |
 | is_active | boolean |  | ○ |  |  | 有効／無効 |
 | created_at | timestamptz |  | ○ |  |  | 登録日時 |

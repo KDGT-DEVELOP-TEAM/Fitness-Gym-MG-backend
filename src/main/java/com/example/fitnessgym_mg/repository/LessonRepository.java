@@ -46,7 +46,8 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	long countByCustomerId(UUID customerId);
 
 	/**
-	 * 指定されたユーザーIDに紐づくレッスンレコードの件数を取得する。
+	 * 指定されたトレーナーID（ユーザーID）に紐づくレッスンレコードの件数を取得する。
+	 * LessonエンティティのtrainerフィールドのIDで検索します。
 	 */
-	long countByUserId(UUID userId);
+	long countByTrainerId(UUID trainerId);
 }
