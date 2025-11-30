@@ -26,6 +26,19 @@ public class LessonResponse {
 	// 顧客
 	private String customerName;
 
+	// 詳細表示用フィールド
+	private String condition;
+	private Double weight;
+	private Double bmi; // 計算値
+	private String meal;
+	private String memo;
+	private LocalDateTime nextDate;
+	private String nextStoreName;
+	private String nextTrainerName;
+	
+	private List<TrainingResponse> trainings;
+	private List<PostureImageResponse> postureImages;
+
 	// Lesson エンティティから DTO に変換する
 	public static LessonResponse fromEntity(Lesson lesson) {
 		LessonResponse r = new LessonResponse();
@@ -39,6 +52,15 @@ public class LessonResponse {
 		r.setCustomerName(lesson.getCustomer().getName());
 
 		return r;
+	}
+
+	// BMI計算メソッド
+	public static Double calculateBmi(Double weight, Double height) {
+		if (weight == null || height == null || height == 0) {
+			return null;
+		}
+		double heightInMeters = height / 100.0;
+		return Math.round((weight / (heightInMeters * heightInMeters)) * 100.0) / 100.0;
 	}
 
 	// グラフデータを格納するための内部クラス
