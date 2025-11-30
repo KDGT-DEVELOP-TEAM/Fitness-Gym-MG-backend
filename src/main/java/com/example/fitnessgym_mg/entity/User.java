@@ -1,65 +1,67 @@
 package com.example.fitnessgym_mg.entity;
 
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.UUID;
 
-import com.example.fitnessgym_mg.entity.converter.UserRoleConverter;
-import com.example.fitnessgym_mg.entity.enums.UserRole;
 import jakarta.persistence.Column;
-import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.persistence.UniqueConstraint;
 
-/**
- * DB usersテーブルとマッピングするエンティティ
- * システムユーザー（トレーナー、マネージャー、管理者）を表す
- * DBスキーマに合わせてkanaとcreatedAtフィールドを追加
- */
-@Getter
-@Setter
-@Builder
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Entity
+@Table(name = "users") // 明示的にテーブル名を指定
 @NoArgsConstructor
 @AllArgsConstructor
-@Entity
-@Table(name = "users")
+@Data
 public class User {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.UUID)
+	private UUID id;
 
-    // メールアドレス（DB側でCHECK制約あり）
-    @Column(name = "email", length = 255, nullable = false, unique = true)
-    private String email;
+	@Column(unique = true, nullable = false)
+	private String email;
 
-    // フリガナ（DBスキーマに合わせて追加）
-    @Column(name = "kana", nullable = false)
-    private String kana;
+	@Column(nullable = false)
+	private String name;
 
-    @Column(name = "name", nullable = false)
-    private String name;
+	@Column(nullable = false)
+	private String kana;
 
-    // bcryptハッシュ化されたパスワード
-    @Column(name = "pass", length = 60, nullable = false)
-    private String passwordHash;
+	@Column(nullable = false)
+	private String pass;
 
-    @Convert(converter = UserRoleConverter.class)
-    @Column(name = "role", length = 20, nullable = false)
-    private UserRole role;
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private UserRole role;
 
-    @Column(name = "is_active", nullable = false)
-    private boolean active;
+	@Column(nullable = false)
+	private boolean isActive = true;
 
-    // ユーザー登録日時（DBスキーマに合わせて追加）
-    @Column(name = "created_at", nullable = false)
-    private OffsetDateTime createdAt;
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private LocalDateTime createdAt;
+
+	public enum UserRole {
+		admin, manager, trainer;
+	}
+
+	@ManyToMany
+	@JoinTable(name = "user_stores", // 中間テーブル名
+			joinColumns = @JoinColumn(name = "user_id", nullable = false), // User側のFK
+			inverseJoinColumns = @JoinColumn(name = "store_id", nullable = false), // Store側のFK
+			uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "store_id" })) //複合ユニーク制約
+	private Set<Store> stores; // ユーザーが所属する店舗リスト
 }
-

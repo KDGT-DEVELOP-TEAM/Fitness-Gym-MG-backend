@@ -1,7 +1,6 @@
 package com.example.fitnessgym_mg.entity;
 
-import java.math.BigDecimal;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -12,78 +11,95 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-/**
- * DB lessonsテーブルとマッピングするエンティティ
- * 顧客が受けたトレーニングレッスンの記録を表す
- * 関連エンティティはLAZY読み込みで必要時のみDBから取得
- */
-@Getter
-@Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 @Entity
 @Table(name = "lessons")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class Lesson {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.UUID)
+	private UUID id;
 
-    // レッスン実施店舗（LAZY: アクセス時にDBから取得）
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "store_id")
-    private Store store;
+	// 実施時間
+	@Column(name = "start_date", nullable = true) // NOT NULLではない
+	private LocalDateTime startDate;
 
-    // 担当トレーナー（LAZY: アクセス時にDBから取得）
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id")
-    private User trainer;
+	@Column(name = "end_date", nullable = true) // NOT NULLではない
+	private LocalDateTime endDate;
 
-    // レッスン受講顧客（LAZY: アクセス時にDBから取得）
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "customer_id")
-    private Customer customer;
+	// ------------------------------------
+	// 必須リレーション
+	// ------------------------------------
 
-    @Column(name = "condition", length = 50)
-    private String condition;
+	// 実施店舗 (FK: store_id)
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "store_id", nullable = false)
+	private Store store;
 
-    @Column(name = "weight", precision = 5, scale = 2)
-    private BigDecimal weight;
+	// 担当トレーナー (FK: user_id)
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "user_id", nullable = false)
+	private User trainer; // DBは user_id だが、Java側は trainer と命名
 
-    @Column(name = "meal", length = 150)
-    private String meal;
+	// 顧客 (FK: customer_id)
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "customer_id", nullable = false)
+	private Customer customer;
 
-    @Column(name = "memo", length = 500)
-    private String memo;
+	// 姿勢画像グループ (FK: posture_group_id)
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "posture_group_id", nullable = true) // NOT NULLではない
+	private PostureGroup postureGroup;
 
-    @Column(name = "start_date")
-    private OffsetDateTime startDate;
+	// ------------------------------------
+	// フィールド
+	// ------------------------------------
 
-    @Column(name = "end_date")
-    private OffsetDateTime endDate;
+	@Column(length = 50)
+	private String condition; // 体調
 
-    @Column(name = "next_date")
-    private OffsetDateTime nextDate;
+	private Double weight; // 体重 (numeric は Double/BigDecimal)
 
-    // 次回予定店舗（任意）
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "next_store_id")
-    private Store nextStore;
+	@Column(length = 150)
+	private String meal; // 食事
 
-    // 次回担当トレーナー（任意）
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "next_user_id")
-    private User nextTrainer;
+	@Column(length = 500)
+	private String memo; // 会話などのメモ
 
-    @Column(name = "created_at")
-    private OffsetDateTime createdAt;
+	// ------------------------------------
+	// 次回予約関連
+	// ------------------------------------
+
+	// 次回のレッスン予約
+	@Column(name = "next_date", nullable = true)
+	private LocalDateTime nextDate;
+
+	// 次回の実施店舗 (FK: next_store_id)
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "next_store_id", nullable = true)
+	private Store nextStore;
+
+	// 次回の担当トレーナー (FK: next_user_id)
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "next_user_id", nullable = true)
+	private User nextUser;
+
+	// ------------------------------------
+
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private LocalDateTime createdAt;
+
+	@PrePersist
+	public void onPrePersist() {
+		this.createdAt = LocalDateTime.now();
+	}
 }
-

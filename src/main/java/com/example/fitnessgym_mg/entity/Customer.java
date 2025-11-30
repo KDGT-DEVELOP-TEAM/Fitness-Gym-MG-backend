@@ -1,96 +1,92 @@
 package com.example.fitnessgym_mg.entity;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.UUID;
 
-import com.example.fitnessgym_mg.entity.converter.GenderConverter;
-import com.example.fitnessgym_mg.entity.enums.Gender;
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
-import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.persistence.UniqueConstraint;
 
-/**
- * DB customersテーブルとマッピングするエンティティ
- * ジムの顧客情報を表す
- * CascadeType.ALL: PostureGroupsを自動保存・削除
- */
-@Getter
-@Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 @Entity
 @Table(name = "customers")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class Customer {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.UUID)
+	private UUID id;
 
-    @Column(name = "kana", length = 100, nullable = false)
-    private String kana;
+	@Column(nullable = false)
+	private String kana;
 
-    @Column(name = "name", length = 100, nullable = false)
-    private String name;
+	@Column(nullable = false)
+	private String name;
 
-    @Convert(converter = GenderConverter.class)
-    @Column(name = "gender", length = 10, nullable = false)
-    private Gender gender;
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private CustomerGender gender;
 
-    @Column(name = "birthday", nullable = false)
-    private LocalDate birthday;
+	@Column(nullable = false)
+	private LocalDate birthday;
 
-    @Column(name = "height", precision = 5, scale = 2)
-    private BigDecimal height;
+	@Column(nullable = false)
+	private Double height; // numeric型に対応
 
-    @Column(name = "email", length = 255, nullable = false, unique = true)
-    private String email;
+	@Column(unique = true, nullable = false)
+	private String email;
 
-    @Column(name = "phone", length = 12, nullable = false)
-    private String phone;
+	@Column(nullable = false, length = 12)
+	private String phone;
 
-    @Column(name = "address", length = 200, nullable = false)
-    private String address;
+	@Column(nullable = false)
+	private String address;
 
-    @Column(name = "medical", length = 100)
-    private String medical;
+	@Column
+	private String medical; // 任意
 
-    @Column(name = "taboo", length = 100)
-    private String taboo;
+	@Column
+	private String taboo; // 任意
 
-    // 初回姿勢画像グループへの参照（任意）
-    @Column(name = "first_posture_group_id")
-    private UUID firstPostureGroupId;
+	// 初回姿勢画像ID (外部キーであり、新規作成時は任意)
+	@Column(name = "first_posture_group_id")
+	private UUID firstPostureGroupId;
 
-    @Column(name = "memo", length = 500)
-    private String memo;
+	@Column
+	private String memo; // 任意
 
-    @Column(name = "created_at", nullable = false)
-    private OffsetDateTime createdAt;
+	// 備考: 作成日時は、DB側でデフォルト値が設定されるため、Java側では変更不可 (updatable=false) とする
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private LocalDateTime createdAt;
 
-    @Column(name = "is_active", nullable = false)
-    private boolean active;
+	@Column(name = "is_active", nullable = false)
+	private boolean active = true;
 
-    // この顧客の姿勢画像グループリスト
-    // CascadeType.ALL: Customer削除時にPostureGroupsもDBから削除
-    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default
-    private List<PostureGroup> postureGroups = new ArrayList<>();
+	public enum CustomerGender {
+		男, 女;
+	}
+
+	@ManyToMany
+	@JoinTable(name = "store_customers", // 中間テーブル名
+			joinColumns = @JoinColumn(name = "customer_id", nullable = false), // Customer側のFK
+			inverseJoinColumns = @JoinColumn(name = "store_id", nullable = false), // Store側のFK
+			uniqueConstraints = @UniqueConstraint(columnNames = { "customer_id", "user_id" }) //複合ユニーク制約
+	)
+	private Set<Store> stores; // 顧客が所属する店舗リスト
 }
-
