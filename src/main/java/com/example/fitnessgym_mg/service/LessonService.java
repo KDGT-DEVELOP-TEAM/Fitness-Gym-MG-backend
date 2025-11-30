@@ -8,17 +8,29 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.fitnessgym_mg.dto.request.LessonRequest;
 import com.example.fitnessgym_mg.dto.response.LessonResponse;
+import com.example.fitnessgym_mg.dto.response.PostureImageResponse;
+import com.example.fitnessgym_mg.dto.response.TrainingResponse;
 import com.example.fitnessgym_mg.dto.response.LessonResponse.ChartSeries;
 import com.example.fitnessgym_mg.dto.response.LessonResponse.LessonChartData;
+import com.example.fitnessgym_mg.entity.Customer;
 import com.example.fitnessgym_mg.entity.Lesson;
+import com.example.fitnessgym_mg.entity.PostureGroup;
+import com.example.fitnessgym_mg.entity.Store;
+import com.example.fitnessgym_mg.entity.User;
+import com.example.fitnessgym_mg.repository.CustomerRepository;
 import com.example.fitnessgym_mg.repository.LessonRepository;
+import com.example.fitnessgym_mg.repository.PostureGroupRepository;
+import com.example.fitnessgym_mg.repository.StoreRepository;
+import com.example.fitnessgym_mg.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,6 +40,11 @@ import lombok.RequiredArgsConstructor;
 public class LessonService {
 
 	private final LessonRepository lessonRepository;
+	private final TrainingService trainingService;
+	private final PostureGroupRepository postureGroupRepository;
+	private final CustomerRepository customerRepository;
+	private final StoreRepository storeRepository;
+	private final UserRepository userRepository;
 
 	// --- レッスン一覧の検索と絞り込み (Pageable対応に修正) ---
 	// ★ Pageable を引数に追加し、戻り値を Page に変更 ★
@@ -120,5 +137,90 @@ public class LessonService {
 		chartData.setMaxCount(maxCount);
 		chartData.setType(type);
 		return chartData;
+	}
+
+	// --- 新規レッスン作成 ---
+	@Transactional
+	public Lesson createLesson(LessonRequest request) {
+		// エンティティの取得
+		Customer customer = customerRepository.findById(request.getCustomerId())
+			.orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
+		Store store = storeRepository.findById(request.getStoreId())
+			.orElseThrow(() -> new RuntimeException("店舗が見つかりません"));
+		User trainer = userRepository.findById(request.getTrainerId())
+			.orElseThrow(() -> new RuntimeException("トレーナーが見つかりません"));
+		
+		// 次回店舗・トレーナー（任意）
+		Store nextStore = request.getNextStoreId() != null 
+			? storeRepository.findById(request.getNextStoreId()).orElse(null) 
+			: null;
+		User nextTrainer = request.getNextTrainerId() != null 
+			? userRepository.findById(request.getNextTrainerId()).orElse(null) 
+			: null;
+		
+		// レッスンエンティティの作成
+		Lesson lesson = new Lesson();
+		lesson.setCustomer(customer);
+		lesson.setStore(store);
+		lesson.setTrainer(trainer);
+		lesson.setCondition(request.getCondition());
+		lesson.setWeight(request.getWeight());
+		lesson.setMeal(request.getMeal());
+		lesson.setMemo(request.getMemo());
+		lesson.setStartDate(request.getStartDate());
+		lesson.setEndDate(request.getEndDate());
+		lesson.setNextDate(request.getNextDate());
+		lesson.setNextStore(nextStore);
+		lesson.setNextUser(nextTrainer);
+		
+		// レッスン保存
+		Lesson savedLesson = lessonRepository.save(lesson);
+		
+		// トレーニング保存
+		if (request.getTrainings() != null && !request.getTrainings().isEmpty()) {
+			trainingService.createTrainings(savedLesson.getId(), request.getTrainings());
+		}
+		
+		return savedLesson;
+	}
+
+	// --- レッスン詳細取得 ---
+	public LessonResponse getLessonDetail(UUID lessonId) {
+		Lesson lesson = lessonRepository.findById(lessonId)
+			.orElseThrow(() -> new RuntimeException("レッスンが見つかりません"));
+		
+		// トレーニング取得
+		List<TrainingResponse> trainings = trainingService.getTrainingsByLessonId(lessonId);
+		
+		// 姿勢画像取得
+		List<PostureGroup> postureGroups = postureGroupRepository.findByLessonIdOrderByCapturedAtDesc(lessonId);
+		List<PostureImageResponse> postureImages = postureGroups.stream()
+			.flatMap(pg -> pg.getPostureImages().stream())
+			.map(PostureImageResponse::fromEntity)
+			.collect(Collectors.toList());
+		
+		// BMI計算
+		Double bmi = LessonResponse.calculateBmi(lesson.getWeight(), lesson.getCustomer().getHeight());
+		
+		// レスポンス作成
+		LessonResponse response = new LessonResponse();
+		response.setId(lesson.getId());
+		response.setCustomerName(lesson.getCustomer().getName());
+		response.setTrainerName(lesson.getTrainer().getName());
+		response.setStoreName(lesson.getStore().getName());
+		response.setStartDate(lesson.getStartDate());
+		response.setEndDate(lesson.getEndDate());
+		response.setCondition(lesson.getCondition());
+		response.setWeight(lesson.getWeight());
+		response.setBmi(bmi);
+		response.setMeal(lesson.getMeal());
+		response.setMemo(lesson.getMemo());
+		response.setNextDate(lesson.getNextDate());
+		response.setNextStoreName(lesson.getNextStore() != null ? lesson.getNextStore().getName() : null);
+		response.setNextTrainerName(lesson.getNextUser() != null ? lesson.getNextUser().getName() : null);
+		response.setTrainings(trainings);
+		response.setPostureImages(postureImages);
+		
+		return response;
 	}
 }
