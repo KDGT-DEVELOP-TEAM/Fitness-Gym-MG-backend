@@ -1,9 +1,49 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="ja" th:replace="layout/base :: content">
   <body>
-    <section>
-      <h1>Customer Detail Placeholder</h1>
+    <section class="customer-list">
+      <header class="customer-list__header">
+        <h1>顧客一覧</h1>
+      </header>
+
+      <div th:if="${customers == null || customers.isEmpty()}" class="customer-list__empty">
+        <p>顧客が登録されていません。</p>
+      </div>
+
+      <div th:if="${customers != null && !customers.isEmpty()}" class="customer-list__items">
+        <table class="customer-list__table">
+          <thead>
+            <tr>
+              <th>氏名</th>
+              <th>フリガナ</th>
+              <th>性別</th>
+              <th>メールアドレス</th>
+              <th>電話番号</th>
+              <th>状態</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:each="customer : ${customers}">
+              <td th:text="${customer.name}"></td>
+              <td th:text="${customer.kana}"></td>
+              <td th:text="${customer.gender == 'male' ? '男性' : (customer.gender == 'female' ? '女性' : '')}"></td>
+              <td th:text="${customer.email}"></td>
+              <td th:text="${customer.phone}"></td>
+              <td th:text="${customer.active ? '有効' : '無効'}"></td>
+              <td>
+                <a th:href="'/customers/' + ${customer.id} + '/posture_groups'" class="customer-list__link">画像一覧</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <footer class="customer-list__footer">
+        <form th:action="@{/auth/logout}" method="post" style="margin-top: 2rem;">
+          <button type="submit" class="customer-list__logout">ログアウト</button>
+        </form>
+      </footer>
     </section>
   </body>
 </html>
-

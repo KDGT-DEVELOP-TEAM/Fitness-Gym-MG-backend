@@ -1,9 +1,249 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="ja" th:replace="layout/base :: content">
+<!--
+  姿勢画像比較ページ
+  動作: JavaScriptで /api/customers/{customerId}/posture_groups を呼び出し
+        APIから取得した画像データを左右比較表示
+        URLパラメータ（groupId, imageId）で比較元を指定
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>姿勢画像比較 - FitnessGym MG</title>
+    <link rel="stylesheet" th:href="@{/css/reset.css}" />
+    <link rel="stylesheet" th:href="@{/css/style.css}" />
+  </head>
   <body>
-    <section>
-      <h1>Posture Image Placeholder</h1>
+    <main>
+    <!-- 顧客IDをdata属性として保持（JavaScriptで使用） -->
+    <section
+      class="posture-compare"
+      th:attr="data-customer-id=${customerId}"
+    >
+      <header class="posture-compare__header">
+        <h1>姿勢画像比較</h1>
+        <p>左側は一覧から選択した姿勢画像、右側は比較対象を選択して表示します。</p>
+        <a th:href="'/customers/' + ${customerId} + '/posture_groups'">一覧へ戻る</a>
+      </header>
+
+      <div id="posture-compare-error" class="posture-compare__error" hidden>
+        姿勢画像の読み込みに失敗しました。ページを再読み込みしてください。
+      </div>
+
+      <div class="posture-compare__panels">
+        <article class="posture-compare__panel">
+          <header>
+            <h2>比較元</h2>
+            <p id="compare-left-meta"></p>
+          </header>
+          <div class="posture-compare__image-wrapper">
+            <img id="compare-left-image" alt="比較元の姿勢画像" />
+          </div>
+        </article>
+
+        <article class="posture-compare__panel">
+          <header>
+            <h2>比較対象</h2>
+            <div class="posture-compare__controls">
+              <label for="compare-lesson-select">レッスン日</label>
+              <select id="compare-lesson-select"></select>
+              <div class="posture-compare__toggler">
+                <button type="button" data-action="prev">前へ</button>
+                <button type="button" data-action="next">次へ</button>
+              </div>
+            </div>
+            <p id="compare-right-meta"></p>
+          </header>
+          <div class="posture-compare__image-wrapper">
+            <img id="compare-right-image" alt="比較対象の姿勢画像" />
+          </div>
+        </article>
+      </div>
     </section>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const section = document.querySelector('.posture-compare');
+        if (!section) return;
+
+        const customerId = section.dataset.customerId;
+        const errorState = document.getElementById('posture-compare-error');
+
+        const leftImageEl = document.getElementById('compare-left-image');
+        const leftMetaEl = document.getElementById('compare-left-meta');
+
+        const rightImageEl = document.getElementById('compare-right-image');
+        const rightMetaEl = document.getElementById('compare-right-meta');
+        const lessonSelect = document.getElementById('compare-lesson-select');
+        const toggleButtons = document.querySelectorAll('.posture-compare__toggler button');
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialGroupId = urlParams.get('groupId');
+        const initialImageId = urlParams.get('imageId');
+
+        // 姿勢画像の表示順序
+        const PAGE_ORDER = ['front', 'right', 'back', 'left'];
+
+        // Storageの公開URL生成
+        // posturesバケットの公開URLベース
+        const SUPABASE_PUBLIC_BASE = 'https://cwybkjzapzrxtcyvctuk.supabase.co/storage/v1/object/public/postures';
+
+        // storageKey（相対パスまたは完全URL）をStorage公開URLに変換
+        const toPublicUrl = (storageKey) => {
+          if (!storageKey) return '';
+          if (storageKey.startsWith('http://') || storageKey.startsWith('https://')) {
+            return storageKey; // 既に完全URLの場合
+          }
+          // 相対パスの場合はStorage公開URLベースに結合
+          return `${SUPABASE_PUBLIC_BASE}${storageKey.startsWith('/') ? storageKey : '/' + storageKey}`;
+        };
+
+        const formatDateTime = (value) => {
+          if (!value) return '日時未設定';
+          return new Intl.DateTimeFormat('ja-JP', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          }).format(new Date(value));
+        };
+
+        const formatMeta = (group, image) => {
+          if (!group || !image) return 'データが存在しません。';
+          const position = image.position ?? '不明';
+          return `レッスン日: ${formatDateTime(group.lessonStartDate)} / 体位: ${position} / 撮影: ${formatDateTime(image.takenAt)}`;
+        };
+
+        const sortImages = (images = []) =>
+          [...images].sort((a, b) => {
+            const orderA = PAGE_ORDER.indexOf(a.position);
+            const orderB = PAGE_ORDER.indexOf(b.position);
+            return (orderA === -1 ? Number.MAX_SAFE_INTEGER : orderA) -
+              (orderB === -1 ? Number.MAX_SAFE_INTEGER : orderB);
+          });
+
+        const state = {
+          groups: [],
+          left: { group: null, image: null },
+          right: { group: null, index: 0 }
+        };
+
+        const applyLeft = () => {
+          if (!state.left.group || !state.left.image) {
+            leftImageEl.src = '';
+            leftMetaEl.textContent = '比較元データが見つかりませんでした。';
+            return;
+          }
+          leftImageEl.src = toPublicUrl(state.left.image.storageKey);
+          leftImageEl.alt = `${state.left.image.position ?? 'unknown'} posture image`;
+          leftMetaEl.textContent = formatMeta(state.left.group, state.left.image);
+        };
+
+        const applyRight = () => {
+          const { group, index } = state.right;
+          if (!group || !group.images?.length) {
+            rightImageEl.src = '';
+            rightMetaEl.textContent = '比較対象のデータがありません。';
+            toggleButtons.forEach((btn) => (btn.disabled = true));
+            return;
+          }
+
+          const images = sortImages(group.images);
+          const safeIndex = ((index % images.length) + images.length) % images.length;
+          state.right.index = safeIndex;
+          const image = images[safeIndex];
+
+          rightImageEl.src = toPublicUrl(image.storageKey);
+          rightImageEl.alt = `${image.position ?? 'unknown'} posture image`;
+          rightMetaEl.textContent = formatMeta(group, image);
+
+          toggleButtons.forEach((btn) => (btn.disabled = images.length <= 1));
+        };
+
+        const populateLessonOptions = () => {
+          lessonSelect.innerHTML = '';
+          state.groups.forEach((group) => {
+            const option = document.createElement('option');
+            option.value = group.id;
+            option.textContent = formatDateTime(group.lessonStartDate);
+            lessonSelect.appendChild(option);
+          });
+        };
+
+        const selectRightGroup = (groupId) => {
+          const selected = state.groups.find((group) => group.id === groupId) ?? state.groups[0];
+          state.right.group = selected || null;
+          state.right.index = 0;
+          if (selected) {
+            lessonSelect.value = selected.id;
+          }
+          applyRight();
+        };
+
+        const initializeState = () => {
+          if (!state.groups.length) {
+            leftMetaEl.textContent = '姿勢画像が登録されていません。';
+            rightMetaEl.textContent = '';
+            return;
+          }
+
+          // Initialize left side
+          const fallbackGroup = state.groups[0];
+          const fallbackImage = sortImages(fallbackGroup.images)[0];
+
+          let leftGroup = fallbackGroup;
+          let leftImage = fallbackImage;
+
+          if (initialGroupId) {
+            const matchGroup = state.groups.find((group) => group.id === initialGroupId);
+            if (matchGroup) {
+              leftGroup = matchGroup;
+              const matchImage = matchGroup.images?.find((img) => img.id === initialImageId);
+              leftImage = matchImage ?? sortImages(matchGroup.images)[0];
+            }
+          }
+
+          state.left.group = leftGroup;
+          state.left.image = leftImage;
+          applyLeft();
+
+          // Initialize right side
+          populateLessonOptions();
+          selectRightGroup(lessonSelect.options[0]?.value);
+        };
+
+        lessonSelect.addEventListener('change', (event) => {
+          selectRightGroup(event.target.value);
+        });
+
+        toggleButtons.forEach((button) => {
+          button.addEventListener('click', () => {
+            if (!state.right.group?.images?.length) return;
+            const delta = button.dataset.action === 'prev' ? -1 : 1;
+            state.right.index += delta;
+            applyRight();
+          });
+        });
+
+        // APIから姿勢画像グループ一覧を取得して比較画像を初期化
+        const fetchGroups = async () => {
+          try {
+            const response = await fetch(`/api/customers/${customerId}/posture_groups`);
+            if (!response.ok) {
+              throw new Error(`Failed to load posture groups: ${response.status}`);
+            }
+            state.groups = await response.json(); // APIからのJSONレスポンスをパース
+            initializeState(); // 左右の比較画像を初期設定
+          } catch (error) {
+            console.error(error);
+            errorState.hidden = false;
+          }
+        };
+
+        fetchGroups();
+      });
+    </script>
+    </main>
   </body>
 </html>
-
