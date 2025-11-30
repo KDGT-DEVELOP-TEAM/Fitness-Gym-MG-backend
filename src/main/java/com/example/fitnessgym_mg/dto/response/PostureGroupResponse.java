@@ -20,8 +20,13 @@ public class PostureGroupResponse {
 
     private UUID id;
     private UUID lessonId;
+    
+    // lessonStartDate: Lessonエンティティのstart_dateフィールドから取得
+    // 注: マージ後にLessonエンティティの実装を確認すること
     private OffsetDateTime lessonStartDate;
+    
     private OffsetDateTime capturedAt;
+    
     @Builder.Default
     private List<PostureImageResponse> images = new ArrayList<>();
 }
