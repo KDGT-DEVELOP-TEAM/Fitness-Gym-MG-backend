@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>エラー | フィットネスジム管理システム</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            margin: 0;
+        }
+        
+        .error-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            padding: 60px 40px;
+            text-align: center;
+            max-width: 500px;
+        }
+        
+        .error-code {
+            font-size: 80px;
+            font-weight: bold;
+            color: #fa709a;
+            margin: 0;
+        }
+        
+        .error-title {
+            font-size: 24px;
+            color: #333;
+            margin: 20px 0;
+        }
+        
+        .error-message {
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        
+        .button {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .button:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-code" th:text="${status} ?: '500'">500</div>
+        <div class="error-title" th:text="${error} ?: 'エラーが発生しました'">エラーが発生しました</div>
+        <div class="error-message">
+            <p th:if="${message}" th:text="${message}">予期しないエラーが発生しました。</p>
+            <p th:if="${!message}">予期しないエラーが発生しました。しばらくしてから再度お試しください。</p>
+        </div>
+        <a href="/trainer/customers" class="button">ホームに戻る</a>
+    </div>
+</body>
+</html>
+

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>顧客選択 | フィットネスジム管理システム</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .user-info {
+            text-align: right;
+            color: #666;
+        }
+        
+        .logout-button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        
+        .logout-button:hover {
+            background: #c82333;
+        }
+        
+        .search-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .search-box input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .search-box input:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        
+        .customer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .customer-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        
+        .customer-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        .customer-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .customer-kana {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .customer-info {
+            font-size: 14px;
+            color: #888;
+            margin-top: 10px;
+        }
+        
+        .customer-info-item {
+            margin-bottom: 5px;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 60px 20px;
+            background: white;
+            border-radius: 8px;
+            color: #999;
+        }
+        
+        .no-data h2 {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- ヘッダー -->
+    <div class="header">
+        <div>
+            <h1>顧客選択</h1>
+        </div>
+        <div class="user-info">
+            <div>
+                <strong th:text="${currentUser.name}"></strong> さん
+            </div>
+            <form method="post" action="/logout" style="display: inline;">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <button type="submit" class="logout-button">ログアウト</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 検索ボックス -->
+    <div class="search-box">
+        <form method="get" action="/trainer/customers">
+            <input 
+                type="text" 
+                name="search" 
+                th:value="${search}" 
+                placeholder="顧客名またはかなで検索...">
+        </form>
+    </div>
+    
+    <!-- 顧客一覧 -->
+    <div th:if="${customers != null and !customers.isEmpty()}" class="customer-grid">
+        <a th:each="customer : ${customers}" 
+           th:href="@{'/trainer/history/' + ${customer.id}}" 
+           class="customer-card">
+            <div class="customer-name" th:text="${customer.name}"></div>
+            <div class="customer-kana" th:text="${customer.kana}"></div>
+            <div class="customer-info">
+                <div class="customer-info-item" th:if="${customer.email}">
+                    📧 <span th:text="${customer.email}"></span>
+                </div>
+                <div class="customer-info-item" th:if="${customer.phone}">
+                    📞 <span th:text="${customer.phone}"></span>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <!-- データなし -->
+    <div th:if="${customers == null or customers.isEmpty()}" class="no-data">
+        <h2>担当顧客がいません</h2>
+        <p>まだ顧客が登録されていないか、検索条件に一致する顧客がいません。</p>
+    </div>
+</body>
+</html>
+

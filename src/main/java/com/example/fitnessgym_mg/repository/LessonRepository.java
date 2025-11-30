@@ -13,6 +13,12 @@ import org.springframework.data.repository.query.Param;
 import com.example.fitnessgym_mg.entity.Lesson;
 
 public interface LessonRepository extends JpaRepository<Lesson, UUID> {
+	
+	/**
+	 * 顧客IDに紐づくレッスン履歴を実施日時の降順で取得（履歴一覧表示用）
+	 */
+	List<Lesson> findByCustomerIdOrderByStartDateDesc(UUID customerId);
+	
 	// --- 1. レッスン一覧検索 (ページネーション対応) ---
 	// 終了日時が指定時刻より前のレッスンを検索し、実施日時で降順ソートする。(全店舗対象)
 	Page<Lesson> findPageByEndDateBefore(LocalDateTime endDate, Pageable pageable);
