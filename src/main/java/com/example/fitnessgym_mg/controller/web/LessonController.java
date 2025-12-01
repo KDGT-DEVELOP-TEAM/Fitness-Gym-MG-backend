@@ -218,12 +218,16 @@ public class LessonController {
 			// BASE_PATHを設定（リクエストパスから判定）
 			String requestPath = request.getRequestURI();
 			String basePath;
+			String detailBasePath;
 			if (requestPath.startsWith("/manager/")) {
 				basePath = "/manager/" + storeId + "/history/" + customerId;
+				detailBasePath = "/manager/" + storeId + "/lessons";
 			} else if (requestPath.startsWith("/trainer/")) {
 				basePath = "/trainer/history/" + customerId;
+				detailBasePath = "/trainer/lessons";
 			} else {
 				basePath = "/admin/history/" + customerId;
+				detailBasePath = "/admin/lessons";
 			}
 
 			model.addAttribute("customer", customer);
@@ -235,6 +239,7 @@ public class LessonController {
 			model.addAttribute("chartData", chartData);
 			model.addAttribute("chartType", chartType);
 			model.addAttribute("BASE_PATH", basePath);
+			model.addAttribute("DETAIL_BASE_PATH", detailBasePath);
 			model.addAttribute("stores", List.of()); // トレーナーは店舗選択不要
 
 			return "lesson/lesson-list";
@@ -250,6 +255,7 @@ public class LessonController {
 	/**
 	 * GET /admin/lessons/{lessonId}
 	 * GET /manager/{storeId}/lessons/{lessonId}
+	 * GET /trainer/lessons/{lessonId}
 	 * レッスン詳細画面表示
 	 * 
 	 * 処理の流れ：
@@ -257,10 +263,12 @@ public class LessonController {
 	 * 2. 画面に表示するデータをModelに設定して返す
 	 * 3. エラーが発生した場合、エラーメッセージを設定してリダイレクト
 	 */
-	@GetMapping({ "/admin/lessons/{lessonId}", "/manager/{storeId}/lessons/{lessonId}" })
+	@GetMapping({ "/admin/lessons/{lessonId}", "/manager/{storeId}/lessons/{lessonId}",
+			"/trainer/lessons/{lessonId}" })
 	public String lessonDetail(
 			@PathVariable(required = false) UUID storeId,
 			@PathVariable UUID lessonId,
+			HttpServletRequest request,
 			Model model) {
 
 		try {
@@ -275,8 +283,14 @@ public class LessonController {
 		} catch (RuntimeException e) {
 			model.addAttribute("errorMessage", "レッスンの取得に失敗しました: " + e.getMessage());
 
-			if (storeId != null) {
+			// リクエストパスから判定してリダイレクト先を決定
+			String requestPath = request.getRequestURI();
+			if (requestPath.startsWith("/manager/")) {
 				return "redirect:/manager/" + storeId + "/lessons";
+			} else if (requestPath.startsWith("/trainer/")) {
+				// トレーナーの場合は、レッスンから顧客IDを取得して履歴ページにリダイレクト
+				// ただし、レッスンが見つからない場合は顧客選択画面にリダイレクト
+				return "redirect:/trainer/customers";
 			} else {
 				return "redirect:/admin/lessons";
 			}
