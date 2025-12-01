@@ -5,6 +5,9 @@ import java.util.UUID;
 
 import jakarta.validation.Valid;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -14,6 +17,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 import com.example.fitnessgym_mg.dto.request.LessonRequest;
 import com.example.fitnessgym_mg.dto.response.LessonResponse;
@@ -182,15 +187,20 @@ public class LessonController {
 	 * 
 	 * 処理の流れ：
 	 * 1. 顧客情報を取得
-	 * 2. その顧客のレッスン履歴を取得（開始日時の新しい順）
-	 * 3. 画面に表示するデータをModelに設定して返す
-	 * 4. エラーが発生した場合、エラーメッセージを設定して顧客選択画面にリダイレクト
+	 * 2. その顧客のレッスン履歴を取得（ページネーション対応、開始日時の新しい順）
+	 * 3. グラフデータを取得
+	 * 4. 画面に表示するデータをModelに設定して返す
+	 * 5. エラーが発生した場合、エラーメッセージを設定して顧客選択画面にリダイレクト
 	 */
 	@GetMapping({ "/admin/history/{customerId}", "/manager/{storeId}/history/{customerId}",
 			"/trainer/history/{customerId}" })
 	public String lessonHistory(
 			@PathVariable(required = false) UUID storeId,
 			@PathVariable UUID customerId,
+			@RequestParam(defaultValue = "month") String chartType,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size,
+			HttpServletRequest request,
 			Model model) {
 
 		try {
@@ -198,17 +208,40 @@ public class LessonController {
 			Customer customer = customerRepository.findById(customerId)
 					.orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
 
-			// レッスン履歴を取得
-			List<LessonResponse> lessons = lessonService.getLessonsByCustomerId(customerId);
+			// ページネーション対応のレッスン履歴を取得
+			Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
+			var lessonPage = lessonService.getLessonsByCustomerId(customerId, pageable);
+
+			// グラフデータを取得
+			var chartData = lessonService.getLessonChartDataByCustomerId(customerId, chartType);
+
+			// BASE_PATHを設定（リクエストパスから判定）
+			String requestPath = request.getRequestURI();
+			String basePath;
+			if (requestPath.startsWith("/manager/")) {
+				basePath = "/manager/" + storeId + "/history/" + customerId;
+			} else if (requestPath.startsWith("/trainer/")) {
+				basePath = "/trainer/history/" + customerId;
+			} else {
+				basePath = "/admin/history/" + customerId;
+			}
 
 			model.addAttribute("customer", customer);
-			model.addAttribute("lessons", lessons);
+			model.addAttribute("lessonPage", lessonPage);
+			model.addAttribute("lessons", lessonPage.getContent()); // 互換性のため
+			model.addAttribute("count", lessonPage.getTotalElements());
 			model.addAttribute("customerId", customerId);
 			model.addAttribute("storeId", storeId);
+			model.addAttribute("chartData", chartData);
+			model.addAttribute("chartType", chartType);
+			model.addAttribute("BASE_PATH", basePath);
+			model.addAttribute("stores", List.of()); // トレーナーは店舗選択不要
 
 			return "lesson/lesson-list";
 
-		} catch (RuntimeException e) {
+		} catch (Exception e) {
+			// すべての例外をキャッチしてログ出力
+			e.printStackTrace();
 			model.addAttribute("errorMessage", "履歴の取得に失敗しました: " + e.getMessage());
 			return "redirect:/trainer/customers";
 		}

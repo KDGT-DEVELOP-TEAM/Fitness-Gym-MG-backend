@@ -95,11 +95,24 @@ public class LessonService {
 		int maxCount = 0;
 
 		for (Object[] row : rawChartData) {
-			// PostgreSQLはTIMESTAMP型を返すため、LocalDateTimeに変換
-			java.sql.Timestamp periodTimestamp = (java.sql.Timestamp) row[0];
-			LocalDateTime periodStartAt = periodTimestamp.toInstant()
-					.atZone(ZoneId.systemDefault())
-					.toLocalDateTime();
+			// PostgreSQLはTIMESTAMP型またはInstant型を返す可能性があるため、安全に変換
+			LocalDateTime periodStartAt;
+			Object periodObj = row[0];
+			if (periodObj instanceof java.sql.Timestamp) {
+				periodStartAt = ((java.sql.Timestamp) periodObj).toInstant()
+						.atZone(ZoneId.systemDefault())
+						.toLocalDateTime();
+			} else if (periodObj instanceof java.time.Instant) {
+				periodStartAt = ((java.time.Instant) periodObj)
+						.atZone(ZoneId.systemDefault())
+						.toLocalDateTime();
+			} else if (periodObj instanceof java.time.OffsetDateTime) {
+				periodStartAt = ((java.time.OffsetDateTime) periodObj)
+						.toLocalDateTime();
+			} else {
+				// その他の型の場合は文字列として扱うか、エラーをスロー
+				throw new RuntimeException("Unsupported timestamp type: " + periodObj.getClass().getName());
+			}
 
 			long count = ((Number) row[1]).longValue();
 
@@ -232,5 +245,92 @@ public class LessonService {
 		return lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId).stream()
 				.map(LessonResponse::fromEntity)
 				.collect(Collectors.toList());
+	}
+
+	/**
+	 * 顧客IDに紐づくレッスン履歴をページネーション対応で取得
+	 */
+	public Page<LessonResponse> getLessonsByCustomerId(UUID customerId, Pageable pageable) {
+		Page<Lesson> lessonPage = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId, pageable);
+		return lessonPage.map(LessonResponse::fromEntity);
+	}
+
+	/**
+	 * 顧客IDでレッスン回数グラフデータの作成
+	 */
+	public LessonChartData getLessonChartDataByCustomerId(UUID customerId, String type) {
+		LocalDateTime now = LocalDateTime.now();
+
+		// 1. 期間タイプの決定
+		String intervalType;
+		if ("week".equals(type)) {
+			intervalType = "week";
+		} else {
+			intervalType = "month";
+			type = "month";
+		}
+
+		// DBから集計結果を取得 [0: 期間開始日時, 1: 回数]
+		List<Object[]> rawChartData = lessonRepository.countLessonsGroupedByPeriodByCustomerId(
+				intervalType, now, customerId);
+
+		// 2. 結果の整形 (LessonChartDataの生成)
+		List<ChartSeries> series = new ArrayList<>();
+		int maxCount = 0;
+
+		for (Object[] row : rawChartData) {
+			// PostgreSQLはTIMESTAMP型またはInstant型を返す可能性があるため、安全に変換
+			LocalDateTime periodStartAt;
+			Object periodObj = row[0];
+			if (periodObj instanceof java.sql.Timestamp) {
+				periodStartAt = ((java.sql.Timestamp) periodObj).toInstant()
+						.atZone(ZoneId.systemDefault())
+						.toLocalDateTime();
+			} else if (periodObj instanceof java.time.Instant) {
+				periodStartAt = ((java.time.Instant) periodObj)
+						.atZone(ZoneId.systemDefault())
+						.toLocalDateTime();
+			} else if (periodObj instanceof java.time.OffsetDateTime) {
+				periodStartAt = ((java.time.OffsetDateTime) periodObj)
+						.toLocalDateTime();
+			} else {
+				// その他の型の場合は文字列として扱うか、エラーをスロー
+				throw new RuntimeException("Unsupported timestamp type: " + periodObj.getClass().getName());
+			}
+
+			long count = ((Number) row[1]).longValue();
+
+			// ラベルの生成
+			String label;
+			if ("week".equals(type)) {
+				LocalDate startDate = periodStartAt.toLocalDate();
+				LocalDate endDate = startDate.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+				label = startDate.getMonthValue() + "/" + startDate.getDayOfMonth() +
+						" - " + endDate.getMonthValue() + "/" + endDate.getDayOfMonth();
+			} else {
+				// 月別
+				label = periodStartAt.getYear() + "/" + periodStartAt.getMonthValue();
+			}
+
+			// maxCountの更新
+			int currentCount = (int) count;
+			if (currentCount > maxCount) {
+				maxCount = currentCount;
+			}
+
+			ChartSeries chartSeries = new ChartSeries();
+			chartSeries.setPeriod(label);
+			chartSeries.setCount(count);
+			series.add(chartSeries);
+		}
+
+		// グラフの要件に従い、「右が最新」にするため、リストを逆順にする
+		java.util.Collections.reverse(series);
+
+		LessonChartData chartData = new LessonChartData();
+		chartData.setSeries(series);
+		chartData.setMaxCount(maxCount);
+		chartData.setType(type);
+		return chartData;
 	}
 }

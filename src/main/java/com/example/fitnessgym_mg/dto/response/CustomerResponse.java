@@ -17,6 +17,7 @@ public class CustomerResponse {
 	private String kana;
 	private boolean active;
 	private String email;
+	private String phone;
 	private int age; // 年齢
 	private LocalDateTime createdAt;
 
@@ -36,6 +37,7 @@ public class CustomerResponse {
 		r.setKana(c.getKana());
 		r.setActive(c.isActive());
 		r.setEmail(c.getEmail());
+		r.setPhone(c.getPhone());
 		r.setAge(age);
 		r.setCreatedAt(c.getCreatedAt());
 		return r;

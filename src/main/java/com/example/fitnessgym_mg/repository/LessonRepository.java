@@ -19,6 +19,11 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	 */
 	List<Lesson> findByCustomerIdOrderByStartDateDesc(UUID customerId);
 	
+	/**
+	 * 顧客IDに紐づくレッスン履歴をページネーション対応で取得（実施日時の降順）
+	 */
+	Page<Lesson> findByCustomerIdOrderByStartDateDesc(UUID customerId, Pageable pageable);
+	
 	// --- 1. レッスン一覧検索 (ページネーション対応) ---
 	// 終了日時が指定時刻より前のレッスンを検索し、実施日時で降順ソートする。(全店舗対象)
 	Page<Lesson> findPageByEndDateBefore(LocalDateTime endDate, Pageable pageable);
@@ -38,6 +43,19 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 			@Param("type") String type,
 			@Param("now") LocalDateTime now,
 			@Param("storeId") UUID storeId);
+
+	/**
+	 * 顧客IDでグラフデータを集計（期間別レッスン回数）
+	 */
+	@Query(value = "SELECT date_trunc(:type, l.start_date) as period_start, COUNT(*) " +
+			"FROM lessons l " +
+			"WHERE l.end_date < :now AND l.customer_id = :customerId " +
+			"GROUP BY period_start " +
+			"ORDER BY period_start DESC", nativeQuery = true)
+	List<Object[]> countLessonsGroupedByPeriodByCustomerId(
+			@Param("type") String type,
+			@Param("now") LocalDateTime now,
+			@Param("customerId") UUID customerId);
 
 	// --- 3. 関連データカウント (既存を維持) ---
 	/**

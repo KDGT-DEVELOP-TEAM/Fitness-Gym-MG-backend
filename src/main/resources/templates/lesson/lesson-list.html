@@ -66,8 +66,23 @@
 
 
 			/* --- Chart.js 描画処理 --- */
-			const chartDataJson = document.getElementById("chartDataContainer").getAttribute('data-chart-data');
+			const chartDataContainer = document.getElementById("chartDataContainer");
+			if (!chartDataContainer) {
+				console.error("chartDataContainer not found");
+				return;
+			}
+
+			const chartDataJson = chartDataContainer.getAttribute('data-chart-data');
+			if (!chartDataJson || chartDataJson === '{}' || chartDataJson === 'null') {
+				console.warn("chartData is empty or null");
+				return;
+			}
+
 			const chartData = JSON.parse(chartDataJson);
+			if (!chartData || !chartData.series || chartData.series.length === 0) {
+				console.warn("chartData.series is empty");
+				return;
+			}
 
 			const labels = chartData.series.map(item => item.label);
 			const counts = chartData.series.map(item => item.count);
@@ -75,11 +90,15 @@
 			// 最大カウントが0の場合、グラフの最大値を10に設定して表示崩れを防ぐ
 			const maxCount = chartData.maxCount > 0 ? chartData.maxCount : 10;
 
-			const ctx = document.getElementById('lessonChart').getContext('2d');
+			const ctx = document.getElementById('lessonChart');
+			if (!ctx) {
+				console.error("lessonChart canvas not found");
+				return;
+			}
 
 			Chart.register(ChartDataLabels);
 
-			new Chart(ctx, {
+			new Chart(ctx.getContext('2d'), {
 				type: 'bar',
 				data: {
 					labels: labels,
@@ -157,7 +176,7 @@
 				<button type="submit" style="display: none;">検索</button>
 			</form>
 		</div>
-	    <div id="chartDataContainer" th:attr="data-chart-data=${#jsonUtils.toJson(chartData)}" style="display: none;">
+	    <div id="chartDataContainer" th:attr="data-chart-data=${jsonUtils.toJson(chartData)}" style="display: none;">
 		</div>
 
 		<div class="chart-section">
