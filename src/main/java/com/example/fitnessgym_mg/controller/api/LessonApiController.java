@@ -106,7 +106,7 @@ public class LessonApiController {
 		// View側でのリンク構築に利用 (Admin/Managerパスの切り替え)
 		model.addAttribute("BASE_PATH", basePath);
 
-		return "lessons/list"; // 共通のThymeleafテンプレート
+		return "lesson/lesson-list"; // 共通のThymeleafテンプレート
 	}
 
 	// --- グラフデータ取得API (非同期更新用) ---

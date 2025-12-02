@@ -1,6 +1,7 @@
 package com.example.fitnessgym_mg.config;
 
 import java.io.IOException;
+import java.util.UUID;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,9 +15,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 
+import com.example.fitnessgym_mg.entity.Store;
+import com.example.fitnessgym_mg.entity.User;
+import com.example.fitnessgym_mg.repository.UserRepository;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Spring Security設定クラス
@@ -30,7 +36,10 @@ import jakarta.servlet.http.HttpServletResponse;
  */
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+	private final UserRepository userRepository;
 
     /**
      * パスワードエンコーダーのBean定義
@@ -98,7 +107,7 @@ public class SecurityConfig {
      * 1. ユーザーの権限を取得
      * 2. 権限に応じてリダイレクト先を決定
      *    - ROLE_ADMIN → /admin/dashboard
-     *    - ROLE_MANAGER → /manager/dashboard
+     *    - ROLE_MANAGER → /manager/{storeId}/lessons（店舗統計画面）
      *    - ROLE_TRAINER → /trainer/customers
      * 3. 決定したURLにリダイレクト
      */
@@ -117,7 +126,8 @@ public class SecurityConfig {
                     redirectUrl = "/admin/dashboard";
                 } else if (authentication.getAuthorities().stream()
                         .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_MANAGER"))) {
-                    redirectUrl = "/manager/dashboard";
+                    // 店長の場合は所属店舗IDを取得して統計画面にリダイレクト
+                    redirectUrl = getManagerRedirectUrl(authentication.getName());
                 } else if (authentication.getAuthorities().stream()
                         .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_TRAINER"))) {
                     redirectUrl = "/trainer/customers";
@@ -126,6 +136,30 @@ public class SecurityConfig {
                 response.sendRedirect(redirectUrl);
             }
         };
+    }
+
+    /**
+     * 店長のリダイレクトURLを取得
+     * 所属店舗IDを取得して統計画面（/manager/{storeId}/lessons）にリダイレクト
+     * 
+     * @param email ログインユーザーのメールアドレス
+     * @return リダイレクトURL
+     */
+    private String getManagerRedirectUrl(String email) {
+        // ユーザー情報を取得（storesをJOIN FETCH）
+        User user = userRepository.findByEmailWithStores(email)
+                .orElseThrow(() -> new RuntimeException("ユーザーが見つかりません: " + email));
+
+        // 店長は1つの店舗にのみ所属する想定
+        if (user.getStores() == null || user.getStores().isEmpty()) {
+            throw new RuntimeException("店長ユーザーに店舗が割り当てられていません: " + email);
+        }
+
+        // 最初の店舗IDを使用（店長は1つの店舗にのみ所属する想定）
+        Store store = user.getStores().iterator().next();
+        UUID storeId = store.getId();
+
+        return "/manager/" + storeId + "/lessons";
     }
 }
 
