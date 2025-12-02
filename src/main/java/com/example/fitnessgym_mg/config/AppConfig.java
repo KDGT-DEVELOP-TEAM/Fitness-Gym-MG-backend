@@ -2,6 +2,7 @@ package com.example.fitnessgym_mg.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
@@ -16,10 +17,12 @@ public class AppConfig {
 
 	/**
 	 * JSON変換用のObjectMapper Bean
+	 * Spring Bootの推奨方法であるJackson2ObjectMapperBuilderを使用して作成
+	 * JavaTimeModuleが自動的に登録されるため、OffsetDateTimeなどのシリアライズが可能
 	 */
 	@Bean
-	public ObjectMapper objectMapper() {
-		return new ObjectMapper();
+	public ObjectMapper objectMapper(Jackson2ObjectMapperBuilder builder) {
+		return builder.build();
 	}
 
 	/**

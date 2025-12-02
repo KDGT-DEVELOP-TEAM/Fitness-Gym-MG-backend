@@ -20,9 +20,13 @@ public class CustomerResponse {
 	private String phone;
 	private int age; // 年齢
 	private LocalDateTime createdAt;
-
-	// 編集モーダル用にエンティティの全フィールドを含めることもできますが、
-	// ユーザー一覧に倣い、必要最小限のデータ転送とします。
+	
+	// プロフィール画面用の追加フィールド
+	private Customer.CustomerGender gender;
+	private LocalDate birthdate; // birthdayの別名（HTMLフォームとの互換性のため）
+	private String address;
+	private Double height;
+	private Double latestWeight; // 最新レッスンの体重（BMI計算用）
 
 	/**
 	 * Customer エンティティから CustomerResponse DTO に変換する
@@ -40,6 +44,11 @@ public class CustomerResponse {
 		r.setPhone(c.getPhone());
 		r.setAge(age);
 		r.setCreatedAt(c.getCreatedAt());
+		r.setGender(c.getGender());
+		r.setBirthdate(c.getBirthday()); // birthdayをbirthdateとして設定
+		r.setAddress(c.getAddress());
+		r.setHeight(c.getHeight());
+		// latestWeightは別途設定が必要（レッスンから取得）
 		return r;
 	}
 }

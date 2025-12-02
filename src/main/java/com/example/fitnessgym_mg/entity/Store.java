@@ -15,14 +15,18 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 @Entity
 @Table(name = "stores")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString(exclude = {"users", "customers"})
 public class Store {
 	@Id
 	@GeneratedValue(strategy = GenerationType.UUID)
@@ -46,4 +50,24 @@ public class Store {
 			uniqueConstraints = @UniqueConstraint(columnNames = { "store_id", "customer_id" }) //複合ユニーク制約
 	)
 	private Set<Customer> customers; // 店舗に所属する顧客リスト
+
+	@Override
+	public int hashCode() {
+		if (id == null) {
+			return super.hashCode();
+		}
+		return id.hashCode();
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (obj == null || getClass() != obj.getClass()) {
+			return false;
+		}
+		Store store = (Store) obj;
+		return id != null && id.equals(store.id);
+	}
 }

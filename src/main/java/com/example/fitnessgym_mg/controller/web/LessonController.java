@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -48,47 +50,78 @@ public class LessonController {
 	/**
 	 * GET /admin/lessons/new
 	 * GET /manager/{storeId}/lessons/new
+	 * GET /trainer/lessons/new
 	 * 新規レッスン入力フォーム表示
 	 * 
 	 * 処理の流れ：
 	 * 1. 顧客情報を取得
-	 * 2. 店舗一覧を取得（管理者は全店舗、店長は所属店舗のみ）
-	 * 3. トレーナー一覧を取得
+	 * 2. 店舗一覧を取得（管理者は全店舗、店長は所属店舗のみ、トレーナーは所属店舗のみ）
+	 * 3. トレーナー一覧を取得（トレーナーの場合はログインユーザー自身のみ）
 	 * 4. フォーム用の空のリクエストオブジェクトを作成
 	 * 5. 画面に表示するデータをModelに設定して返す
 	 */
-	@GetMapping({ "/admin/lessons/new", "/manager/{storeId}/lessons/new" })
+	@GetMapping({ "/admin/lessons/new", "/manager/{storeId}/lessons/new", "/trainer/lessons/new" })
 	public String newLessonForm(
 			@PathVariable(required = false) UUID storeId,
 			@RequestParam UUID customerId,
+			HttpServletRequest request,
 			Model model) {
 
 		// 顧客情報を取得
 		Customer customer = customerRepository.findById(customerId)
 				.orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
 
-		// 店舗一覧を取得（管理者は全店舗、店長は所属店舗のみ）
+		// リクエストパスから判定
+		String requestPath = request.getRequestURI();
+		boolean isTrainer = requestPath.startsWith("/trainer/");
+
+		// 店舗一覧を取得
 		List<Store> stores;
-		if (storeId != null) {
+		if (isTrainer) {
+			// トレーナーの場合：ログインユーザーの所属店舗のみ
+			User currentUser = getCurrentUser();
+			if (currentUser.getStores() != null && !currentUser.getStores().isEmpty()) {
+				stores = new java.util.ArrayList<>(currentUser.getStores());
+			} else {
+				stores = List.of();
+			}
+		} else if (storeId != null) {
+			// 店長の場合：所属店舗のみ
 			stores = List.of(storeRepository.findById(storeId)
 					.orElseThrow(() -> new RuntimeException("店舗が見つかりません")));
 		} else {
+			// 管理者の場合：全店舗
 			stores = storeRepository.findAll();
 		}
 
 		// トレーナー一覧を取得
-		List<User> trainers = userRepository.findAll();
+		List<User> trainers;
+		if (isTrainer) {
+			// トレーナーの場合：ログインユーザー自身のみ
+			User currentUser = getCurrentUser();
+			trainers = List.of(currentUser);
+		} else {
+			// 管理者・店長の場合：全トレーナー
+			trainers = userRepository.findAll();
+		}
 
 		// 空のリクエストオブジェクトを作成
 		LessonRequest lessonRequest = LessonRequest.builder()
 				.customerId(customerId)
 				.build();
 
+		// トレーナーの場合、デフォルト値を設定
+		if (isTrainer && !trainers.isEmpty()) {
+			lessonRequest.setTrainerId(trainers.get(0).getId());
+		}
+
 		model.addAttribute("customer", customer);
 		model.addAttribute("stores", stores);
 		model.addAttribute("trainers", trainers);
 		model.addAttribute("lessonRequest", lessonRequest);
 		model.addAttribute("storeId", storeId);
+		model.addAttribute("customerId", customerId);
+		model.addAttribute("isTrainer", isTrainer);
 
 		return "lesson/lesson-new";
 	}
@@ -96,6 +129,7 @@ public class LessonController {
 	/**
 	 * POST /admin/lessons
 	 * POST /manager/{storeId}/lessons
+	 * POST /trainer/lessons
 	 * レッスン保存処理
 	 * 
 	 * 処理の流れ：
@@ -105,13 +139,18 @@ public class LessonController {
 	 * 4. 保存成功後、成功メッセージを設定してリダイレクト
 	 * 5. エラーが発生した場合、エラーメッセージと共にフォーム画面に戻る
 	 */
-	@PostMapping({ "/admin/lessons", "/manager/{storeId}/lessons" })
+	@PostMapping({ "/admin/lessons", "/manager/{storeId}/lessons", "/trainer/lessons" })
 	public String createLesson(
 			@PathVariable(required = false) UUID storeId,
 			@Valid @ModelAttribute LessonRequest request,
 			BindingResult result,
 			RedirectAttributes redirectAttributes,
+			HttpServletRequest httpRequest,
 			Model model) {
+
+		// リクエストパスから判定
+		String requestPath = httpRequest.getRequestURI();
+		boolean isTrainer = requestPath.startsWith("/trainer/");
 
 		// バリデーションエラーがある場合はフォームに戻る
 		if (result.hasErrors()) {
@@ -120,19 +159,33 @@ public class LessonController {
 					.orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
 
 			List<Store> stores;
-			if (storeId != null) {
+			List<User> trainers;
+			if (isTrainer) {
+				// トレーナーの場合
+				User currentUser = getCurrentUser();
+				if (currentUser.getStores() != null && !currentUser.getStores().isEmpty()) {
+					stores = new java.util.ArrayList<>(currentUser.getStores());
+				} else {
+					stores = List.of();
+				}
+				trainers = List.of(currentUser);
+			} else if (storeId != null) {
+				// 店長の場合
 				stores = List.of(storeRepository.findById(storeId)
 						.orElseThrow(() -> new RuntimeException("店舗が見つかりません")));
+				trainers = userRepository.findAll();
 			} else {
+				// 管理者の場合
 				stores = storeRepository.findAll();
+				trainers = userRepository.findAll();
 			}
-
-			List<User> trainers = userRepository.findAll();
 
 			model.addAttribute("customer", customer);
 			model.addAttribute("stores", stores);
 			model.addAttribute("trainers", trainers);
 			model.addAttribute("storeId", storeId);
+			model.addAttribute("customerId", request.getCustomerId());
+			model.addAttribute("isTrainer", isTrainer);
 
 			return "lesson/lesson-new";
 		}
@@ -144,11 +197,15 @@ public class LessonController {
 			// 成功メッセージ
 			redirectAttributes.addFlashAttribute("successMessage", "レッスンを保存しました");
 
-			// レッスン詳細画面へリダイレクト（将来実装）
-			// 現在は一覧画面へリダイレクト
-			if (storeId != null) {
+			// リダイレクト先を決定
+			if (isTrainer) {
+				// トレーナーの場合：新規レッスン入力画面に戻る
+				return "redirect:/trainer/lessons/new?customerId=" + request.getCustomerId();
+			} else if (storeId != null) {
+				// 店長の場合
 				return "redirect:/manager/" + storeId + "/lessons";
 			} else {
+				// 管理者の場合
 				return "redirect:/admin/lessons";
 			}
 
@@ -161,19 +218,33 @@ public class LessonController {
 					.orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
 
 			List<Store> stores;
-			if (storeId != null) {
+			List<User> trainers;
+			if (isTrainer) {
+				// トレーナーの場合
+				User currentUser = getCurrentUser();
+				if (currentUser.getStores() != null && !currentUser.getStores().isEmpty()) {
+					stores = new java.util.ArrayList<>(currentUser.getStores());
+				} else {
+					stores = List.of();
+				}
+				trainers = List.of(currentUser);
+			} else if (storeId != null) {
+				// 店長の場合
 				stores = List.of(storeRepository.findById(storeId)
 						.orElseThrow(() -> new RuntimeException("店舗が見つかりません")));
+				trainers = userRepository.findAll();
 			} else {
+				// 管理者の場合
 				stores = storeRepository.findAll();
+				trainers = userRepository.findAll();
 			}
-
-			List<User> trainers = userRepository.findAll();
 
 			model.addAttribute("customer", customer);
 			model.addAttribute("stores", stores);
 			model.addAttribute("trainers", trainers);
 			model.addAttribute("storeId", storeId);
+			model.addAttribute("customerId", request.getCustomerId());
+			model.addAttribute("isTrainer", isTrainer);
 
 			return "lesson/lesson-new";
 		}
@@ -242,6 +313,14 @@ public class LessonController {
 			model.addAttribute("DETAIL_BASE_PATH", detailBasePath);
 			model.addAttribute("stores", List.of()); // トレーナーは店舗選択不要
 
+			// トレーナーの場合は統計情報を非表示にする
+			boolean isTrainer = requestPath.startsWith("/trainer/");
+			model.addAttribute("isTrainer", isTrainer);
+			if (isTrainer) {
+				// トレーナーの場合はchartDataを追加しない
+				model.addAttribute("chartData", null);
+			}
+
 			return "lesson/lesson-list";
 
 		} catch (Exception e) {
@@ -295,5 +374,15 @@ public class LessonController {
 				return "redirect:/admin/lessons";
 			}
 		}
+	}
+
+	/**
+	 * 現在ログイン中のユーザーを取得
+	 */
+	private User getCurrentUser() {
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		String email = authentication.getName();
+		return userRepository.findByEmail(email)
+				.orElseThrow(() -> new RuntimeException("ログインユーザーが見つかりません"));
 	}
 }

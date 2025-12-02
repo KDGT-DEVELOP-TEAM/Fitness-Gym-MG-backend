@@ -18,14 +18,18 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 @Entity
 @Table(name = "users") // 明示的にテーブル名を指定
 @NoArgsConstructor
 @AllArgsConstructor
-@Data
+@Getter
+@Setter
+@ToString(exclude = {"stores"})
 public class User {
 
 	@Id
@@ -64,4 +68,24 @@ public class User {
 			inverseJoinColumns = @JoinColumn(name = "store_id", nullable = false), // Store側のFK
 			uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "store_id" })) //複合ユニーク制約
 	private Set<Store> stores; // ユーザーが所属する店舗リスト
+
+	@Override
+	public int hashCode() {
+		if (id == null) {
+			return super.hashCode();
+		}
+		return id.hashCode();
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (obj == null || getClass() != obj.getClass()) {
+			return false;
+		}
+		User user = (User) obj;
+		return id != null && id.equals(user.id);
+	}
 }

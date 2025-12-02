@@ -74,6 +74,29 @@ public class PostureWebController {
         return "posture/posture-image";
     }
 
+    /**
+     * GET /trainer/postures?customerId={customerId}
+     * posture/posture-group.htmlを返す（画像一覧ページ）
+     * JS内で /api/customers/{customerId}/posture_groups を呼びデータ取得
+     */
+    @GetMapping("/trainer/postures")
+    public String trainerPostureGroupPage(@RequestParam UUID customerId, Model model) {
+        model.addAttribute("customerId", customerId);
+        model.addAttribute("isTrainer", true);
+        return "posture/posture-group";
+    }
+
+    /**
+     * GET /trainer/postures/compare?customerId={customerId}
+     * posture/posture-image.htmlを返す（画像比較ページ）
+     * JS内で /api/customers/{customerId}/posture_groups を呼びデータ取得
+     */
+    @GetMapping("/trainer/postures/compare")
+    public String trainerPostureComparePage(@RequestParam UUID customerId, Model model) {
+        model.addAttribute("customerId", customerId);
+        return "posture/posture-image";
+    }
+
     // 後方互換性のため、旧パスも一時的にサポート（将来的に削除予定）
     /**
      * @deprecated 後方互換性のため残されています。/admin/postures または /manager/{storeId}/postures を使用してください。

@@ -5,6 +5,8 @@
 	<meta charset="UTF-8">
 	<title>統計情報</title>
 
+	<link rel="stylesheet" th:href="@{/css/reset.css}" />
+	<link rel="stylesheet" th:href="@{/css/style.css}" />
 	<style>
 		table {
 			width: 100%;
@@ -152,10 +154,32 @@
 </head>
 
 <body>
+	<!-- サイドバー -->
+	<div class="sidebar" th:if="${isTrainer}">
+		<h2>メニュー</h2>
+		<ul>
+			<li>
+				<a th:href="@{'/trainer/history/' + ${customerId}}" class="active">履歴一覧</a>
+			</li>
+			<li>
+				<a th:href="@{'/trainer/customers/' + ${customerId}}" class="">顧客プロフィール</a>
+			</li>
+			<li>
+				<a th:href="@{'/trainer/postures?customerId=' + ${customerId}}" class="">姿勢画像一覧</a>
+			</li>
+			<li>
+				<a th:href="@{'/trainer/lessons/new?customerId=' + ${customerId}}" class="">新規レッスン入力</a>
+			</li>
+		</ul>
+	</div>
+	
+	<!-- メインコンテンツ -->
+	<div class="main-content" th:classappend="${isTrainer} ? 'with-sidebar' : ''">
+	<!-- 統計情報セクション（トレーナーの場合は非表示） -->
+	<div th:unless="${isTrainer}">
+		<h2>統計情報</h2>
 
-	<h2>統計情報</h2>
-
-	<div th:if="${storeId == null}">
+		<div th:if="${storeId == null}">
 			<form id="filterForm">
 				<select name="storeId">
 					<option value="">全ての店舗</option>
@@ -176,7 +200,7 @@
 				<button type="submit" style="display: none;">検索</button>
 			</form>
 		</div>
-	    <div id="chartDataContainer" th:attr="data-chart-data=${jsonUtils.toJson(chartData)}" style="display: none;">
+		<div id="chartDataContainer" th:attr="data-chart-data=${jsonUtils.toJson(chartData)}" style="display: none;">
 		</div>
 
 		<div class="chart-section">
@@ -193,6 +217,7 @@
 		</div>
 
 		<hr>
+	</div>
 
 		<h3>レッスン履歴一覧 (<span th:text="${lessonPage.totalElements}"></span> 件)</h3>
 

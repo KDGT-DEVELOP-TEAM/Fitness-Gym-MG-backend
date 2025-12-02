@@ -13,6 +13,27 @@
     <link rel="stylesheet" th:href="@{/css/style.css}" />
   </head>
   <body>
+    <!-- サイドバー -->
+    <div class="sidebar" th:if="${isTrainer}">
+        <h2>メニュー</h2>
+        <ul>
+            <li>
+                <a th:href="@{'/trainer/history/' + ${customerId}}" class="">履歴一覧</a>
+            </li>
+            <li>
+                <a th:href="@{'/trainer/customers/' + ${customerId}}" class="">顧客プロフィール</a>
+            </li>
+            <li>
+                <a th:href="@{'/trainer/postures?customerId=' + ${customerId}}" class="active">姿勢画像一覧</a>
+            </li>
+            <li>
+                <a th:href="@{'/trainer/lessons/new?customerId=' + ${customerId}}" class="">新規レッスン入力</a>
+            </li>
+        </ul>
+    </div>
+    
+    <!-- メインコンテンツ -->
+    <div class="main-content" th:classappend="${isTrainer} ? 'with-sidebar' : ''">
     <main>
       <!-- 顧客IDをdata属性として保持（JavaScriptで使用） -->
       <section class="posture-groups" th:attr="data-customer-id=${customerId}">
@@ -43,6 +64,7 @@
         <button type="button" data-action="next" disabled>次へ</button>
       </nav>
     </section>
+    </div>
 
     <script>
       document.addEventListener('DOMContentLoaded', () => {
@@ -210,5 +232,6 @@
       });
     </script>
     </main>
+    </div>
   </body>
 </html>

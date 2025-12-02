@@ -4,13 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>新規レッスン入力 | フィットネスジム管理システム</title>
+    <link rel="stylesheet" th:href="@{/css/reset.css}" />
+    <link rel="stylesheet" th:href="@{/css/style.css}" />
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
         .form-group {
             margin-bottom: 15px;
         }
@@ -73,6 +69,27 @@
     </style>
 </head>
 <body>
+    <!-- サイドバー -->
+    <div class="sidebar" th:if="${isTrainer}">
+        <h2>メニュー</h2>
+        <ul>
+            <li>
+                <a th:href="@{'/trainer/history/' + ${customerId}}" class="">履歴一覧</a>
+            </li>
+            <li>
+                <a th:href="@{'/trainer/customers/' + ${customerId}}" class="">顧客プロフィール</a>
+            </li>
+            <li>
+                <a th:href="@{'/trainer/postures?customerId=' + ${customerId}}" class="">姿勢画像一覧</a>
+            </li>
+            <li>
+                <a href="#" class="active">新規レッスン入力</a>
+            </li>
+        </ul>
+    </div>
+    
+    <!-- メインコンテンツ -->
+    <div class="main-content" th:classappend="${isTrainer} ? 'with-sidebar' : ''">
     <h1>新規レッスン入力</h1>
     
     <div th:if="${successMessage}" class="success" th:text="${successMessage}"></div>
@@ -83,7 +100,7 @@
         <p><strong>身長:</strong> <span th:text="${customer.height}"></span> cm</p>
     </div>
     
-    <form th:action="@{${storeId != null ? '/manager/' + storeId + '/lessons' : '/admin/lessons'}}" 
+    <form th:action="@{${isTrainer ? '/trainer/lessons' : (storeId != null ? '/manager/' + storeId + '/lessons' : '/admin/lessons')}}" 
           th:object="${lessonRequest}" 
           method="post">
         
@@ -233,6 +250,7 @@
             }
         });
     </script>
+    </div>
 </body>
 </html>
 

@@ -161,7 +161,7 @@
     <!-- 顧客一覧 -->
     <div th:if="${customers != null and !customers.isEmpty()}" class="customer-grid">
         <a th:each="customer : ${customers}" 
-           th:href="@{'/trainer/history/' + ${customer.id}}" 
+           th:href="@{'/trainer/lessons/new?customerId=' + ${customer.id}}" 
            class="customer-card">
             <div class="customer-name" th:text="${customer.name}"></div>
             <div class="customer-kana" th:text="${customer.kana}"></div>

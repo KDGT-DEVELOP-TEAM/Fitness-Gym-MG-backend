@@ -1,2 +1,69 @@
-/* Main stylesheet placeholder */
+/* 共通スタイル */
 
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f5f5f5;
+}
+
+/* サイドバー */
+.sidebar {
+    width: 250px;
+    background-color: #2c3e50;
+    color: white;
+    padding: 20px;
+    min-height: 100vh;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1000;
+    box-sizing: border-box;
+}
+
+.sidebar h2 {
+    margin-top: 0;
+    margin-bottom: 30px;
+    font-size: 20px;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+}
+
+.sidebar ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sidebar li {
+    margin-bottom: 10px;
+}
+
+.sidebar a {
+    color: white;
+    text-decoration: none;
+    display: block;
+    padding: 12px 15px;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+.sidebar a:hover {
+    background-color: #34495e;
+}
+
+.sidebar a.active {
+    background-color: #3498db;
+}
+
+/* メインコンテンツ */
+.main-content {
+    padding: 20px;
+    box-sizing: border-box;
+    min-height: 100vh;
+}
+
+/* サイドバーが存在する場合のみmargin-leftを適用 */
+.main-content.with-sidebar {
+    margin-left: 270px; /* サイドバー幅250px + 余白20px */
+}

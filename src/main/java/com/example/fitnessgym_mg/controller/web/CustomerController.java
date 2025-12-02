@@ -93,16 +93,34 @@ public class CustomerController {
         
         try {
             // 顧客詳細を取得
-            CustomerResponse customer = customerService.getCustomerById(customerId);
+            CustomerResponse customerResponse = customerService.getCustomerById(customerId);
             User currentUser = getCurrentUser();
             
             // 編集可能かどうかを判定（管理者/店長のみ）
             boolean canEdit = hasRole("ROLE_ADMIN") || hasRole("ROLE_MANAGER");
             
-            model.addAttribute("customer", customer);
+            // リクエストパスからトレーナーかどうかを判定
+            boolean isTrainer = !hasRole("ROLE_ADMIN") && !hasRole("ROLE_MANAGER");
+            
+            // CustomerResponseからCustomerRequestを作成（フォーム用）
+            CustomerRequest customerRequest = new CustomerRequest();
+            customerRequest.setKana(customerResponse.getKana());
+            customerRequest.setName(customerResponse.getName());
+            customerRequest.setGender(customerResponse.getGender());
+            customerRequest.setBirthday(customerResponse.getBirthdate());
+            customerRequest.setHeight(customerResponse.getHeight());
+            customerRequest.setEmail(customerResponse.getEmail());
+            customerRequest.setPhone(customerResponse.getPhone());
+            customerRequest.setAddress(customerResponse.getAddress());
+            customerRequest.setActive(customerResponse.isActive());
+            
+            model.addAttribute("customer", customerResponse); // 表示用
+            model.addAttribute("customerRequest", customerRequest); // フォーム用
             model.addAttribute("storeId", storeId);
             model.addAttribute("canEdit", canEdit);
             model.addAttribute("currentUser", currentUser);
+            model.addAttribute("customerId", customerId);
+            model.addAttribute("isTrainer", isTrainer);
             
             return "customer/customer-profile";
             

@@ -179,12 +179,24 @@ public class CustomerService {
 	// --- 顧客IDで顧客詳細を取得（CustomerResponse形式） ---
 	/**
 	 * 顧客IDで顧客情報を取得し、CustomerResponseに変換
+	 * 最新レッスンの体重も取得して設定
 	 */
 	@Transactional(readOnly = true)
 	public CustomerResponse getCustomerById(UUID customerId) {
 		Customer customer = customerRepository.findById(customerId)
 				.orElseThrow(() -> new RuntimeException("顧客が見つかりません: " + customerId));
-		return CustomerResponse.fromEntity(customer);
+		CustomerResponse response = CustomerResponse.fromEntity(customer);
+		
+		// 最新レッスンの体重を取得
+		List<com.example.fitnessgym_mg.entity.Lesson> lessons = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId);
+		if (!lessons.isEmpty()) {
+			com.example.fitnessgym_mg.entity.Lesson latestLesson = lessons.get(0);
+			if (latestLesson.getWeight() != null) {
+				response.setLatestWeight(latestLesson.getWeight());
+			}
+		}
+		
+		return response;
 	}
 
 	// --- ヘルパーメソッド ---
