@@ -23,6 +23,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Spring Security設定クラス
@@ -34,6 +35,7 @@ import lombok.RequiredArgsConstructor;
  * 3. パスワードをBCryptで比較して認証
  * 4. 認証成功後、権限（ROLE）に応じて適切な画面にリダイレクト
  */
+@Slf4j
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -118,21 +120,44 @@ public class SecurityConfig {
             public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
                     Authentication authentication) throws IOException, ServletException {
                 
+                String email = authentication.getName();
                 String redirectUrl = "/";
                 
+                // デバッグログ: 認証されたユーザーの権限を出力
+                log.info("認証成功: ユーザー={}, 権限={}", email, authentication.getAuthorities());
+                
                 // 権限に応じてリダイレクト先を決定
-                if (authentication.getAuthorities().stream()
-                        .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_ADMIN"))) {
+                boolean isAdmin = authentication.getAuthorities().stream()
+                        .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_ADMIN"));
+                boolean isManager = authentication.getAuthorities().stream()
+                        .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_MANAGER"));
+                boolean isTrainer = authentication.getAuthorities().stream()
+                        .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_TRAINER"));
+                
+                log.info("権限判定結果: ADMIN={}, MANAGER={}, TRAINER={}", isAdmin, isManager, isTrainer);
+                
+                if (isAdmin) {
                     redirectUrl = "/admin/dashboard";
-                } else if (authentication.getAuthorities().stream()
-                        .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_MANAGER"))) {
+                    log.info("ADMINユーザーとしてリダイレクト: {}", redirectUrl);
+                } else if (isManager) {
                     // 店長の場合は所属店舗IDを取得して統計画面にリダイレクト
-                    redirectUrl = getManagerRedirectUrl(authentication.getName());
-                } else if (authentication.getAuthorities().stream()
-                        .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_TRAINER"))) {
+                    try {
+                        redirectUrl = getManagerRedirectUrl(email);
+                        log.info("MANAGERユーザーとしてリダイレクト: {}", redirectUrl);
+                    } catch (Exception e) {
+                        log.error("店長のリダイレクトURL取得に失敗: ユーザー={}, エラー={}", email, e.getMessage(), e);
+                        // 例外が発生した場合はログイン画面にリダイレクト（エラーメッセージ付き）
+                        response.sendRedirect("/login?error=manager_redirect_failed");
+                        return;
+                    }
+                } else if (isTrainer) {
                     redirectUrl = "/trainer/customers";
+                    log.info("TRAINERユーザーとしてリダイレクト: {}", redirectUrl);
+                } else {
+                    log.warn("未知の権限: ユーザー={}, 権限={}", email, authentication.getAuthorities());
                 }
                 
+                log.info("最終リダイレクト先: {}", redirectUrl);
                 response.sendRedirect(redirectUrl);
             }
         };
@@ -146,20 +171,34 @@ public class SecurityConfig {
      * @return リダイレクトURL
      */
     private String getManagerRedirectUrl(String email) {
+        log.info("店長のリダイレクトURL取得開始: ユーザー={}", email);
+        
         // ユーザー情報を取得（storesをJOIN FETCH）
         User user = userRepository.findByEmailWithStores(email)
-                .orElseThrow(() -> new RuntimeException("ユーザーが見つかりません: " + email));
+                .orElseThrow(() -> {
+                    log.error("ユーザーが見つかりません: {}", email);
+                    return new RuntimeException("ユーザーが見つかりません: " + email);
+                });
+
+        log.info("ユーザー情報取得成功: ユーザー={}, 権限={}, 店舗数={}", 
+                email, user.getRole(), 
+                user.getStores() != null ? user.getStores().size() : 0);
 
         // 店長は1つの店舗にのみ所属する想定
         if (user.getStores() == null || user.getStores().isEmpty()) {
+            log.error("店長ユーザーに店舗が割り当てられていません: {}", email);
             throw new RuntimeException("店長ユーザーに店舗が割り当てられていません: " + email);
         }
 
         // 最初の店舗IDを使用（店長は1つの店舗にのみ所属する想定）
         Store store = user.getStores().iterator().next();
         UUID storeId = store.getId();
-
-        return "/manager/" + storeId + "/lessons";
+        String redirectUrl = "/manager/" + storeId + "/lessons";
+        
+        log.info("店長のリダイレクトURL取得成功: ユーザー={}, 店舗ID={}, リダイレクト先={}", 
+                email, storeId, redirectUrl);
+        
+        return redirectUrl;
     }
 }
 

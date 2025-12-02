@@ -69,7 +69,7 @@
             このページへのアクセス権限がありません。<br>
             必要な権限がない、またはログインが必要な可能性があります。
         </div>
-        <a href="/trainer/customers" class="button">ホームに戻る</a>
+        <a th:href="${homeUrl != null ? homeUrl : '/login'}" class="button">ホームに戻る</a>
     </div>
 </body>
 </html>

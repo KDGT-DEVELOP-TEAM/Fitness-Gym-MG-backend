@@ -69,7 +69,7 @@
             お探しのページは存在しないか、移動された可能性があります。<br>
             URLをご確認ください。
         </div>
-        <a href="/trainer/customers" class="button">ホームに戻る</a>
+        <a th:href="${homeUrl != null ? homeUrl : '/login'}" class="button">ホームに戻る</a>
     </div>
 </body>
 </html>

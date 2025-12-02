@@ -25,6 +25,7 @@ import com.example.fitnessgym_mg.dto.response.CustomerResponse;
 import com.example.fitnessgym_mg.entity.Customer;
 import com.example.fitnessgym_mg.entity.Customer.CustomerGender;
 import com.example.fitnessgym_mg.service.CustomerService;
+import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -33,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 public class CustomerApiController {
 
 	private final CustomerService service;
+	private final SecurityUtil securityUtil;
 
 	// --- カスタマー一覧（検索・並び替え対応） ---
 	@GetMapping({ "/admin/customers", "/manager/{storeId}/customers" })
@@ -50,14 +52,21 @@ public class CustomerApiController {
 
 		model.addAttribute("customerPage", customerPage); // PageオブジェクトをViewに渡す
 		model.addAttribute("count", customerPage.getTotalElements()); // 総件数
-		model.addAttribute("currentPage", page); // ★ 現在のページ番号
+		model.addAttribute("pageNumber", page); // ★ 現在のページ番号（currentPageと競合しないように名前を変更）
 
 		model.addAttribute("keyword", keyword);
 		model.addAttribute("sort", sort);
 		model.addAttribute("genders", CustomerGender.values());
 		model.addAttribute("storeId", storeId);
+		
+		// 店長用サイドバー表示のためのフラグ（storeIdが存在する場合のみ）
+		model.addAttribute("isManager", storeId != null);
+		// 現在のページを示すフラグ（サイドバーのアクティブ状態用）
+		if (storeId != null) {
+			model.addAttribute("currentPage", "customers");
+		}
 
-		return "customers/list";
+		return "customer/customer_list";
 	}
 
 	// --- 作成 ---

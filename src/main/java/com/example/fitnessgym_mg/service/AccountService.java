@@ -237,8 +237,8 @@ public class AccountService {
 	}
 
 	private Sort createSort(String sort) {
-		// 1. ロール順序による昇順ソート
-		Sort primarySort = Sort.by("roleOrder").ascending();
+		// 1. ロールによる昇順ソート（roleOrderプロパティは存在しないため、roleでソート）
+		Sort primarySort = Sort.by("role").ascending();
 
 		// 2. 登録日時降順ソート、またはカナ昇順ソート
 		Sort secondarySort;

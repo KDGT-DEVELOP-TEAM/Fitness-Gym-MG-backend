@@ -69,7 +69,7 @@
             <p th:if="${message}" th:text="${message}">予期しないエラーが発生しました。</p>
             <p th:if="${!message}">予期しないエラーが発生しました。しばらくしてから再度お試しください。</p>
         </div>
-        <a href="/trainer/customers" class="button">ホームに戻る</a>
+        <a th:href="${homeUrl != null ? homeUrl : '/login'}" class="button">ホームに戻る</a>
     </div>
 </body>
 </html>

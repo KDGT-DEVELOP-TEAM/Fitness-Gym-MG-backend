@@ -18,6 +18,7 @@ import com.example.fitnessgym_mg.dto.response.LessonResponse.LessonChartData;
 import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.service.LessonService;
+import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -27,6 +28,7 @@ public class LessonApiController {
 
 	private final LessonService lessonService;
 	private final StoreRepository storeRepository;
+	private final SecurityUtil securityUtil;
 
 	// --- 1. 本部管理者 (Admin) 用：全店舗のレッスン履歴ページ ---
 	@GetMapping("/admin/lessons")
@@ -44,6 +46,10 @@ public class LessonApiController {
 		// 全店舗リストを取得 (絞り込みUI用)
 		List<Store> allStores = storeRepository.findAll();
 		model.addAttribute("stores", allStores);
+
+		// Admin用のフラグ設定
+		model.addAttribute("isManager", false);
+		model.addAttribute("isTrainer", false);
 
 		// サービス層の検索とグラフデータ取得を呼び出し (storeIdがnullなら全店舗が対象)
 		return loadLessonData(storeId, keyword, chartType, pageable, model, "/admin/lessons");
@@ -68,6 +74,12 @@ public class LessonApiController {
 
 		// 店長は自分の店舗データのみを閲覧できるため、絞り込みリストは自分の店舗のみとする
 		model.addAttribute("stores", List.of(targetStore));
+		
+		// 店長用サイドバー表示のためのフラグ
+		model.addAttribute("isManager", true);
+		model.addAttribute("isTrainer", false);
+		// 現在のページを示すフラグ（サイドバーのアクティブ状態用）
+		model.addAttribute("currentPage", "lessons");
 
 		// サービス層の検索とグラフデータ取得を呼び出し (storeIdは必須)
 		return loadLessonData(storeId, keyword, chartType, pageable, model, "/manager/" + storeId + "/lessons");
@@ -105,6 +117,9 @@ public class LessonApiController {
 
 		// View側でのリンク構築に利用 (Admin/Managerパスの切り替え)
 		model.addAttribute("BASE_PATH", basePath);
+		
+		// レッスン詳細へのパスを設定（BASE_PATHと同じパスを使用）
+		model.addAttribute("DETAIL_BASE_PATH", basePath);
 
 		return "lesson/lesson-list"; // 共通のThymeleafテンプレート
 	}

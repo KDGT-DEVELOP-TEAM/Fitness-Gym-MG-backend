@@ -26,6 +26,7 @@ import com.example.fitnessgym_mg.dto.response.UserResponse;
 import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.service.AccountService;
+import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -35,6 +36,7 @@ public class UserController {
 
 	private final AccountService service;
 	private final StoreRepository storeRepository;
+	private final SecurityUtil securityUtil;
 
 	// --- ユーザー一覧（本部管理者 /admin/users, 店長 /manager/{storeId}/users）---
 	@GetMapping({ "/admin/users", "/manager/{storeId}/users" })
@@ -63,8 +65,15 @@ public class UserController {
 		model.addAttribute("role", role);
 		model.addAttribute("sort", sort);
 		model.addAttribute("storeId", storeId);
+		
+		// 店長用サイドバー表示のためのフラグ（storeIdが存在する場合のみ）
+		model.addAttribute("isManager", storeId != null);
+		// 現在のページを示すフラグ（サイドバーのアクティブ状態用）
+		if (storeId != null) {
+			model.addAttribute("currentPage", "users");
+		}
 
-		return "users/list";
+		return "user/user-list";
 	}
 
 	// --- 作成 (API) ---
