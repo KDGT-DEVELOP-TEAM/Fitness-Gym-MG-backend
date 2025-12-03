@@ -24,6 +24,7 @@ import com.example.fitnessgym_mg.entity.User.UserRole;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.repository.UserRepository;
+import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -36,6 +37,7 @@ public class AccountService {
 	private final StoreRepository storeRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final LessonRepository lessonRepository;
+	private final SecurityUtil securityUtil;
 
 	// --- ユーザー検索 ---
 	@Transactional(readOnly = true)
@@ -133,6 +135,19 @@ public class AccountService {
 	// 更新
 	public void update(UUID id, UserRequest req, Set<UUID> storeIds) {
 		User user = findUserById(id, null);
+
+		// マネージャーの権限チェック: マネージャーはトレーナーのみ編集可能
+		if (securityUtil.isManager()) {
+			// 編集対象ユーザーのロールをチェック
+			UserRole targetUserRole = user.getRole();
+			if (targetUserRole != UserRole.trainer) {
+				throw new IllegalArgumentException("マネージャーはトレーナーのみ編集可能です。");
+			}
+			// 編集後のロールもトレーナーである必要がある
+			if (req.getRole() != UserRole.trainer) {
+				throw new IllegalArgumentException("マネージャーはトレーナーのみ編集可能です。");
+			}
+		}
 
 		// StoreIdsのnullチェック (フロントから空配列[]が来る想定だが念のため)
 		if (storeIds == null) {

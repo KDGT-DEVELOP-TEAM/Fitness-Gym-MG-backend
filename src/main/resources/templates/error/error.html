@@ -67,7 +67,7 @@
         <div class="error-title" th:text="${error} ?: 'エラーが発生しました'">エラーが発生しました</div>
         <div class="error-message">
             <p th:if="${message}" th:text="${message}">予期しないエラーが発生しました。</p>
-            <p th:if="${!message}">予期しないエラーが発生しました。しばらくしてから再度お試しください。</p>
+            <p th:if="${message == null}">予期しないエラーが発生しました。しばらくしてから再度お試しください。</p>
         </div>
         <a th:href="${homeUrl != null ? homeUrl : '/login'}" class="button">ホームに戻る</a>
     </div>

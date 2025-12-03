@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -101,14 +102,19 @@ public class UserController {
 	//--- 更新 (API) ---
 	@PatchMapping({ "/admin/users/{id}/edit", "/manager/{storeId}/users/{id}/edit" })
 	@ResponseBody
-	public ResponseEntity<Void> update(
+	public ResponseEntity<String> update(
 			@PathVariable(required = false) UUID pathStoreId,
 			@PathVariable UUID id,
 			@Valid @RequestBody UserRequest req) {
 
-		// null チェックと空セットの提供
-		service.update(id, req, req.getStoreIds() != null ? req.getStoreIds() : Collections.emptySet());
-		return ResponseEntity.ok().build();
+		try {
+			// null チェックと空セットの提供
+			service.update(id, req, req.getStoreIds() != null ? req.getStoreIds() : Collections.emptySet());
+			return ResponseEntity.ok().build();
+		} catch (IllegalArgumentException e) {
+			// 権限エラーやバリデーションエラーの場合、403エラーとして返す
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+		}
 	}
 
 	// --- ユーザーを無効化 (Disable) ---

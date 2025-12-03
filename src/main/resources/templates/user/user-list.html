@@ -248,48 +248,76 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const id = btn.dataset.id;
             const form = document.getElementById("editForm");
-            const res = await fetch(`${API_BASE_PATH}/${id}/detail`);
-            const user = await res.json();
-            
-            document.getElementById("editError").textContent = "";
+            const errorDiv = document.getElementById("editError");
+            errorDiv.textContent = "";
 
-            form.id.value       = user.id;
-            document.getElementById("edit-id-display").value = user.id;
-
-            form.name.value     = user.name;
-            form.kana.value     = user.kana;
-            form.email.value    = user.email;
-            form.role.value     = user.role;
-            form.active.checked = user.active;
-
-            const editStoreSelect = form.querySelector('#editStoreId');
-            
-            // 既存の選択状態を全て解除
-            Array.from(editStoreSelect.options).forEach(opt => opt.selected = false); 
-
-            // user.storeIds (Set<UUID>) をループして選択状態にする
-            if (user.storeIds && user.storeIds.length > 0) {
-                user.storeIds.forEach(storeId => {
-                    const option = editStoreSelect.querySelector(`option[value="${storeId}"]`);
-                    if (option) {
-                        option.selected = true; // 該当IDのオプションを選択状態にする
+            try {
+                const res = await fetch(`${API_BASE_PATH}/${id}/detail`);
+                
+                if (!res.ok) {
+                    let errorMessage = "データの取得に失敗しました。";
+                    if (res.status === 403) {
+                        errorMessage = "このユーザーを編集する権限がありません。";
+                    } else if (res.status === 404) {
+                        errorMessage = "ユーザーが見つかりません。";
+                    } else {
+                        try {
+                            const errorText = await res.text();
+                            if (errorText) {
+                                errorMessage = errorText;
+                            }
+                        } catch (e) {
+                            // エラーテキストの取得に失敗した場合はデフォルトメッセージを使用
+                        }
                     }
-                });
-            }
-            
-            // 削除ボタンの状態制御
-            if (user.active) {
-                modalDeleteBtn.style.display = 'none';
-                modalDeleteBtn.dataset.id = '';
-            } else {
-                modalDeleteBtn.style.display = 'block';
-                modalDeleteBtn.dataset.id = id;
-            }
+                    errorDiv.textContent = errorMessage;
+                    document.getElementById("editModal").style.display = "block";
+                    return;
+                }
 
-            // 編集モーダル開時にも必須制御を実行
-            toggleStoreRequired('edit', user.role);
+                const user = await res.json();
 
-            document.getElementById("editModal").style.display = "block";
+                form.id.value       = user.id;
+                document.getElementById("edit-id-display").value = user.id;
+
+                form.name.value     = user.name;
+                form.kana.value     = user.kana;
+                form.email.value    = user.email;
+                form.role.value     = user.role;
+                form.active.checked = user.active;
+
+                const editStoreSelect = form.querySelector('#editStoreId');
+                
+                // 既存の選択状態を全て解除
+                Array.from(editStoreSelect.options).forEach(opt => opt.selected = false); 
+
+                // user.storeIds (Set<UUID>) をループして選択状態にする
+                if (user.storeIds && user.storeIds.length > 0) {
+                    user.storeIds.forEach(storeId => {
+                        const option = editStoreSelect.querySelector(`option[value="${storeId}"]`);
+                        if (option) {
+                            option.selected = true; // 該当IDのオプションを選択状態にする
+                        }
+                    });
+                }
+                
+                // 削除ボタンの状態制御
+                if (user.active) {
+                    modalDeleteBtn.style.display = 'none';
+                    modalDeleteBtn.dataset.id = '';
+                } else {
+                    modalDeleteBtn.style.display = 'block';
+                    modalDeleteBtn.dataset.id = id;
+                }
+
+                // 編集モーダル開時にも必須制御を実行
+                toggleStoreRequired('edit', user.role);
+
+                document.getElementById("editModal").style.display = "block";
+            } catch (error) {
+                errorDiv.textContent = "データの取得中にエラーが発生しました: " + error.message;
+                document.getElementById("editModal").style.display = "block";
+            }
         };
     });
     

@@ -113,7 +113,7 @@
 		document.addEventListener("DOMContentLoaded", () => {
 
 			// モーダル内の削除ボタン要素を取得
-			const modalDeleteBtn = document.getElementById("modalCustomerDeleteBtn");
+			const modalDeleteBtn = document.getElementById("modalDeleteBtn");
 
 			// --- 削除 (モーダル内のボタンにイベントを設定) ---
 			modalDeleteBtn.onclick = async () => {
@@ -212,44 +212,70 @@
 
 					const id = btn.dataset.id;
 					const form = document.getElementById("editForm");
+					const errorDiv = document.getElementById("editError");
+					errorDiv.textContent = "";
 
-					const response = await fetch(`${API_BASE_PATH}/${id}/detail`);
-					const customer = await response.json();
+					try {
+						const response = await fetch(`${API_BASE_PATH}/${id}/detail`);
+						
+						if (!response.ok) {
+							let errorMessage = "データの取得に失敗しました。";
+							if (response.status === 403) {
+								errorMessage = "この顧客を編集する権限がありません。";
+							} else if (response.status === 404) {
+								errorMessage = "顧客が見つかりません。";
+							} else {
+								try {
+									const errorText = await response.text();
+									if (errorText) {
+										errorMessage = errorText;
+									}
+								} catch (e) {
+									// エラーテキストの取得に失敗した場合はデフォルトメッセージを使用
+								}
+							}
+							errorDiv.textContent = errorMessage;
+							document.getElementById("editModal").style.display = "block";
+							return;
+						}
 
-					document.getElementById("editError").textContent = "";
+						const customer = await response.json();
 
-					form.id.value = customer.id;
-					document.getElementById("edit-id-display").value = customer.id;
-					form.name.value = customer.name;
-					form.kana.value = customer.kana;
-					form.email.value = customer.email;
-					form.gender.value = customer.gender;
-					form.birthday.value = customer.birthday;
-					form.height.value = customer.height;
-					form.phone.value = customer.phone;
-					form.address.value = customer.address;
-					form.medical.value = customer.medical || '';
-					form.taboo.value = customer.taboo || '';
-					form.memo.value = customer.memo || '';
-					form.firstPostureGroupId.value = customer.firstPostureGroupId || '';
-					form.active.checked = customer.active;
+						form.id.value = customer.id;
+						document.getElementById("edit-id-display").value = customer.id;
+						form.name.value = customer.name;
+						form.kana.value = customer.kana;
+						form.email.value = customer.email;
+						form.gender.value = customer.gender;
+						form.birthday.value = customer.birthday;
+						form.height.value = customer.height;
+						form.phone.value = customer.phone;
+						form.address.value = customer.address;
+						form.medical.value = customer.medical || '';
+						form.taboo.value = customer.taboo || '';
+						form.memo.value = customer.memo || '';
+						form.firstPostureGroupId.value = customer.firstPostureGroupId || '';
+						form.active.checked = customer.active;
 
-					// 編集モーダルオープン時に年齢表示を更新
-					document.getElementById("editAgeDisplay").textContent = calcAge(customer.birthday);
+						// 編集モーダルオープン時に年齢表示を更新
+						document.getElementById("editAgeDisplay").textContent = calcAge(customer.birthday);
 
-					// 削除ボタンの状態制御
-					if (customer.active) {
-						// 有効な場合は非表示
-						modalDeleteBtn.style.display = 'none';
-						modalDeleteBtn.dataset.id = '';
-					} else {
-						// 無効な場合は表示し、IDを設定
-						modalDeleteBtn.style.display = 'block';
-						modalDeleteBtn.dataset.id = id;
+						// 削除ボタンの状態制御
+						if (customer.active) {
+							// 有効な場合は非表示
+							modalDeleteBtn.style.display = 'none';
+							modalDeleteBtn.dataset.id = '';
+						} else {
+							// 無効な場合は表示し、IDを設定
+							modalDeleteBtn.style.display = 'block';
+							modalDeleteBtn.dataset.id = id;
+						}
+
+						document.getElementById("editModal").style.display = "block";
+					} catch (error) {
+						errorDiv.textContent = "データの取得中にエラーが発生しました: " + error.message;
+						document.getElementById("editModal").style.display = "block";
 					}
-
-
-					document.getElementById("editModal").style.display = "block";
 				};
 			});
 

@@ -14,6 +14,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.entity.User;
@@ -96,8 +97,20 @@ public class SecurityConfig {
                 .deleteCookies("JSESSIONID")
                 .permitAll()
             )
-            // CSRF対策：APIエンドポイントはCSRFチェックを無視
-            .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"));
+            // CSRF対策：APIエンドポイントと有効/無効エンドポイントはCSRFチェックを無視
+            .csrf(csrf -> csrf.ignoringRequestMatchers(
+                AntPathRequestMatcher.antMatcher("/api/**"),
+                // 顧客の有効/無効エンドポイント
+                AntPathRequestMatcher.antMatcher("/admin/customers/**/enable"),
+                AntPathRequestMatcher.antMatcher("/admin/customers/**/disable"),
+                AntPathRequestMatcher.antMatcher("/manager/**/customers/**/enable"),
+                AntPathRequestMatcher.antMatcher("/manager/**/customers/**/disable"),
+                // ユーザーの有効/無効エンドポイント
+                AntPathRequestMatcher.antMatcher("/admin/users/**/enable"),
+                AntPathRequestMatcher.antMatcher("/admin/users/**/disable"),
+                AntPathRequestMatcher.antMatcher("/manager/**/users/**/enable"),
+                AntPathRequestMatcher.antMatcher("/manager/**/users/**/disable")
+            ));
 
         return http.build();
     }
