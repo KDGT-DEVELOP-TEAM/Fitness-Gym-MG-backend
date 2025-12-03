@@ -14,7 +14,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.entity.User;
@@ -49,7 +48,7 @@ public class SecurityConfig {
      * パスワードをBCryptでハッシュ化するためのエンコーダーを返します
      */
     @Bean
-    public PasswordEncoder passwordEncoder() {
+    PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
@@ -58,7 +57,7 @@ public class SecurityConfig {
      * ログイン処理を実行するためのマネージャーを返します
      */
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
+    AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
         return authConfig.getAuthenticationManager();
     }
 
@@ -72,7 +71,7 @@ public class SecurityConfig {
      * 4. CSRF対策：APIエンドポイントはCSRFチェックを無視
      */
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             // 認可設定：静的リソースとログイン画面は認証不要、その他は認証必須
             .authorizeHttpRequests(authz -> authz
@@ -99,17 +98,17 @@ public class SecurityConfig {
             )
             // CSRF対策：APIエンドポイントと有効/無効エンドポイントはCSRFチェックを無視
             .csrf(csrf -> csrf.ignoringRequestMatchers(
-                AntPathRequestMatcher.antMatcher("/api/**"),
+                "/api/**",
                 // 顧客の有効/無効エンドポイント
-                AntPathRequestMatcher.antMatcher("/admin/customers/**/enable"),
-                AntPathRequestMatcher.antMatcher("/admin/customers/**/disable"),
-                AntPathRequestMatcher.antMatcher("/manager/**/customers/**/enable"),
-                AntPathRequestMatcher.antMatcher("/manager/**/customers/**/disable"),
+                "/admin/customers/*/enable",
+                "/admin/customers/*/disable",
+                "/manager/*/customers/*/enable",
+                "/manager/*/customers/*/disable",
                 // ユーザーの有効/無効エンドポイント
-                AntPathRequestMatcher.antMatcher("/admin/users/**/enable"),
-                AntPathRequestMatcher.antMatcher("/admin/users/**/disable"),
-                AntPathRequestMatcher.antMatcher("/manager/**/users/**/enable"),
-                AntPathRequestMatcher.antMatcher("/manager/**/users/**/disable")
+                "/admin/users/*/enable",
+                "/admin/users/*/disable",
+                "/manager/*/users/*/enable",
+                "/manager/*/users/*/disable"
             ));
 
         return http.build();
@@ -127,7 +126,7 @@ public class SecurityConfig {
      * 3. 決定したURLにリダイレクト
      */
     @Bean
-    public AuthenticationSuccessHandler customAuthenticationSuccessHandler() {
+    AuthenticationSuccessHandler customAuthenticationSuccessHandler() {
         return new AuthenticationSuccessHandler() {
             @Override
             public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
