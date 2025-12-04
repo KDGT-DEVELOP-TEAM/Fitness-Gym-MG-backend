@@ -111,7 +111,10 @@ public class SecurityConfig {
                 "/manager/*/users/*/disable",
                 // ユーザー作成エンドポイント
                 "/admin/users/create",
-                "/manager/*/users/create"
+                "/manager/*/users/create",
+                // 顧客作成エンドポイント
+                "/admin/customers/create",
+                "/manager/*/customers/create"
             ));
 
         return http.build();

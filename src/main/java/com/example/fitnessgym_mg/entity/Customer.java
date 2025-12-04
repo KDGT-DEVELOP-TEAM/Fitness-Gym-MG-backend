@@ -7,18 +7,19 @@ import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -42,8 +43,8 @@ public class Customer {
 	@Column(nullable = false)
 	private String name;
 
-	@Enumerated(EnumType.STRING)
-	@Column(nullable = false)
+	@JdbcTypeCode(SqlTypes.NAMED_ENUM)
+	@Column(nullable = false, columnDefinition = "customer_gender")
 	private CustomerGender gender;
 
 	@Column(nullable = false)
@@ -80,6 +81,11 @@ public class Customer {
 
 	@Column(name = "is_active", nullable = false)
 	private boolean active = true;
+
+	@PrePersist
+	public void onPrePersist() {
+		this.createdAt = LocalDateTime.now();
+	}
 
 	public enum CustomerGender {
 		男, 女;
