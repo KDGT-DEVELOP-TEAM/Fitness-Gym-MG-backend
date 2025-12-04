@@ -27,6 +27,47 @@
             margin: 10px 0;
             border-radius: 4px;
             background: #f9f9f9;
+            position: relative;
+        }
+        .training-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .training-section-header h3 {
+            margin: 0;
+        }
+        .delete-training-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .delete-training-btn:hover {
+            background: #c82333;
+        }
+        .delete-training-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .add-training-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 20px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .add-training-btn:hover {
+            background: #218838;
+        }
+        #trainings-container {
+            margin: 10px 0;
         }
         .error {
             color: red;
@@ -159,32 +200,13 @@
             <span class="error" th:if="${#fields.hasErrors('meal')}" th:errors="*{meal}"></span>
         </div>
         
-        <!-- トレーニング1 -->
-        <div class="training-section">
-            <h3>トレーニング1</h3>
-            <div class="form-group">
-                <label for="training1Name">種目名</label>
-                <input type="text" name="trainings[0].name" id="training1Name" placeholder="例: ベンチプレス" />
+        <!-- トレーニングセクション -->
+        <div class="form-group">
+            <label>トレーニング</label>
+            <div id="trainings-container">
+                <!-- トレーニングセクションはJavaScriptで動的に生成 -->
             </div>
-            <div class="form-group">
-                <label for="training1Reps">回数</label>
-                <input type="number" name="trainings[0].reps" id="training1Reps" placeholder="例: 80" />
-            </div>
-            <input type="hidden" name="trainings[0].orderNo" value="1" />
-        </div>
-        
-        <!-- トレーニング2 -->
-        <div class="training-section">
-            <h3>トレーニング2</h3>
-            <div class="form-group">
-                <label for="training2Name">種目名</label>
-                <input type="text" name="trainings[1].name" id="training2Name" placeholder="例: スクワット" />
-            </div>
-            <div class="form-group">
-                <label for="training2Reps">回数</label>
-                <input type="number" name="trainings[1].reps" id="training2Reps" placeholder="例: 90" />
-            </div>
-            <input type="hidden" name="trainings[1].orderNo" value="2" />
+            <button type="button" class="add-training-btn" id="addTrainingBtn">トレーニングを追加</button>
         </div>
         
         <!-- 実施時間 -->
@@ -256,6 +278,115 @@
                 bmiDisplay.textContent = '';
             }
         });
+
+        // トレーニングセクション管理
+        let trainingIndex = 0;
+        const trainingsContainer = document.getElementById('trainings-container');
+        const addTrainingBtn = document.getElementById('addTrainingBtn');
+
+        // トレーニングセクションを生成する関数
+        function createTrainingSection(index) {
+            const section = document.createElement('div');
+            section.className = 'training-section';
+            section.dataset.index = index;
+            
+            const orderNo = index + 1;
+            
+            section.innerHTML = `
+                <div class="training-section-header">
+                    <h3>トレーニング${orderNo}</h3>
+                    <button type="button" class="delete-training-btn" onclick="removeTrainingSection(${index})">削除</button>
+                </div>
+                <div class="form-group">
+                    <label for="training${index}Name">種目名</label>
+                    <input type="text" name="trainings[${index}].name" id="training${index}Name" placeholder="例: ベンチプレス" />
+                </div>
+                <div class="form-group">
+                    <label for="training${index}Reps">回数</label>
+                    <input type="number" name="trainings[${index}].reps" id="training${index}Reps" placeholder="例: 80" />
+                </div>
+                <input type="hidden" name="trainings[${index}].orderNo" value="${orderNo}" />
+            `;
+            
+            return section;
+        }
+
+        // トレーニングセクションを追加する関数
+        function addTrainingSection() {
+            const section = createTrainingSection(trainingIndex);
+            trainingsContainer.appendChild(section);
+            trainingIndex++;
+            updateDeleteButtons();
+        }
+
+        // トレーニングセクションを削除する関数
+        function removeTrainingSection(index) {
+            const sections = trainingsContainer.querySelectorAll('.training-section');
+            const sectionToRemove = Array.from(sections).find(s => parseInt(s.dataset.index) === index);
+            
+            if (sectionToRemove) {
+                sectionToRemove.remove();
+                reindexTrainingSections();
+                updateDeleteButtons();
+            }
+        }
+
+        // トレーニングセクションのインデックスを再設定
+        function reindexTrainingSections() {
+            const sections = Array.from(trainingsContainer.querySelectorAll('.training-section'));
+            trainingIndex = 0;
+            
+            sections.forEach((section, newIndex) => {
+                section.dataset.index = newIndex;
+                
+                const orderNo = newIndex + 1;
+                const header = section.querySelector('h3');
+                header.textContent = `トレーニング${orderNo}`;
+                
+                // 削除ボタンのonclickを更新
+                const deleteBtn = section.querySelector('.delete-training-btn');
+                deleteBtn.setAttribute('onclick', `removeTrainingSection(${newIndex})`);
+                
+                // 入力フィールドのname属性とidを更新
+                const nameInput = section.querySelector('input[type="text"]');
+                const repsInput = section.querySelector('input[type="number"]');
+                const orderNoInput = section.querySelector('input[type="hidden"]');
+                
+                nameInput.name = `trainings[${newIndex}].name`;
+                nameInput.id = `training${newIndex}Name`;
+                repsInput.name = `trainings[${newIndex}].reps`;
+                repsInput.id = `training${newIndex}Reps`;
+                orderNoInput.name = `trainings[${newIndex}].orderNo`;
+                orderNoInput.value = orderNo;
+                
+                // ラベルのfor属性を更新
+                const labels = section.querySelectorAll('label');
+                if (labels.length >= 2) {
+                    labels[0].setAttribute('for', `training${newIndex}Name`);
+                    labels[1].setAttribute('for', `training${newIndex}Reps`);
+                }
+                
+                trainingIndex = newIndex + 1;
+            });
+        }
+
+        // 削除ボタンの有効/無効を更新（最低1つは残す）
+        function updateDeleteButtons() {
+            const sections = trainingsContainer.querySelectorAll('.training-section');
+            const deleteButtons = trainingsContainer.querySelectorAll('.delete-training-btn');
+            
+            if (sections.length <= 1) {
+                deleteButtons.forEach(btn => btn.disabled = true);
+            } else {
+                deleteButtons.forEach(btn => btn.disabled = false);
+            }
+        }
+
+        // トレーニング追加ボタンのイベントリスナー
+        addTrainingBtn.addEventListener('click', addTrainingSection);
+
+        // 初期状態で1つのトレーニングセクションを追加
+        addTrainingSection();
     </script>
     </div>
 </body>
