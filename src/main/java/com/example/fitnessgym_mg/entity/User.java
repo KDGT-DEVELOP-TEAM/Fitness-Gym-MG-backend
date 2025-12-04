@@ -6,16 +6,19 @@ import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -25,6 +28,7 @@ import lombok.ToString;
 
 @Entity
 @Table(name = "users") // 明示的にテーブル名を指定
+@DynamicUpdate
 @NoArgsConstructor
 @AllArgsConstructor
 @Getter
@@ -48,8 +52,8 @@ public class User {
 	@Column(nullable = false)
 	private String pass;
 
-	@Enumerated(EnumType.STRING)
-	@Column(nullable = false)
+	@JdbcTypeCode(SqlTypes.NAMED_ENUM)
+	@Column(nullable = false, columnDefinition = "user_role")
 	private UserRole role;
 
 	@Column(nullable = false)
@@ -68,6 +72,11 @@ public class User {
 			inverseJoinColumns = @JoinColumn(name = "store_id", nullable = false), // Store側のFK
 			uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "store_id" })) //複合ユニーク制約
 	private Set<Store> stores; // ユーザーが所属する店舗リスト
+
+	@PrePersist
+	public void onPrePersist() {
+		this.createdAt = LocalDateTime.now();
+	}
 
 	@Override
 	public int hashCode() {

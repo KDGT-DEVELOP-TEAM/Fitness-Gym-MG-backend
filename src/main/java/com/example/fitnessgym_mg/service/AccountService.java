@@ -86,6 +86,13 @@ public class AccountService {
 	// ユーザー作成
 	public void create(UserRequest req, Set<UUID> storeIds) {
 
+		// マネージャーの権限チェック: マネージャーはトレーナーのみ作成可能
+		if (securityUtil.isManager()) {
+			if (req.getRole() != UserRole.trainer) {
+				throw new IllegalArgumentException("マネージャーはトレーナーのみ作成可能です。");
+			}
+		}
+
 		// 1. 店長ロールのバリデーション (単一の店舗必須)
 		if (req.getRole() == UserRole.manager) {
 			// 店長の場合、店舗IDが1つだけ存在することを確認
@@ -193,6 +200,14 @@ public class AccountService {
 	// --- ユーザーを有効化 ---
 	public void enableActive(UUID id, UUID storeId) {
 		User user = findUserById(id, storeId);
+		
+		// マネージャーの権限チェック: マネージャーはトレーナーのみ編集可能
+		if (securityUtil.isManager()) {
+			if (user.getRole() != UserRole.trainer) {
+				throw new IllegalArgumentException("マネージャーはトレーナーのみ編集可能です。");
+			}
+		}
+		
 		if (user.isActive()) {
 			return;
 		}
@@ -203,6 +218,14 @@ public class AccountService {
 	// --- ユーザーを無効化 ---
 	public void disableActive(UUID id, UUID storeId) {
 		User user = findUserById(id, storeId);
+		
+		// マネージャーの権限チェック: マネージャーはトレーナーのみ編集可能
+		if (securityUtil.isManager()) {
+			if (user.getRole() != UserRole.trainer) {
+				throw new IllegalArgumentException("マネージャーはトレーナーのみ編集可能です。");
+			}
+		}
+		
 		if (!user.isActive()) {
 			return;
 		}

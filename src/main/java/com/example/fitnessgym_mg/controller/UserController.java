@@ -80,13 +80,18 @@ public class UserController {
 	// --- 作成 (API) ---
 	@PostMapping({ "/admin/users/create", "/manager/{storeId}/users/create" })
 	@ResponseBody
-	public ResponseEntity<Void> create(
+	public ResponseEntity<String> create(
 			@PathVariable(required = false) UUID pathStoreId,
 			@Valid @RequestBody UserRequest req) {
 
-		// null チェックと空セットの提供
-		service.create(req, req.getStoreIds() != null ? req.getStoreIds() : Collections.emptySet());
-		return ResponseEntity.ok().build();
+		try {
+			// null チェックと空セットの提供
+			service.create(req, req.getStoreIds() != null ? req.getStoreIds() : Collections.emptySet());
+			return ResponseEntity.ok().build();
+		} catch (IllegalArgumentException e) {
+			// 権限エラーやバリデーションエラーの場合、403エラーとして返す
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+		}
 	}
 
 	// --- 詳細表示 (API) ---
@@ -120,23 +125,33 @@ public class UserController {
 	// --- ユーザーを無効化 (Disable) ---
 	@PatchMapping({ "/admin/users/{id}/disable", "/manager/{storeId}/users/{id}/disable" })
 	@ResponseBody
-	public ResponseEntity<Void> disableUser(
+	public ResponseEntity<String> disableUser(
 			@PathVariable(required = false) UUID storeId,
 			@PathVariable UUID id) {
 
-		service.disableActive(id, storeId);
-		return ResponseEntity.ok().build();
+		try {
+			service.disableActive(id, storeId);
+			return ResponseEntity.ok().build();
+		} catch (IllegalArgumentException e) {
+			// 権限エラーやバリデーションエラーの場合、403エラーとして返す
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+		}
 	}
 
 	// --- ユーザーを有効化 (Enable) ---
 	@PatchMapping({ "/admin/users/{id}/enable", "/manager/{storeId}/users/{id}/enable" })
 	@ResponseBody
-	public ResponseEntity<Void> enableUser(
+	public ResponseEntity<String> enableUser(
 			@PathVariable(required = false) UUID storeId,
 			@PathVariable UUID id) {
 
-		service.enableActive(id, storeId);
-		return ResponseEntity.ok().build();
+		try {
+			service.enableActive(id, storeId);
+			return ResponseEntity.ok().build();
+		} catch (IllegalArgumentException e) {
+			// 権限エラーやバリデーションエラーの場合、403エラーとして返す
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+		}
 	}
 
 	// --- 削除 (API) ---

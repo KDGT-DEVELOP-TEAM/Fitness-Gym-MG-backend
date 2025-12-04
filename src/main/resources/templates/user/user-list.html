@@ -144,8 +144,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const storeSelect = document.getElementById(prefix + 'StoreId');
         const requiredLabel = document.getElementById(prefix + 'StoreRequiredLabel');
         
-        // MANAGER の場合のみ必須にする (Admin/Trainerは不要)
-        if (selectedRole === 'MANAGER') {
+        // manager の場合のみ必須にする (admin/trainerは不要)
+        if (selectedRole === 'manager') {
             storeSelect.required = true;
             requiredLabel.style.display = 'inline-block';
         } else {
@@ -236,8 +236,35 @@ document.addEventListener("DOMContentLoaded", () => {
 	                endpoint = '/enable';
 	            }
 
-	            await fetch(`${API_BASE_PATH}/${id}${endpoint}`, {method:"PATCH"});
-	            location.reload();
+	            try {
+	                const response = await fetch(`${API_BASE_PATH}/${id}${endpoint}`, {method:"PATCH"});
+	                
+	                if (!response.ok) {
+	                    let errorMessage = "状態の変更に失敗しました。";
+	                    if (response.status === 403) {
+	                        errorMessage = "このユーザーの状態を変更する権限がありません。";
+	                    } else if (response.status === 404) {
+	                        errorMessage = "ユーザーが見つかりません。";
+	                    } else if (response.status === 500) {
+	                        errorMessage = "サーバーエラーが発生しました。しばらくしてから再度お試しください。";
+	                    } else {
+	                        try {
+	                            const errorText = await response.text();
+	                            if (errorText) {
+	                                errorMessage = errorText;
+	                            }
+	                        } catch (e) {
+	                            // エラーテキストの取得に失敗した場合はデフォルトメッセージを使用
+	                        }
+	                    }
+	                    alert(errorMessage);
+	                    return;
+	                }
+	                
+	                location.reload();
+	            } catch (error) {
+	                alert("状態の変更中にエラーが発生しました: " + error.message);
+	            }
 	        };
 	    });
 
@@ -455,9 +482,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
             <select name="role" id="createRole" required>
                 <option value="">ロール選択</option>
-                <option value="ADMIN">admin</option>
-                <option value="MANAGER">manager</option>
-                <option value="TRAINER">trainer</option>
+                <option value="admin">admin</option>
+                <option value="manager">manager</option>
+                <option value="trainer">trainer</option>
             </select> <span class="required-label">必須</span>
             
             <select name="storeIds" id="createStoreId" style="margin-top: 10px;" multiple> 
@@ -489,9 +516,9 @@ document.addEventListener("DOMContentLoaded", () => {
             <input name="email" required placeholder="メール"> <span class="required-label">必須</span>
 
             <select name="role" id="editRole" required>
-                <option value="ADMIN">admin</option>
-                <option value="MANAGER">manager</option>
-                <option value="TRAINER">trainer</option>
+                <option value="admin">admin</option>
+                <option value="manager">manager</option>
+                <option value="trainer">trainer</option>
             </select> <span class="required-label">必須</span>
             
             <select name="storeIds" id="editStoreId" style="margin-top: 10px;" multiple> 

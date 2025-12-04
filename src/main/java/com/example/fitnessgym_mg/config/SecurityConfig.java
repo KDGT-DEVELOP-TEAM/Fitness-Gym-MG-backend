@@ -108,7 +108,10 @@ public class SecurityConfig {
                 "/admin/users/*/enable",
                 "/admin/users/*/disable",
                 "/manager/*/users/*/enable",
-                "/manager/*/users/*/disable"
+                "/manager/*/users/*/disable",
+                // ユーザー作成エンドポイント
+                "/admin/users/create",
+                "/manager/*/users/create"
             ));
 
         return http.build();
