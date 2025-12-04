@@ -59,12 +59,11 @@ public class CustomerApiController {
 		model.addAttribute("genders", CustomerGender.values());
 		model.addAttribute("storeId", storeId);
 		
-		// 店長用サイドバー表示のためのフラグ（storeIdが存在する場合のみ）
+		// Admin/Manager用サイドバー表示のためのフラグ
+		model.addAttribute("isAdmin", storeId == null);
 		model.addAttribute("isManager", storeId != null);
 		// 現在のページを示すフラグ（サイドバーのアクティブ状態用）
-		if (storeId != null) {
-			model.addAttribute("currentPage", "customers");
-		}
+		model.addAttribute("currentPage", "customers");
 
 		return "customer/customer_list";
 	}

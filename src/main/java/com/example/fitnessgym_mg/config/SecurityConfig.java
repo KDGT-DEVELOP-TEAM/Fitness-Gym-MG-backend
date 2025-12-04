@@ -73,9 +73,9 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            // 認可設定：静的リソースとログイン画面は認証不要、その他は認証必須
+            // 認可設定：静的リソースとログイン画面、エラー画面は認証不要、その他は認証必須
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers("/login", "/css/**", "/js/**", "/images/**").permitAll()
+                .requestMatchers("/login", "/error", "/403", "/404", "/css/**", "/js/**", "/images/**").permitAll()
                 .anyRequest().authenticated()
             )
             // フォームログイン設定
@@ -126,7 +126,7 @@ public class SecurityConfig {
      * 処理の流れ：
      * 1. ユーザーの権限を取得
      * 2. 権限に応じてリダイレクト先を決定
-     *    - ROLE_ADMIN → /admin/dashboard
+     *    - ROLE_ADMIN → /admin/lessons（レッスン履歴画面）
      *    - ROLE_MANAGER → /manager/{storeId}/lessons（店舗統計画面）
      *    - ROLE_TRAINER → /trainer/customers
      * 3. 決定したURLにリダイレクト
@@ -155,7 +155,7 @@ public class SecurityConfig {
                 log.info("権限判定結果: ADMIN={}, MANAGER={}, TRAINER={}", isAdmin, isManager, isTrainer);
                 
                 if (isAdmin) {
-                    redirectUrl = "/admin/dashboard";
+                    redirectUrl = "/admin/lessons";
                     log.info("ADMINユーザーとしてリダイレクト: {}", redirectUrl);
                 } else if (isManager) {
                     // 店長の場合は所属店舗IDを取得して統計画面にリダイレクト

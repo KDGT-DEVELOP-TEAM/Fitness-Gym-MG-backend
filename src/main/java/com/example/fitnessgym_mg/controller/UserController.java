@@ -67,12 +67,11 @@ public class UserController {
 		model.addAttribute("sort", sort);
 		model.addAttribute("storeId", storeId);
 		
-		// 店長用サイドバー表示のためのフラグ（storeIdが存在する場合のみ）
+		// Admin/Manager用サイドバー表示のためのフラグ
+		model.addAttribute("isAdmin", storeId == null);
 		model.addAttribute("isManager", storeId != null);
 		// 現在のページを示すフラグ（サイドバーのアクティブ状態用）
-		if (storeId != null) {
-			model.addAttribute("currentPage", "users");
-		}
+		model.addAttribute("currentPage", "users");
 
 		return "user/user-list";
 	}

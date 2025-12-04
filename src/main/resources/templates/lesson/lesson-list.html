@@ -226,6 +226,25 @@
 		</ul>
 	</div>
 	
+	<!-- 本部管理者用サイドバー -->
+	<div class="sidebar" th:if="${isAdmin != null ? isAdmin : false}">
+		<h2>メニュー</h2>
+		<ul>
+			<li>
+				<a th:href="@{/admin/lessons}" 
+				   th:classappend="${currentPage != null and currentPage == 'lessons'} ? 'active' : ''">統計情報</a>
+			</li>
+			<li>
+				<a th:href="@{/admin/customers}" 
+				   th:classappend="${currentPage != null and currentPage == 'customers'} ? 'active' : ''">顧客一覧</a>
+			</li>
+			<li>
+				<a th:href="@{/admin/users}" 
+				   th:classappend="${currentPage != null and currentPage == 'users'} ? 'active' : ''">トレーナー一覧</a>
+			</li>
+		</ul>
+	</div>
+	
 	<!-- 店長用サイドバー -->
 	<div class="sidebar" th:if="${isManager != null ? isManager : false}">
 		<h2>メニュー</h2>
@@ -246,7 +265,7 @@
 	</div>
 	
 	<!-- メインコンテンツ -->
-	<div class="main-content" th:classappend="${(isTrainer != null ? isTrainer : false) or (isManager != null ? isManager : false)} ? 'with-sidebar' : ''">
+	<div class="main-content" th:classappend="${(isTrainer != null ? isTrainer : false) or (isManager != null ? isManager : false) or (isAdmin != null ? isAdmin : false)} ? 'with-sidebar' : ''">
 	<!-- 統計情報セクション（トレーナーの場合は非表示） -->
 	<div th:unless="${isTrainer != null ? isTrainer : false}">
 		<h2>統計情報</h2>

@@ -48,8 +48,11 @@ public class LessonApiController {
 		model.addAttribute("stores", allStores);
 
 		// Admin用のフラグ設定
+		model.addAttribute("isAdmin", true);
 		model.addAttribute("isManager", false);
 		model.addAttribute("isTrainer", false);
+		// 現在のページを示すフラグ（サイドバーのアクティブ状態用）
+		model.addAttribute("currentPage", "lessons");
 
 		// サービス層の検索とグラフデータ取得を呼び出し (storeIdがnullなら全店舗が対象)
 		return loadLessonData(storeId, keyword, chartType, pageable, model, "/admin/lessons");

@@ -356,6 +356,25 @@
 </head>
 
 <body>
+	<!-- 本部管理者用サイドバー -->
+	<div class="sidebar" th:if="${isAdmin != null ? isAdmin : false}">
+		<h2>メニュー</h2>
+		<ul>
+			<li>
+				<a th:href="@{/admin/lessons}" 
+				   th:classappend="${currentPage != null and currentPage == 'lessons'} ? 'active' : ''">統計情報</a>
+			</li>
+			<li>
+				<a th:href="@{/admin/customers}" 
+				   th:classappend="${currentPage != null and currentPage == 'customers'} ? 'active' : ''">顧客一覧</a>
+			</li>
+			<li>
+				<a th:href="@{/admin/users}" 
+				   th:classappend="${currentPage != null and currentPage == 'users'} ? 'active' : ''">トレーナー一覧</a>
+			</li>
+		</ul>
+	</div>
+	
 	<!-- 店長用サイドバー -->
 	<div class="sidebar" th:if="${isManager}">
 		<h2>メニュー</h2>
@@ -376,7 +395,7 @@
 	</div>
 	
 	<!-- メインコンテンツ -->
-	<div class="main-content" th:classappend="${isManager} ? 'with-sidebar' : ''">
+	<div class="main-content" th:classappend="${(isAdmin != null ? isAdmin : false) or isManager} ? 'with-sidebar' : ''">
 		<button id="openCreateModal">＋ 新規顧客作成</button>
 
 	<form id="filterForm">
