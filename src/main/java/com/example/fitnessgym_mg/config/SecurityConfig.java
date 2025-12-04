@@ -73,9 +73,10 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            // 認可設定：静的リソースとログイン画面、エラー画面は認証不要、その他は認証必須
+            // 認可設定：静的リソースとログイン画面、エラー画面、認証APIは認証不要、その他は認証必須
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers("/login", "/error", "/403", "/404", "/css/**", "/js/**", "/images/**").permitAll()
+                .requestMatchers("/api/auth/login", "/api/auth/logout").permitAll() // 認証APIは認証不要
                 .anyRequest().authenticated()
             )
             // フォームログイン設定
@@ -144,6 +145,13 @@ public class SecurityConfig {
                 // デバッグログ: 認証されたユーザーの権限を出力
                 log.info("認証成功: ユーザー={}, 権限={}", email, authentication.getAuthorities());
                 
+                // セッションに保存されたリダイレクト先をクリア（古いリダイレクト先が残らないようにする）
+                Object savedRequest = request.getSession().getAttribute("SPRING_SECURITY_SAVED_REQUEST");
+                if (savedRequest != null) {
+                    log.info("セッションに保存されたリダイレクト先をクリア: {}", savedRequest);
+                    request.getSession().removeAttribute("SPRING_SECURITY_SAVED_REQUEST");
+                }
+                
                 // 権限に応じてリダイレクト先を決定
                 boolean isAdmin = authentication.getAuthorities().stream()
                         .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_ADMIN"));
@@ -173,6 +181,7 @@ public class SecurityConfig {
                     log.info("TRAINERユーザーとしてリダイレクト: {}", redirectUrl);
                 } else {
                     log.warn("未知の権限: ユーザー={}, 権限={}", email, authentication.getAuthorities());
+                    redirectUrl = "/login";
                 }
                 
                 log.info("最終リダイレクト先: {}", redirectUrl);

@@ -50,7 +50,7 @@ public class LessonController {
 	/**
 	 * GET /admin/lessons/new
 	 * GET /manager/{storeId}/lessons/new
-	 * GET /trainer/lessons/new
+	 * GET /customer/{customerId}/lesson/new
 	 * 新規レッスン入力フォーム表示
 	 * 
 	 * 処理の流れ：
@@ -60,20 +60,27 @@ public class LessonController {
 	 * 4. フォーム用の空のリクエストオブジェクトを作成
 	 * 5. 画面に表示するデータをModelに設定して返す
 	 */
-	@GetMapping({ "/admin/lessons/new", "/manager/{storeId}/lessons/new", "/trainer/lessons/new" })
+	@GetMapping({ "/admin/lessons/new", "/manager/{storeId}/lessons/new", "/customer/{customerId}/lesson/new" })
 	public String newLessonForm(
 			@PathVariable(required = false) UUID storeId,
-			@RequestParam UUID customerId,
+			@PathVariable(required = false) UUID customerId,
+			@RequestParam(required = false) UUID customerIdParam,
 			HttpServletRequest request,
 			Model model) {
 
+		// customerIdを取得（パスパラメータまたはクエリパラメータから）
+		UUID actualCustomerId = customerId != null ? customerId : customerIdParam;
+		if (actualCustomerId == null) {
+			throw new RuntimeException("顧客IDが指定されていません");
+		}
+
 		// 顧客情報を取得
-		Customer customer = customerRepository.findById(customerId)
+		Customer customer = customerRepository.findById(actualCustomerId)
 				.orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
 
 		// リクエストパスから判定
 		String requestPath = request.getRequestURI();
-		boolean isTrainer = requestPath.startsWith("/trainer/");
+		boolean isTrainer = requestPath.startsWith("/customer/");
 
 		// 店舗一覧を取得
 		List<Store> stores;
@@ -107,7 +114,7 @@ public class LessonController {
 
 		// 空のリクエストオブジェクトを作成
 		LessonRequest lessonRequest = LessonRequest.builder()
-				.customerId(customerId)
+				.customerId(actualCustomerId)
 				.build();
 
 		// トレーナーの場合、デフォルト値を設定
@@ -120,7 +127,7 @@ public class LessonController {
 		model.addAttribute("trainers", trainers);
 		model.addAttribute("lessonRequest", lessonRequest);
 		model.addAttribute("storeId", storeId);
-		model.addAttribute("customerId", customerId);
+		model.addAttribute("customerId", actualCustomerId);
 		model.addAttribute("isTrainer", isTrainer);
 
 		return "lesson/lesson-new";
@@ -129,7 +136,7 @@ public class LessonController {
 	/**
 	 * POST /admin/lessons
 	 * POST /manager/{storeId}/lessons
-	 * POST /trainer/lessons
+	 * POST /customer/{customerId}/lessons
 	 * レッスン保存処理
 	 * 
 	 * 処理の流れ：
@@ -139,18 +146,24 @@ public class LessonController {
 	 * 4. 保存成功後、成功メッセージを設定してリダイレクト
 	 * 5. エラーが発生した場合、エラーメッセージと共にフォーム画面に戻る
 	 */
-	@PostMapping({ "/admin/lessons", "/manager/{storeId}/lessons", "/trainer/lessons" })
+	@PostMapping({ "/admin/lessons", "/manager/{storeId}/lessons", "/customer/{customerId}/lessons" })
 	public String createLesson(
 			@PathVariable(required = false) UUID storeId,
+			@PathVariable(required = false) UUID customerId,
 			@Valid @ModelAttribute LessonRequest request,
 			BindingResult result,
 			RedirectAttributes redirectAttributes,
 			HttpServletRequest httpRequest,
 			Model model) {
 
+		// customerIdをパスパラメータから取得（トレーナーの場合）
+		if (customerId != null) {
+			request.setCustomerId(customerId);
+		}
+
 		// リクエストパスから判定
 		String requestPath = httpRequest.getRequestURI();
-		boolean isTrainer = requestPath.startsWith("/trainer/");
+		boolean isTrainer = requestPath.startsWith("/customer/");
 
 		// バリデーションエラーがある場合はフォームに戻る
 		if (result.hasErrors()) {
@@ -200,7 +213,7 @@ public class LessonController {
 			// リダイレクト先を決定
 			if (isTrainer) {
 				// トレーナーの場合：新規レッスン入力画面に戻る
-				return "redirect:/trainer/lessons/new?customerId=" + request.getCustomerId();
+				return "redirect:/customer/" + request.getCustomerId() + "/lesson/new";
 			} else if (storeId != null) {
 				// 店長の場合
 				return "redirect:/manager/" + storeId + "/lessons";
@@ -264,10 +277,11 @@ public class LessonController {
 	 * 5. エラーが発生した場合、エラーメッセージを設定して顧客選択画面にリダイレクト
 	 */
 	@GetMapping({ "/admin/history/{customerId}", "/manager/{storeId}/history/{customerId}",
-			"/trainer/history/{customerId}" })
+			"/customer/{customerId}/lessons" })
 	public String lessonHistory(
 			@PathVariable(required = false) UUID storeId,
 			@PathVariable UUID customerId,
+			@RequestParam(required = false) String from,
 			@RequestParam(defaultValue = "month") String chartType,
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "10") int size,
@@ -293,9 +307,9 @@ public class LessonController {
 			if (requestPath.startsWith("/manager/")) {
 				basePath = "/manager/" + storeId + "/history/" + customerId;
 				detailBasePath = "/manager/" + storeId + "/lessons";
-			} else if (requestPath.startsWith("/trainer/")) {
-				basePath = "/trainer/history/" + customerId;
-				detailBasePath = "/trainer/lessons";
+			} else if (requestPath.startsWith("/customer/")) {
+				basePath = "/customer/" + customerId + "/lessons";
+				detailBasePath = "/lesson"; // pas.mdの定義に従い /lesson/{lessonId} を使用
 			} else {
 				basePath = "/admin/history/" + customerId;
 				detailBasePath = "/admin/lessons";
@@ -313,13 +327,46 @@ public class LessonController {
 			model.addAttribute("DETAIL_BASE_PATH", detailBasePath);
 			model.addAttribute("stores", List.of()); // トレーナーは店舗選択不要
 
-			// トレーナーの場合は統計情報を非表示にする
-			boolean isTrainer = requestPath.startsWith("/trainer/");
+			// ユーザータイプを判定してフラグを設定
+			boolean isTrainer = requestPath.startsWith("/customer/");
+			boolean isManager = requestPath.startsWith("/manager/");
+			boolean isAdmin = !isTrainer && !isManager;
+			
 			model.addAttribute("isTrainer", isTrainer);
-			if (isTrainer) {
-				// トレーナーの場合はchartDataを追加しない
-				model.addAttribute("chartData", null);
+			model.addAttribute("isManager", isManager);
+			model.addAttribute("isAdmin", isAdmin);
+			
+			// 顧客選択後の画面であることを示すフラグ
+			model.addAttribute("isCustomerHistoryPage", true);
+			
+			// 遷移元をModelに追加
+			model.addAttribute("from", from);
+			
+			// 戻る先のURLを設定
+			String backUrl = null;
+			if (from != null) {
+				if (requestPath.startsWith("/manager/")) {
+					if ("lessons".equals(from)) {
+						backUrl = "/manager/" + storeId + "/lessons";
+					} else if ("customers".equals(from)) {
+						backUrl = "/manager/" + storeId + "/customers";
+					}
+				} else if (requestPath.startsWith("/trainer/")) {
+					// トレーナーの場合は顧客選択画面に戻る
+					backUrl = "/trainer/customers";
+				} else {
+					// adminの場合
+					if ("lessons".equals(from)) {
+						backUrl = "/admin/lessons";
+					} else if ("customers".equals(from)) {
+						backUrl = "/admin/customers";
+					}
+				}
 			}
+			model.addAttribute("backUrl", backUrl);
+			
+			// 顧客選択後の画面では統計情報（グラフ）を非表示にするため、chartDataをnullに設定
+			model.addAttribute("chartData", null);
 
 			return "lesson/lesson-list";
 
@@ -335,6 +382,7 @@ public class LessonController {
 	 * GET /admin/lessons/{lessonId}
 	 * GET /manager/{storeId}/lessons/{lessonId}
 	 * GET /trainer/lessons/{lessonId}
+	 * GET /lesson/{lessonId}
 	 * レッスン詳細画面表示
 	 * 
 	 * 処理の流れ：
@@ -343,7 +391,7 @@ public class LessonController {
 	 * 3. エラーが発生した場合、エラーメッセージを設定してリダイレクト
 	 */
 	@GetMapping({ "/admin/lessons/{lessonId}", "/manager/{storeId}/lessons/{lessonId}",
-			"/trainer/lessons/{lessonId}" })
+			"/trainer/lessons/{lessonId}", "/lesson/{lessonId}" })
 	public String lessonDetail(
 			@PathVariable(required = false) UUID storeId,
 			@PathVariable UUID lessonId,
@@ -354,8 +402,23 @@ public class LessonController {
 			// レッスン詳細データを取得
 			LessonResponse lessonResponse = lessonService.getLessonDetail(lessonId);
 
-			model.addAttribute("lesson", lessonResponse);
+			// リクエストパスから判定してユーザータイプを設定
+			String requestPath = request.getRequestURI();
+			boolean isTrainer = requestPath.startsWith("/customer/") || requestPath.startsWith("/trainer/") || requestPath.startsWith("/lesson/");
+			boolean isManager = requestPath.startsWith("/manager/");
+			boolean isAdmin = !isTrainer && !isManager;
+
+			// サイドバー表示に必要なフラグを設定
+			model.addAttribute("isTrainer", isTrainer);
+			model.addAttribute("isManager", isManager);
+			model.addAttribute("isAdmin", isAdmin);
+			model.addAttribute("isCustomerHistoryPage", true); // 履歴一覧の括りとして表示
+			
+			// 顧客IDをレッスン情報から取得して設定（サイドバーのリンクで使用）
+			UUID customerId = lessonResponse.getCustomerId();
+			model.addAttribute("customerId", customerId);
 			model.addAttribute("storeId", storeId);
+			model.addAttribute("lesson", lessonResponse);
 
 			return "lesson/lesson-detail";
 
@@ -366,7 +429,7 @@ public class LessonController {
 			String requestPath = request.getRequestURI();
 			if (requestPath.startsWith("/manager/")) {
 				return "redirect:/manager/" + storeId + "/lessons";
-			} else if (requestPath.startsWith("/trainer/")) {
+			} else if (requestPath.startsWith("/trainer/") || requestPath.startsWith("/lesson/")) {
 				// トレーナーの場合は、レッスンから顧客IDを取得して履歴ページにリダイレクト
 				// ただし、レッスンが見つからない場合は顧客選択画面にリダイレクト
 				return "redirect:/trainer/customers";

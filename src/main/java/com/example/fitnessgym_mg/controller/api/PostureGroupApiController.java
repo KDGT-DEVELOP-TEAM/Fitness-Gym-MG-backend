@@ -12,15 +12,21 @@ import java.util.stream.Collectors;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.fitnessgym_mg.dto.request.PostureImageRequest;
 import com.example.fitnessgym_mg.dto.response.PostureGroupResponse;
 import com.example.fitnessgym_mg.dto.response.PostureImageResponse;
 import com.example.fitnessgym_mg.entity.PostureGroup;
 import com.example.fitnessgym_mg.entity.PostureImage;
 import com.example.fitnessgym_mg.entity.enums.PostureImagePosition;
 import com.example.fitnessgym_mg.service.PostureGroupService;
+import com.example.fitnessgym_mg.service.PostureImageService;
+
+import jakarta.validation.Valid;
 
 import lombok.RequiredArgsConstructor;
 
@@ -29,7 +35,7 @@ import lombok.RequiredArgsConstructor;
  * DBから取得したエンティティをJSON形式で返す
  */
 @RestController
-@RequestMapping("/api/customers/{customerId}/posture_groups")
+@RequestMapping("/api")
 @RequiredArgsConstructor
 public class PostureGroupApiController {
 
@@ -42,14 +48,15 @@ public class PostureGroupApiController {
     );
 
     private final PostureGroupService postureGroupService;
+    private final PostureImageService postureImageService;
 
     /**
-     * GET /api/customers/{customerId}/posture_groups
+     * GET /api/customers/{customer_id}/posture_groups
      * 顧客の姿勢画像グループ一覧をJSON形式で返す
      * フロー: DB取得 → Entity → DTO変換 → JSON
      */
-    @GetMapping
-    public ResponseEntity<List<PostureGroupResponse>> listGroups(@PathVariable UUID customerId) {
+    @GetMapping("/customers/{customer_id}/posture_groups")
+    public ResponseEntity<List<PostureGroupResponse>> listGroups(@PathVariable("customer_id") UUID customerId) {
         List<PostureGroupResponse> response = postureGroupService.findByCustomerId(customerId)
                 .stream()
                 .map(this::toResponse)
@@ -101,6 +108,32 @@ public class PostureGroupApiController {
                 .takenAt(image.getTakenAt())
                 .position(image.getPosition() != null ? image.getPosition().getCode() : null)
                 .build();
+    }
+
+    /**
+     * POST /api/lessons/{lesson_id}/posture_groups
+     * 新しいレッスン記録に伴う、新しい姿勢画像群に対する空グループの作成
+     */
+    @PostMapping("/lessons/{lesson_id}/posture_groups")
+    public ResponseEntity<PostureGroupResponse> createPostureGroup(@PathVariable("lesson_id") UUID lessonId) {
+        PostureGroup postureGroup = postureGroupService.createPostureGroup(lessonId);
+        PostureGroupResponse response = toResponse(postureGroup);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * POST /api/lessons/{lesson_id}/posture_groups/{group_id}/images
+     * 各方向(front/right/back/left)の画像撮影/追加
+     */
+    @PostMapping("/lessons/{lesson_id}/posture_groups/{group_id}/images")
+    public ResponseEntity<PostureImageResponse> createPostureImage(
+            @PathVariable("lesson_id") UUID lessonId,
+            @PathVariable("group_id") UUID groupId,
+            @Valid @RequestBody PostureImageRequest request) {
+        
+        PostureImage postureImage = postureImageService.createPostureImage(groupId, request);
+        PostureImageResponse response = toImageResponse(postureImage);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
     }
 }
 

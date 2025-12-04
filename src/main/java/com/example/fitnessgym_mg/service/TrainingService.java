@@ -59,5 +59,14 @@ public class TrainingService {
                 .build())
             .collect(Collectors.toList());
     }
+    
+    /**
+     * レッスンIDでトレーニングを削除
+     */
+    @Transactional
+    public void deleteByLessonId(UUID lessonId) {
+        List<Training> trainings = trainingRepository.findByIdLessonIdOrderByIdOrderNoAsc(lessonId);
+        trainingRepository.deleteAll(trainings);
+    }
 }
 

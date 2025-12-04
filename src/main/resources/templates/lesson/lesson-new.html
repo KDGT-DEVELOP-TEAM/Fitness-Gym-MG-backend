@@ -74,18 +74,25 @@
         <h2>メニュー</h2>
         <ul>
             <li>
-                <a th:href="@{'/trainer/history/' + ${customerId}}" class="">履歴一覧</a>
+                <a th:href="@{'/customer/' + ${customerId} + '/lessons'}" class="">履歴一覧</a>
             </li>
             <li>
-                <a th:href="@{'/trainer/customers/' + ${customerId}}" class="">顧客プロフィール</a>
+                <a th:href="@{'/customer/' + ${customerId}}" class="">顧客プロフィール</a>
             </li>
             <li>
-                <a th:href="@{'/trainer/postures?customerId=' + ${customerId}}" class="">姿勢画像一覧</a>
+                <a th:href="@{'/customer/' + ${customerId} + '/posture_groups'}" class="">姿勢画像一覧</a>
             </li>
             <li>
                 <a href="#" class="active">新規レッスン入力</a>
             </li>
         </ul>
+        <!-- ログアウトボタン -->
+        <div class="logout-section" style="margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.2);">
+            <form th:action="@{/logout}" method="post" style="margin: 0;">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <button type="submit" style="width: 100%; padding: 12px 15px; background-color: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-align: center; transition: background-color 0.3s;" onmouseover="this.style.backgroundColor='#c0392b'" onmouseout="this.style.backgroundColor='#e74c3c'">ログアウト</button>
+            </form>
+        </div>
     </div>
     
     <!-- メインコンテンツ -->
@@ -100,7 +107,7 @@
         <p><strong>身長:</strong> <span th:text="${customer.height}"></span> cm</p>
     </div>
     
-    <form th:action="@{${isTrainer ? '/trainer/lessons' : (storeId != null ? '/manager/' + storeId + '/lessons' : '/admin/lessons')}}" 
+    <form th:action="@{${isTrainer ? '/customer/' + customerId + '/lessons' : (storeId != null ? '/manager/' + storeId + '/lessons' : '/admin/lessons')}}" 
           th:object="${lessonRequest}" 
           method="post">
         

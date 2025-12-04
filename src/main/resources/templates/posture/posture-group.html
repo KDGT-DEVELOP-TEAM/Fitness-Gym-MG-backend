@@ -11,29 +11,166 @@
     <title>姿勢画像一覧 - FitnessGym MG</title>
     <link rel="stylesheet" th:href="@{/css/reset.css}" />
     <link rel="stylesheet" th:href="@{/css/style.css}" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            min-height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 1000;
+        }
+        .sidebar h2 {
+            margin-top: 0;
+            margin-bottom: 30px;
+            font-size: 20px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .sidebar li {
+            margin-bottom: 10px;
+        }
+        .sidebar a {
+            color: white;
+            text-decoration: none;
+            display: block;
+            padding: 12px 15px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .sidebar a:hover {
+            background-color: #34495e;
+        }
+        .sidebar a.active {
+            background-color: #3498db;
+        }
+        .sidebar .logout-section {
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .sidebar .logout-form {
+            margin: 0;
+        }
+        .sidebar .logout-button {
+            width: 100%;
+            padding: 12px 15px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-align: center;
+            transition: background-color 0.3s;
+        }
+        .sidebar .logout-button:hover {
+            background-color: #c0392b;
+        }
+        .main-content {
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .main-content.with-sidebar {
+            margin-left: 250px;
+        }
+    </style>
   </head>
   <body>
-    <!-- サイドバー -->
-    <div class="sidebar" th:if="${isTrainer}">
+    <!-- トレーナー用サイドバー -->
+    <div class="sidebar" th:if="${isTrainer != null ? isTrainer : false}">
         <h2>メニュー</h2>
         <ul>
             <li>
-                <a th:href="@{'/trainer/history/' + ${customerId}}" class="">履歴一覧</a>
+                <a th:href="@{'/customer/' + ${customerId} + '/lessons'}" class="">履歴一覧</a>
             </li>
             <li>
-                <a th:href="@{'/trainer/customers/' + ${customerId}}" class="">顧客プロフィール</a>
+                <a th:href="@{'/customer/' + ${customerId}}" class="">顧客プロフィール</a>
             </li>
             <li>
-                <a th:href="@{'/trainer/postures?customerId=' + ${customerId}}" class="active">姿勢画像一覧</a>
+                <a th:href="@{'/customer/' + ${customerId} + '/posture_groups'}" class="active">姿勢画像一覧</a>
             </li>
             <li>
-                <a th:href="@{'/trainer/lessons/new?customerId=' + ${customerId}}" class="">新規レッスン入力</a>
+                <a th:href="@{'/customer/' + ${customerId} + '/lesson/new'}" class="">新規レッスン入力</a>
             </li>
         </ul>
+        <!-- ログアウトボタン -->
+        <div class="logout-section">
+            <form th:action="@{/logout}" method="post" class="logout-form">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <button type="submit" class="logout-button">ログアウト</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 本部管理者用サイドバー（顧客選択後の画面） -->
+    <div class="sidebar" th:if="${(isAdmin != null ? isAdmin : false)}">
+        <h2>メニュー</h2>
+        <ul>
+            <li>
+                <a th:href="@{/admin/lessons}" class="">統計情報</a>
+            </li>
+            <li>
+                <a th:href="@{'/admin/history/' + ${customerId}}" class="">履歴一覧</a>
+            </li>
+            <li>
+                <a th:href="@{'/admin/customers/' + ${customerId}}" class="">顧客プロフィール</a>
+            </li>
+            <li>
+                <a th:href="@{'/admin/postures?customerId=' + ${customerId}}" class="active">姿勢画像一覧</a>
+            </li>
+        </ul>
+        <!-- ログアウトボタン -->
+        <div class="logout-section">
+            <form th:action="@{/logout}" method="post" class="logout-form">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <button type="submit" class="logout-button">ログアウト</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 店長用サイドバー（顧客選択後の画面） -->
+    <div class="sidebar" th:if="${(isManager != null ? isManager : false)}">
+        <h2>メニュー</h2>
+        <ul>
+            <li>
+                <a th:href="@{'/manager/' + ${storeId} + '/lessons'}" class="">店舗統計</a>
+            </li>
+            <li>
+                <a th:href="@{'/manager/' + ${storeId} + '/history/' + ${customerId}}" class="">履歴一覧</a>
+            </li>
+            <li>
+                <a th:href="@{'/manager/' + ${storeId} + '/customers/' + ${customerId}}" class="">顧客プロフィール</a>
+            </li>
+            <li>
+                <a th:href="@{'/manager/' + ${storeId} + '/postures?customerId=' + ${customerId}}" class="active">姿勢画像一覧</a>
+            </li>
+        </ul>
+        <!-- ログアウトボタン -->
+        <div class="logout-section">
+            <form th:action="@{/logout}" method="post" class="logout-form">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <button type="submit" class="logout-button">ログアウト</button>
+            </form>
+        </div>
     </div>
     
     <!-- メインコンテンツ -->
-    <div class="main-content" th:classappend="${isTrainer} ? 'with-sidebar' : ''">
+    <div class="main-content" th:classappend="${(isTrainer != null ? isTrainer : false) or (isManager != null ? isManager : false) or (isAdmin != null ? isAdmin : false)} ? 'with-sidebar' : ''">
     <main>
       <!-- 顧客IDをdata属性として保持（JavaScriptで使用） -->
       <section class="posture-groups" th:attr="data-customer-id=${customerId}">

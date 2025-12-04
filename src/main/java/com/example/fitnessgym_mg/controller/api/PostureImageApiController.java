@@ -24,13 +24,13 @@ public class PostureImageApiController {
     private final PostureImageService postureImageService;
 
     /**
-     * DELETE /api/posture_images/{postureImageId}
+     * DELETE /api/posture_images/{img_id}
      * DBから姿勢画像レコードを削除
      * 注意: Storageの画像ファイルは削除されない
      */
-    @DeleteMapping("/{postureImageId}")
-    public ResponseEntity<Void> delete(@PathVariable UUID postureImageId) {
-        postureImageService.delete(postureImageId);
+    @DeleteMapping("/{img_id}")
+    public ResponseEntity<Void> delete(@PathVariable("img_id") UUID imgId) {
+        postureImageService.delete(imgId);
         return ResponseEntity.noContent().build();
     }
 }

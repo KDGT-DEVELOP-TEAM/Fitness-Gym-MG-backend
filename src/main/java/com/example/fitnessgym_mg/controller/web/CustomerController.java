@@ -17,9 +17,13 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.example.fitnessgym_mg.dto.request.CustomerRequest;
 import com.example.fitnessgym_mg.dto.response.CustomerResponse;
+import com.example.fitnessgym_mg.entity.Customer;
+import com.example.fitnessgym_mg.entity.PostureGroup;
 import com.example.fitnessgym_mg.entity.User;
+import com.example.fitnessgym_mg.repository.CustomerRepository;
 import com.example.fitnessgym_mg.repository.UserRepository;
 import com.example.fitnessgym_mg.service.CustomerService;
+import com.example.fitnessgym_mg.service.PostureGroupService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +38,8 @@ public class CustomerController {
 
     private final CustomerService customerService;
     private final UserRepository userRepository;
+    private final PostureGroupService postureGroupService;
+    private final CustomerRepository customerRepository;
 
     /**
      * GET /trainer/customers
@@ -73,9 +79,9 @@ public class CustomerController {
     }
 
     /**
+     * GET /customer/{customerId}
      * GET /admin/customers/{customerId}
      * GET /manager/{storeId}/customers/{customerId}
-     * GET /trainer/customers/{customerId}
      * 顧客プロフィール表示
      * 
      * 処理の流れ：
@@ -85,7 +91,7 @@ public class CustomerController {
      * 4. 画面に表示するデータをModelに設定して返す
      * 5. エラーが発生した場合は、エラーメッセージを設定して顧客選択画面にリダイレクト
      */
-    @GetMapping({"/admin/customers/{customerId}", "/manager/{storeId}/customers/{customerId}", "/trainer/customers/{customerId}"})
+    @GetMapping({"/customer/{customerId}", "/admin/customers/{customerId}", "/manager/{storeId}/customers/{customerId}"})
     public String customerProfile(
             @PathVariable(required = false) UUID storeId,
             @PathVariable UUID customerId,
@@ -94,13 +100,20 @@ public class CustomerController {
         try {
             // 顧客詳細を取得
             CustomerResponse customerResponse = customerService.getCustomerById(customerId);
+            Customer customer = customerRepository.findById(customerId)
+                    .orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
             User currentUser = getCurrentUser();
             
             // 編集可能かどうかを判定（管理者/店長のみ）
             boolean canEdit = hasRole("ROLE_ADMIN") || hasRole("ROLE_MANAGER");
             
-            // リクエストパスからトレーナーかどうかを判定
-            boolean isTrainer = !hasRole("ROLE_ADMIN") && !hasRole("ROLE_MANAGER");
+            // ユーザータイプを判定
+            boolean isAdmin = hasRole("ROLE_ADMIN");
+            boolean isManager = hasRole("ROLE_MANAGER");
+            boolean isTrainer = !isAdmin && !isManager;
+            
+            // 姿勢画像グループ一覧を取得
+            List<PostureGroup> postureGroups = postureGroupService.findByCustomerId(customerId);
             
             // CustomerResponseからCustomerRequestを作成（フォーム用）
             CustomerRequest customerRequest = new CustomerRequest();
@@ -113,13 +126,17 @@ public class CustomerController {
             customerRequest.setPhone(customerResponse.getPhone());
             customerRequest.setAddress(customerResponse.getAddress());
             customerRequest.setActive(customerResponse.isActive());
+            customerRequest.setFirstPostureGroupId(customer.getFirstPostureGroupId()); // 初回姿勢画像IDを設定
             
             model.addAttribute("customer", customerResponse); // 表示用
             model.addAttribute("customerRequest", customerRequest); // フォーム用
+            model.addAttribute("postureGroups", postureGroups); // 姿勢画像グループ一覧
             model.addAttribute("storeId", storeId);
             model.addAttribute("canEdit", canEdit);
             model.addAttribute("currentUser", currentUser);
             model.addAttribute("customerId", customerId);
+            model.addAttribute("isAdmin", isAdmin);
+            model.addAttribute("isManager", isManager);
             model.addAttribute("isTrainer", isTrainer);
             
             return "customer/customer-profile";
@@ -154,9 +171,41 @@ public class CustomerController {
         // バリデーションエラーがある場合
         if (result.hasErrors()) {
             CustomerResponse customer = customerService.getCustomerById(customerId);
+            Customer customerEntity = customerRepository.findById(customerId)
+                    .orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
+            User currentUser = getCurrentUser();
+            
+            // ユーザータイプを判定
+            boolean isAdmin = hasRole("ROLE_ADMIN");
+            boolean isManager = hasRole("ROLE_MANAGER");
+            boolean isTrainer = !isAdmin && !isManager;
+            
+            // 姿勢画像グループ一覧を取得
+            List<PostureGroup> postureGroups = postureGroupService.findByCustomerId(customerId);
+            
+            // CustomerResponseからCustomerRequestを作成（フォーム用）
+            CustomerRequest customerRequest = new CustomerRequest();
+            customerRequest.setKana(customer.getKana());
+            customerRequest.setName(customer.getName());
+            customerRequest.setGender(customer.getGender());
+            customerRequest.setBirthday(customer.getBirthdate());
+            customerRequest.setHeight(customer.getHeight());
+            customerRequest.setEmail(customer.getEmail());
+            customerRequest.setPhone(customer.getPhone());
+            customerRequest.setAddress(customer.getAddress());
+            customerRequest.setActive(customer.isActive());
+            customerRequest.setFirstPostureGroupId(request.getFirstPostureGroupId()); // リクエストから取得した値を設定
+            
             model.addAttribute("customer", customer);
+            model.addAttribute("customerRequest", customerRequest);
+            model.addAttribute("postureGroups", postureGroups); // 姿勢画像グループ一覧
             model.addAttribute("storeId", storeId);
             model.addAttribute("canEdit", true);
+            model.addAttribute("currentUser", currentUser);
+            model.addAttribute("customerId", customerId);
+            model.addAttribute("isAdmin", isAdmin);
+            model.addAttribute("isManager", isManager);
+            model.addAttribute("isTrainer", isTrainer);
             return "customer/customer-profile";
         }
         
@@ -175,11 +224,43 @@ public class CustomerController {
             }
             
         } catch (Exception e) {
-            model.addAttribute("errorMessage", "顧客情報の更新に失敗しました: " + e.getMessage());
             CustomerResponse customer = customerService.getCustomerById(customerId);
+            Customer customerEntity = customerRepository.findById(customerId)
+                    .orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
+            User currentUser = getCurrentUser();
+            
+            // ユーザータイプを判定
+            boolean isAdmin = hasRole("ROLE_ADMIN");
+            boolean isManager = hasRole("ROLE_MANAGER");
+            boolean isTrainer = !isAdmin && !isManager;
+            
+            // 姿勢画像グループ一覧を取得
+            List<PostureGroup> postureGroups = postureGroupService.findByCustomerId(customerId);
+            
+            // CustomerResponseからCustomerRequestを作成（フォーム用）
+            CustomerRequest customerRequest = new CustomerRequest();
+            customerRequest.setKana(customer.getKana());
+            customerRequest.setName(customer.getName());
+            customerRequest.setGender(customer.getGender());
+            customerRequest.setBirthday(customer.getBirthdate());
+            customerRequest.setHeight(customer.getHeight());
+            customerRequest.setEmail(customer.getEmail());
+            customerRequest.setPhone(customer.getPhone());
+            customerRequest.setAddress(customer.getAddress());
+            customerRequest.setActive(customer.isActive());
+            customerRequest.setFirstPostureGroupId(request.getFirstPostureGroupId()); // リクエストから取得した値を設定
+            
+            model.addAttribute("errorMessage", "顧客情報の更新に失敗しました: " + e.getMessage());
             model.addAttribute("customer", customer);
+            model.addAttribute("customerRequest", customerRequest);
+            model.addAttribute("postureGroups", postureGroups); // 姿勢画像グループ一覧
             model.addAttribute("storeId", storeId);
             model.addAttribute("canEdit", true);
+            model.addAttribute("currentUser", currentUser);
+            model.addAttribute("customerId", customerId);
+            model.addAttribute("isAdmin", isAdmin);
+            model.addAttribute("isManager", isManager);
+            model.addAttribute("isTrainer", isTrainer);
             return "customer/customer-profile";
         }
     }

@@ -68,4 +68,13 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	 * LessonエンティティのtrainerフィールドのIDで検索します。
 	 */
 	long countByTrainerId(UUID trainerId);
+
+	/**
+	 * トレーナーIDで直近1週間以内（当日含む）のレッスンを取得
+	 * 開始日時が指定された日時以降のレッスンを開始日時の昇順で取得
+	 */
+	@Query("SELECT l FROM Lesson l WHERE l.trainer.id = :trainerId AND l.startDate >= :fromDate ORDER BY l.startDate ASC")
+	List<Lesson> findByTrainerIdAndStartDateAfterOrderByStartDateAsc(
+			@Param("trainerId") UUID trainerId,
+			@Param("fromDate") LocalDateTime fromDate);
 }

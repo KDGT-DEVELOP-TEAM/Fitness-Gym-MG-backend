@@ -24,6 +24,7 @@ public class LessonResponse {
 	private String trainerName;
 
 	// 顧客
+	private UUID customerId;
 	private String customerName;
 
 	// 詳細表示用フィールド
@@ -49,6 +50,7 @@ public class LessonResponse {
 		// 関連エンティティから名前を取得（※関連がロードされている前提）
 		r.setStoreName(lesson.getStore().getName());
 		r.setTrainerName(lesson.getTrainer().getName());
+		r.setCustomerId(lesson.getCustomer().getId());
 		r.setCustomerName(lesson.getCustomer().getName());
 
 		return r;

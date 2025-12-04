@@ -53,6 +53,29 @@
 		.sidebar a.active {
 			background-color: #3498db;
 		}
+		.sidebar .logout-section {
+			margin-top: auto;
+			padding-top: 20px;
+			border-top: 1px solid rgba(255, 255, 255, 0.2);
+		}
+		.sidebar .logout-form {
+			margin: 0;
+		}
+		.sidebar .logout-button {
+			width: 100%;
+			padding: 12px 15px;
+			background-color: #e74c3c;
+			color: white;
+			border: none;
+			border-radius: 4px;
+			cursor: pointer;
+			font-size: 14px;
+			text-align: center;
+			transition: background-color 0.3s;
+		}
+		.sidebar .logout-button:hover {
+			background-color: #c0392b;
+		}
 		.main-content {
 			padding: 20px;
 			box-sizing: border-box;
@@ -373,6 +396,13 @@
 				   th:classappend="${currentPage != null and currentPage == 'users'} ? 'active' : ''">トレーナー一覧</a>
 			</li>
 		</ul>
+		<!-- ログアウトボタン -->
+		<div class="logout-section">
+			<form th:action="@{/logout}" method="post" class="logout-form">
+				<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+				<button type="submit" class="logout-button">ログアウト</button>
+			</form>
+		</div>
 	</div>
 	
 	<!-- 店長用サイドバー -->
@@ -392,6 +422,13 @@
 				   th:classappend="${currentPage != null and currentPage == 'users'} ? 'active' : ''">トレーナー一覧</a>
 			</li>
 		</ul>
+		<!-- ログアウトボタン -->
+		<div class="logout-section">
+			<form th:action="@{/logout}" method="post" class="logout-form">
+				<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+				<button type="submit" class="logout-button">ログアウト</button>
+			</form>
+		</div>
 	</div>
 	
 	<!-- メインコンテンツ -->
@@ -423,7 +460,7 @@
 
 		<tr th:each="c : ${customerPage.content}">
 			<td>
-				<a th:href="@{${BASE_PATH} + '/' + ${c.id} + '/lessons'}" th:text="${c.name}">顧客名</a>
+				<a th:href="@{${#strings.replace(BASE_PATH, '/customers', '/history')} + '/' + ${c.id} + '?from=customers'}" th:text="${c.name}">顧客名</a>
 			</td>
 			<td th:text="${c.age} + '歳'"></td>
 

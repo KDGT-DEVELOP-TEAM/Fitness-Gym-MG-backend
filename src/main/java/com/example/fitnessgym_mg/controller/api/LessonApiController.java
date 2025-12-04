@@ -10,7 +10,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
@@ -51,6 +54,8 @@ public class LessonApiController {
 		model.addAttribute("isAdmin", true);
 		model.addAttribute("isManager", false);
 		model.addAttribute("isTrainer", false);
+		// 統計画面であることを示すフラグ
+		model.addAttribute("isStatisticsPage", true);
 		// 現在のページを示すフラグ（サイドバーのアクティブ状態用）
 		model.addAttribute("currentPage", "lessons");
 
@@ -81,6 +86,8 @@ public class LessonApiController {
 		// 店長用サイドバー表示のためのフラグ
 		model.addAttribute("isManager", true);
 		model.addAttribute("isTrainer", false);
+		// 統計画面であることを示すフラグ
+		model.addAttribute("isStatisticsPage", true);
 		// 現在のページを示すフラグ（サイドバーのアクティブ状態用）
 		model.addAttribute("currentPage", "lessons");
 
@@ -142,5 +149,74 @@ public class LessonApiController {
 
 		LessonChartData chartData = lessonService.getLessonChartData(effectiveStoreId, type);
 		return ResponseEntity.ok(chartData);
+	}
+
+	// ========== REST API エンドポイント（React用） ==========
+	// 注意: このクラスはWebコントローラーとREST APIコントローラーが混在しているため、
+	// @RequestMapping("/api")をクラスレベルで設定できない
+	// そのため、各メソッドで完全なパスを指定している
+
+	/**
+	 * POST /api/customers/{customer_id}/lessons
+	 * 新しいレッスン記録の作成
+	 */
+	@PostMapping("/api/customers/{customer_id}/lessons")
+	@ResponseBody
+	public ResponseEntity<com.example.fitnessgym_mg.dto.response.LessonResponse> createLesson(
+			@PathVariable("customer_id") UUID customerId,
+			@RequestBody com.example.fitnessgym_mg.dto.request.LessonRequest request) {
+		
+		// customerIdをリクエストに設定
+		request.setCustomerId(customerId);
+		
+		com.example.fitnessgym_mg.entity.Lesson savedLesson = lessonService.createLesson(request);
+		com.example.fitnessgym_mg.dto.response.LessonResponse response = lessonService.getLessonDetail(savedLesson.getId());
+		
+		return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
+	}
+
+	/**
+	 * GET /api/customers/{customer_id}/lessons
+	 * 顧客の全レッスン履歴一覧（ページネーション/フィルタリング）
+	 */
+	@GetMapping("/api/customers/{customer_id}/lessons")
+	@ResponseBody
+	public ResponseEntity<org.springframework.data.domain.Page<com.example.fitnessgym_mg.dto.response.LessonResponse>> getCustomerLessons(
+			@PathVariable("customer_id") UUID customerId,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size) {
+		
+		Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
+		org.springframework.data.domain.Page<com.example.fitnessgym_mg.dto.response.LessonResponse> lessonPage = 
+				lessonService.getLessonsByCustomerId(customerId, pageable);
+		
+		return ResponseEntity.ok(lessonPage);
+	}
+
+	/**
+	 * GET /api/lessons/{lesson_id}
+	 * 特定のレッスン記録の詳細情報取得
+	 */
+	@GetMapping("/api/lessons/{lesson_id}")
+	@ResponseBody
+	public ResponseEntity<com.example.fitnessgym_mg.dto.response.LessonResponse> getLesson(
+			@PathVariable("lesson_id") UUID lessonId) {
+		
+		com.example.fitnessgym_mg.dto.response.LessonResponse lesson = lessonService.getLessonDetail(lessonId);
+		return ResponseEntity.ok(lesson);
+	}
+
+	/**
+	 * PATCH /api/lessons/{lesson_id}
+	 * 既存レッスン情報の編集
+	 */
+	@PatchMapping("/api/lessons/{lesson_id}")
+	@ResponseBody
+	public ResponseEntity<com.example.fitnessgym_mg.dto.response.LessonResponse> updateLesson(
+			@PathVariable("lesson_id") UUID lessonId,
+			@RequestBody com.example.fitnessgym_mg.dto.request.LessonRequest request) {
+		
+		com.example.fitnessgym_mg.dto.response.LessonResponse response = lessonService.updateLesson(lessonId, request);
+		return ResponseEntity.ok(response);
 	}
 }

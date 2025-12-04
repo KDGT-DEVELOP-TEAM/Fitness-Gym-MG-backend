@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import com.example.fitnessgym_mg.util.SecurityUtil;
+
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -22,6 +24,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PostureWebController {
 
+	private final SecurityUtil securityUtil;
+
     /**
      * GET /admin/postures?customerId={customerId}
      * posture/posture-group.htmlを返す（画像一覧ページ）
@@ -30,6 +34,9 @@ public class PostureWebController {
     @GetMapping("/admin/postures")
     public String adminPostureGroupPage(@RequestParam UUID customerId, Model model) {
         model.addAttribute("customerId", customerId);
+        model.addAttribute("isAdmin", true);
+        model.addAttribute("isManager", false);
+        model.addAttribute("isTrainer", false);
         return "posture/posture-group";
     }
 
@@ -45,6 +52,9 @@ public class PostureWebController {
             Model model) {
         model.addAttribute("storeId", storeId);
         model.addAttribute("customerId", customerId);
+        model.addAttribute("isAdmin", false);
+        model.addAttribute("isManager", true);
+        model.addAttribute("isTrainer", false);
         return "posture/posture-group";
     }
 
@@ -75,24 +85,26 @@ public class PostureWebController {
     }
 
     /**
-     * GET /trainer/postures?customerId={customerId}
+     * GET /customer/{customerId}/posture_groups
      * posture/posture-group.htmlを返す（画像一覧ページ）
      * JS内で /api/customers/{customerId}/posture_groups を呼びデータ取得
      */
-    @GetMapping("/trainer/postures")
-    public String trainerPostureGroupPage(@RequestParam UUID customerId, Model model) {
+    @GetMapping("/customer/{customerId}/posture_groups")
+    public String trainerPostureGroupPage(@PathVariable UUID customerId, Model model) {
         model.addAttribute("customerId", customerId);
+        model.addAttribute("isAdmin", false);
+        model.addAttribute("isManager", false);
         model.addAttribute("isTrainer", true);
         return "posture/posture-group";
     }
 
     /**
-     * GET /trainer/postures/compare?customerId={customerId}
+     * GET /customer/{customerId}/posture/compare
      * posture/posture-image.htmlを返す（画像比較ページ）
      * JS内で /api/customers/{customerId}/posture_groups を呼びデータ取得
      */
-    @GetMapping("/trainer/postures/compare")
-    public String trainerPostureComparePage(@RequestParam UUID customerId, Model model) {
+    @GetMapping("/customer/{customerId}/posture/compare")
+    public String trainerPostureComparePage(@PathVariable UUID customerId, Model model) {
         model.addAttribute("customerId", customerId);
         return "posture/posture-image";
     }

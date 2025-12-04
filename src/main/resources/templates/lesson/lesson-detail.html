@@ -4,12 +4,117 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>レッスン詳細 | フィットネスジム管理システム</title>
+    <link rel="stylesheet" th:href="@{/css/reset.css}" />
+    <link rel="stylesheet" th:href="@{/css/style.css}" />
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 900px;
-            margin: 0 auto;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #2c3e50;
+            color: white;
             padding: 20px;
+            min-height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 1000;
+        }
+        .sidebar h2 {
+            margin-top: 0;
+            margin-bottom: 30px;
+            font-size: 20px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .sidebar li {
+            margin-bottom: 10px;
+        }
+        .sidebar a {
+            color: white;
+            text-decoration: none;
+            display: block;
+            padding: 12px 15px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .sidebar a:hover {
+            background-color: #34495e;
+        }
+        .sidebar a.active {
+            background-color: #3498db;
+        }
+        .sidebar .menu-group {
+            margin-bottom: 15px;
+        }
+        .sidebar .menu-group-title {
+            color: #ecf0f1;
+            font-weight: bold;
+            padding: 10px 15px;
+            margin-bottom: 5px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-left: 3px solid #3498db;
+            background-color: rgba(52, 152, 219, 0.1);
+        }
+        .sidebar .submenu {
+            margin-left: 20px;
+            margin-top: 5px;
+        }
+        .sidebar .submenu li {
+            margin-bottom: 5px;
+        }
+        .sidebar .submenu a {
+            padding: 8px 15px;
+            font-size: 14px;
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        .sidebar .submenu a:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .sidebar .submenu a.active {
+            background-color: #3498db;
+            font-weight: bold;
+        }
+        .sidebar .logout-section {
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .sidebar .logout-form {
+            margin: 0;
+        }
+        .sidebar .logout-button {
+            width: 100%;
+            padding: 12px 15px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-align: center;
+            transition: background-color 0.3s;
+        }
+        .sidebar .logout-button:hover {
+            background-color: #c0392b;
+        }
+        .main-content {
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .main-content.with-sidebar {
+            margin-left: 250px;
         }
         .detail-section {
             border: 1px solid #ddd;
@@ -102,6 +207,110 @@
     </style>
 </head>
 <body>
+    <!-- トレーナー用サイドバー -->
+    <div class="sidebar" th:if="${isTrainer != null ? isTrainer : false}">
+        <h2>メニュー</h2>
+        <ul>
+            <li class="menu-group">
+                <div class="menu-group-title">履歴一覧</div>
+                <ul class="submenu">
+                    <li>
+                        <a th:href="@{'/customer/' + ${customerId} + '/lessons'}">履歴一覧</a>
+                    </li>
+                    <li>
+                        <a th:href="@{'/lesson/' + ${lesson.id}}" class="active">レッスン詳細</a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a th:href="@{'/customer/' + ${customerId}}">顧客プロフィール</a>
+            </li>
+            <li>
+                <a th:href="@{'/customer/' + ${customerId} + '/posture_groups'}">姿勢画像一覧</a>
+            </li>
+            <li>
+                <a th:href="@{'/customer/' + ${customerId} + '/lesson/new'}" class="">新規レッスン入力</a>
+            </li>
+        </ul>
+        <!-- ログアウトボタン -->
+        <div class="logout-section">
+            <form th:action="@{/logout}" method="post" class="logout-form">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <button type="submit" class="logout-button">ログアウト</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 本部管理者用サイドバー（顧客選択後の画面） -->
+    <div class="sidebar" th:if="${(isAdmin != null ? isAdmin : false) and (isCustomerHistoryPage != null ? isCustomerHistoryPage : false)}">
+        <h2>メニュー</h2>
+        <ul>
+            <li>
+                <a th:href="@{/admin/lessons}" class="">統計情報</a>
+            </li>
+            <li class="menu-group">
+                <div class="menu-group-title">履歴一覧</div>
+                <ul class="submenu">
+                    <li>
+                        <a th:href="@{'/admin/history/' + ${customerId}}">履歴一覧</a>
+                    </li>
+                    <li>
+                        <a th:href="@{'/admin/lessons/' + ${lesson.id}}" class="active">レッスン詳細</a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a th:href="@{'/admin/customers/' + ${customerId}}">顧客プロフィール</a>
+            </li>
+            <li>
+                <a th:href="@{'/admin/postures?customerId=' + ${customerId}}">姿勢画像一覧</a>
+            </li>
+        </ul>
+        <!-- ログアウトボタン -->
+        <div class="logout-section">
+            <form th:action="@{/logout}" method="post" class="logout-form">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <button type="submit" class="logout-button">ログアウト</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 店長用サイドバー（顧客選択後の画面） -->
+    <div class="sidebar" th:if="${(isManager != null ? isManager : false) and (isCustomerHistoryPage != null ? isCustomerHistoryPage : false)}">
+        <h2>メニュー</h2>
+        <ul>
+            <li>
+                <a th:href="@{'/manager/' + ${storeId} + '/lessons'}" class="">店舗統計</a>
+            </li>
+            <li class="menu-group">
+                <div class="menu-group-title">履歴一覧</div>
+                <ul class="submenu">
+                    <li>
+                        <a th:href="@{'/manager/' + ${storeId} + '/history/' + ${customerId}}">履歴一覧</a>
+                    </li>
+                    <li>
+                        <a th:href="@{'/manager/' + ${storeId} + '/lessons/' + ${lesson.id}}" class="active">レッスン詳細</a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a th:href="@{'/manager/' + ${storeId} + '/customers/' + ${customerId}}">顧客プロフィール</a>
+            </li>
+            <li>
+                <a th:href="@{'/manager/' + ${storeId} + '/postures?customerId=' + ${customerId}}">姿勢画像一覧</a>
+            </li>
+        </ul>
+        <!-- ログアウトボタン -->
+        <div class="logout-section">
+            <form th:action="@{/logout}" method="post" class="logout-form">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <button type="submit" class="logout-button">ログアウト</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- メインコンテンツ -->
+    <div class="main-content" th:classappend="${(isTrainer != null ? isTrainer : false) or (isManager != null ? isManager : false) or (isAdmin != null ? isAdmin : false)} ? 'with-sidebar' : ''">
     <h1>レッスン詳細</h1>
     
     <!-- 基本情報 -->
@@ -229,6 +438,7 @@
     <!-- ボタン -->
     <div class="button-group">
         <button type="button" class="back-button" onclick="history.back()">一覧に戻る</button>
+    </div>
     </div>
 </body>
 </html>

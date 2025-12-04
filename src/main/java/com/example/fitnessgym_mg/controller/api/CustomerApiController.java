@@ -59,6 +59,10 @@ public class CustomerApiController {
 		model.addAttribute("genders", CustomerGender.values());
 		model.addAttribute("storeId", storeId);
 		
+		// BASE_PATHを設定（Thymeleafテンプレートで使用）
+		String basePath = storeId != null ? "/manager/" + storeId + "/customers" : "/admin/customers";
+		model.addAttribute("BASE_PATH", basePath);
+		
 		// Admin/Manager用サイドバー表示のためのフラグ
 		model.addAttribute("isAdmin", storeId == null);
 		model.addAttribute("isManager", storeId != null);
@@ -135,23 +139,206 @@ public class CustomerApiController {
 	}
 
 	// --- 顧客レッスン履歴画面 ---
-	// パスは admin と manager の両方を受け付け、View名は一つに統一
+	// パスは admin と manager の両方を受け付け、LessonController.lessonHistory にリダイレクト
 	@GetMapping({ "/admin/customers/{id}/lessons", "/manager/{storeId}/customers/{id}/lessons" })
 	public String showCustomerLessons(
 			@PathVariable(required = false) UUID storeId, // storeIdはURLに含まれるため取得
-			@PathVariable UUID id,
-			Model model) {
+			@PathVariable UUID id) {
 
-		// TODO: LessonServiceなどを使用して、この顧客ID (id) に紐づくレッスン履歴を取得する処理を実装
+		// LessonController.lessonHistory にリダイレクト
+		if (storeId != null) {
+			return "redirect:/manager/" + storeId + "/history/" + id;
+		} else {
+			return "redirect:/admin/history/" + id;
+		}
+	}
 
-		// ここで storeId が null かどうかで、誰がアクセスしているかを識別
-		model.addAttribute("customerId", id);
-		model.addAttribute("storeId", storeId); // nullの場合もある
+	// ========== REST API エンドポイント（React用） ==========
+	// 注意: このクラスはWebコントローラーとREST APIコントローラーが混在しているため、
+	// @RequestMapping("/api")をクラスレベルで設定できない
+	// そのため、各メソッドで完全なパスを指定している
 
-		// View内で戻るボタンなどのリンクを構築しやすくするためにBASE_PATHを渡す
-		model.addAttribute("BASE_PATH", (storeId != null ? "/manager/" + storeId : "/admin") + "/customers");
+	/**
+	 * GET /api/admin/customers
+	 * 顧客一覧取得
+	 */
+	@GetMapping("/api/admin/customers")
+	@ResponseBody
+	public ResponseEntity<Page<CustomerResponse>> getAdminCustomers(
+			@RequestParam(required = false) String name,
+			@RequestParam(defaultValue = "created") String sort,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size) {
+		
+		Pageable pageable = PageRequest.of(page, size);
+		Page<CustomerResponse> customerPage = service.searchCustomers(name, sort, null, pageable);
+		return ResponseEntity.ok(customerPage);
+	}
 
-		// 遷移先のビュー名は一つに統一
-		return "customers/lessons";
+	/**
+	 * GET /api/admin/customers?name={keyword}
+	 * 顧客名による検索（上記のgetAdminCustomersメソッドでnameパラメータとして処理）
+	 */
+
+	/**
+	 * POST /api/admin/customers
+	 * 顧客の新規登録
+	 */
+	@PostMapping("/api/admin/customers")
+	@ResponseBody
+	public ResponseEntity<Void> createAdminCustomer(@Valid @RequestBody CustomerRequest request) {
+		service.create(request);
+		return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
+	}
+
+	/**
+	 * PATCH /api/admin/customers/{customer_id}/disable
+	 * 顧客の無効化
+	 */
+	@PatchMapping("/api/admin/customers/{customer_id}/disable")
+	@ResponseBody
+	public ResponseEntity<Void> disableAdminCustomer(@PathVariable("customer_id") UUID customerId) {
+		service.disableActive(customerId, null);
+		return ResponseEntity.ok().build();
+	}
+
+	/**
+	 * PATCH /api/admin/customers/{customer_id}/enable
+	 * 顧客の再有効化
+	 */
+	@PatchMapping("/api/admin/customers/{customer_id}/enable")
+	@ResponseBody
+	public ResponseEntity<Void> enableAdminCustomer(@PathVariable("customer_id") UUID customerId) {
+		service.enableActive(customerId, null);
+		return ResponseEntity.ok().build();
+	}
+
+	/**
+	 * DELETE /api/admin/customers/{customer_id}
+	 * 顧客の削除
+	 */
+	@DeleteMapping("/api/admin/customers/{customer_id}")
+	@ResponseBody
+	public ResponseEntity<Void> deleteAdminCustomer(@PathVariable("customer_id") UUID customerId) {
+		service.delete(customerId, null);
+		return ResponseEntity.ok().build();
+	}
+
+	/**
+	 * GET /api/stores/{store_id}/manager/customers
+	 * 顧客一覧取得(店舗内管轄)
+	 */
+	@GetMapping("/api/stores/{store_id}/manager/customers")
+	@ResponseBody
+	public ResponseEntity<Page<CustomerResponse>> getManagerCustomers(
+			@PathVariable("store_id") UUID storeId,
+			@RequestParam(required = false) String name,
+			@RequestParam(defaultValue = "created") String sort,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size) {
+		
+		Pageable pageable = PageRequest.of(page, size);
+		Page<CustomerResponse> customerPage = service.searchCustomers(name, sort, storeId, pageable);
+		return ResponseEntity.ok(customerPage);
+	}
+
+	/**
+	 * GET /api/stores/{store_id}/manager/customers?name={keyword}
+	 * 顧客名による検索(店舗内管轄)（上記のgetManagerCustomersメソッドでnameパラメータとして処理）
+	 */
+
+	/**
+	 * POST /api/stores/{store_id}/manager/customers
+	 * 顧客の新規登録(店舗内管轄)
+	 */
+	@PostMapping("/api/stores/{store_id}/manager/customers")
+	@ResponseBody
+	public ResponseEntity<Void> createManagerCustomer(
+			@PathVariable("store_id") UUID storeId,
+			@Valid @RequestBody CustomerRequest request) {
+		service.create(request);
+		return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
+	}
+
+	/**
+	 * PATCH /api/stores/{store_id}/manager/customers/{customer_id}/disable
+	 * 顧客の無効化(店舗内管轄)
+	 */
+	@PatchMapping("/api/stores/{store_id}/manager/customers/{customer_id}/disable")
+	@ResponseBody
+	public ResponseEntity<Void> disableManagerCustomer(
+			@PathVariable("store_id") UUID storeId,
+			@PathVariable("customer_id") UUID customerId) {
+		service.disableActive(customerId, storeId);
+		return ResponseEntity.ok().build();
+	}
+
+	/**
+	 * PATCH /api/stores/{store_id}/manager/customers/{customer_id}/enable
+	 * 顧客の再有効化(店舗内管轄)
+	 */
+	@PatchMapping("/api/stores/{store_id}/manager/customers/{customer_id}/enable")
+	@ResponseBody
+	public ResponseEntity<Void> enableManagerCustomer(
+			@PathVariable("store_id") UUID storeId,
+			@PathVariable("customer_id") UUID customerId) {
+		service.enableActive(customerId, storeId);
+		return ResponseEntity.ok().build();
+	}
+
+	/**
+	 * DELETE /api/stores/{store_id}/manager/customers/{customer_id}
+	 * 顧客の削除(店舗内管轄)
+	 */
+	@DeleteMapping("/api/stores/{store_id}/manager/customers/{customer_id}")
+	@ResponseBody
+	public ResponseEntity<Void> deleteManagerCustomer(
+			@PathVariable("store_id") UUID storeId,
+			@PathVariable("customer_id") UUID customerId) {
+		service.delete(customerId, storeId);
+		return ResponseEntity.ok().build();
+	}
+
+	/**
+	 * GET /api/stores/{store_id}/trainers/customers
+	 * 担当顧客の一覧取得
+	 */
+	@GetMapping("/api/stores/{store_id}/trainers/customers")
+	@ResponseBody
+	public ResponseEntity<java.util.List<CustomerResponse>> getTrainerCustomers(
+			@PathVariable("store_id") UUID storeId) {
+		
+		// 現在ログイン中のトレーナーを取得
+		UUID trainerId = securityUtil.getCurrentUser()
+				.orElseThrow(() -> new RuntimeException("認証されていません"))
+				.getId();
+		
+		java.util.List<CustomerResponse> customers = service.getCustomersByTrainer(trainerId);
+		return ResponseEntity.ok(customers);
+	}
+
+	/**
+	 * GET /api/customers/{customer_id}/profile
+	 * 顧客の基本プロフィール情報取得
+	 */
+	@GetMapping("/api/customers/{customer_id}/profile")
+	@ResponseBody
+	public ResponseEntity<CustomerResponse> getCustomerProfile(@PathVariable("customer_id") UUID customerId) {
+		CustomerResponse customer = service.getCustomerById(customerId);
+		return ResponseEntity.ok(customer);
+	}
+
+	/**
+	 * PATCH /api/customers/{customer_id}/profile
+	 * 顧客プロフィールの更新
+	 */
+	@PatchMapping("/api/customers/{customer_id}/profile")
+	@ResponseBody
+	public ResponseEntity<Void> updateCustomerProfile(
+			@PathVariable("customer_id") UUID customerId,
+			@Valid @RequestBody CustomerRequest request) {
+		// storeIdはnull（共通エンドポイントのため）
+		service.update(customerId, request, null);
+		return ResponseEntity.ok().build();
 	}
 }

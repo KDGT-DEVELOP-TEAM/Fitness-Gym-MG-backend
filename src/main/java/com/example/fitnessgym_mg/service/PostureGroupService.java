@@ -1,5 +1,6 @@
 package com.example.fitnessgym_mg.service;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -8,7 +9,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.example.fitnessgym_mg.entity.Customer;
+import com.example.fitnessgym_mg.entity.Lesson;
 import com.example.fitnessgym_mg.entity.PostureGroup;
+import com.example.fitnessgym_mg.repository.CustomerRepository;
+import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.PostureGroupRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -22,6 +27,8 @@ import lombok.RequiredArgsConstructor;
 public class PostureGroupService {
 
     private final PostureGroupRepository postureGroupRepository;
+    private final LessonRepository lessonRepository;
+    private final CustomerRepository customerRepository;
 
     /**
      * 顧客IDで姿勢画像グループ一覧をDBから取得
@@ -41,6 +48,27 @@ public class PostureGroupService {
         return postureGroupRepository.findById(postureGroupId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Posture group not found: " + postureGroupId));
+    }
+
+    /**
+     * 新しいレッスン記録に伴う、新しい姿勢画像群に対する空グループの作成
+     */
+    @Transactional
+    public PostureGroup createPostureGroup(UUID lessonId) {
+        Lesson lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Lesson not found: " + lessonId));
+        
+        Customer customer = lesson.getCustomer();
+        
+        PostureGroup postureGroup = PostureGroup.builder()
+                .customer(customer)
+                .lesson(lesson)
+                .capturedAt(OffsetDateTime.now())
+                .createdAt(OffsetDateTime.now())
+                .build();
+        
+        return postureGroupRepository.save(postureGroup);
     }
 }
 

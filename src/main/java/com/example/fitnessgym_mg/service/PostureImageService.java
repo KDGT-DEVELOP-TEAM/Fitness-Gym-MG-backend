@@ -1,5 +1,6 @@
 package com.example.fitnessgym_mg.service;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -8,8 +9,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.example.fitnessgym_mg.dto.request.PostureImageRequest;
+import com.example.fitnessgym_mg.entity.PostureGroup;
 import com.example.fitnessgym_mg.entity.PostureImage;
+import com.example.fitnessgym_mg.entity.enums.PostureImagePosition;
 import com.example.fitnessgym_mg.repository.PostureImageRepository;
+import com.example.fitnessgym_mg.repository.PostureGroupRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -22,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 public class PostureImageService {
 
     private final PostureImageRepository postureImageRepository;
+    private final PostureGroupRepository postureGroupRepository;
 
     /**
      * グループIDで姿勢画像リストをDBから取得（撮影日時昇順）
@@ -43,6 +49,33 @@ public class PostureImageService {
                     "Posture image not found: " + postureImageId);
         }
         postureImageRepository.deleteById(postureImageId);
+    }
+
+    /**
+     * 姿勢画像を作成して保存
+     * 各方向(front/right/back/left)の画像撮影/追加
+     */
+    @Transactional
+    public PostureImage createPostureImage(UUID groupId, PostureImageRequest request) {
+        PostureGroup postureGroup = postureGroupRepository.findById(groupId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Posture group not found: " + groupId));
+        
+        PostureImagePosition position = PostureImagePosition.fromCode(request.getPosition());
+        OffsetDateTime takenAt = request.getTakenAt() != null 
+                ? request.getTakenAt() 
+                : OffsetDateTime.now();
+        
+        PostureImage postureImage = PostureImage.builder()
+                .postureGroup(postureGroup)
+                .storageKey(request.getStorageKey())
+                .consentPublication(request.isConsentPublication())
+                .takenAt(takenAt)
+                .position(position)
+                .createdAt(OffsetDateTime.now())
+                .build();
+        
+        return postureImageRepository.save(postureImage);
     }
 }
 

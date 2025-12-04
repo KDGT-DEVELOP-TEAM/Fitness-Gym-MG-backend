@@ -218,6 +218,7 @@ public class LessonService {
 		// レスポンス作成
 		LessonResponse response = new LessonResponse();
 		response.setId(lesson.getId());
+		response.setCustomerId(lesson.getCustomer().getId());
 		response.setCustomerName(lesson.getCustomer().getName());
 		response.setTrainerName(lesson.getTrainer().getName());
 		response.setStoreName(lesson.getStore().getName());
@@ -332,5 +333,98 @@ public class LessonService {
 		chartData.setMaxCount(maxCount);
 		chartData.setType(type);
 		return chartData;
+	}
+
+	/**
+	 * トレーナーIDで直近1週間以内（当日含む）のレッスンを取得
+	 * 当日・直近(1週間以内)の予約状況/レッスン概要の取得用
+	 */
+	public List<LessonResponse> getUpcomingLessonsByTrainerId(UUID trainerId) {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime oneWeekLater = now.plusWeeks(1);
+		
+		// 開始日時が現在から1週間以内のレッスンを取得
+		List<Lesson> lessons = lessonRepository.findByTrainerIdAndStartDateAfterOrderByStartDateAsc(
+				trainerId, now);
+		
+		// 1週間以内に限定
+		return lessons.stream()
+				.filter(lesson -> lesson.getStartDate() != null && lesson.getStartDate().isBefore(oneWeekLater))
+				.map(LessonResponse::fromEntity)
+				.collect(Collectors.toList());
+	}
+
+	/**
+	 * 顧客IDで体重/BMI履歴を取得
+	 * レッスンデータから体重とBMIの時系列データを取得
+	 */
+	@Transactional(readOnly = true)
+	public List<com.example.fitnessgym_mg.dto.response.VitalsHistoryResponse.VitalsData> getVitalsHistoryByCustomerId(UUID customerId) {
+		List<Lesson> lessons = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId);
+		
+		return lessons.stream()
+				.filter(lesson -> lesson.getWeight() != null && lesson.getStartDate() != null)
+				.map(lesson -> {
+					Double bmi = LessonResponse.calculateBmi(lesson.getWeight(), lesson.getCustomer().getHeight());
+					return com.example.fitnessgym_mg.dto.response.VitalsHistoryResponse.VitalsData.builder()
+							.date(lesson.getStartDate())
+							.weight(lesson.getWeight())
+							.bmi(bmi)
+							.build();
+				})
+				.collect(Collectors.toList());
+	}
+
+	/**
+	 * レッスン情報の更新
+	 */
+	@Transactional
+	public LessonResponse updateLesson(UUID lessonId, LessonRequest request) {
+		Lesson lesson = lessonRepository.findById(lessonId)
+				.orElseThrow(() -> new RuntimeException("レッスンが見つかりません"));
+
+		// エンティティの取得
+		Customer customer = customerRepository.findById(request.getCustomerId())
+				.orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
+		Store store = storeRepository.findById(request.getStoreId())
+				.orElseThrow(() -> new RuntimeException("店舗が見つかりません"));
+		User trainer = userRepository.findById(request.getTrainerId())
+				.orElseThrow(() -> new RuntimeException("トレーナーが見つかりません"));
+		
+		// 次回店舗・トレーナー（任意）
+		Store nextStore = request.getNextStoreId() != null 
+				? storeRepository.findById(request.getNextStoreId()).orElse(null) 
+				: null;
+		User nextTrainer = request.getNextTrainerId() != null 
+				? userRepository.findById(request.getNextTrainerId()).orElse(null) 
+				: null;
+		
+		// レッスン情報を更新
+		lesson.setCustomer(customer);
+		lesson.setStore(store);
+		lesson.setTrainer(trainer);
+		lesson.setCondition(request.getCondition());
+		lesson.setWeight(request.getWeight());
+		lesson.setMeal(request.getMeal());
+		lesson.setMemo(request.getMemo());
+		lesson.setStartDate(request.getStartDate());
+		lesson.setEndDate(request.getEndDate());
+		lesson.setNextDate(request.getNextDate());
+		lesson.setNextStore(nextStore);
+		lesson.setNextUser(nextTrainer);
+		
+		// レッスン保存
+		Lesson savedLesson = lessonRepository.save(lesson);
+		
+		// トレーニング更新（既存を削除して新規作成）
+		if (request.getTrainings() != null) {
+			trainingService.deleteByLessonId(lessonId);
+			if (!request.getTrainings().isEmpty()) {
+				trainingService.createTrainings(savedLesson.getId(), request.getTrainings());
+			}
+		}
+		
+		// レスポンスを返す
+		return getLessonDetail(savedLesson.getId());
 	}
 }
