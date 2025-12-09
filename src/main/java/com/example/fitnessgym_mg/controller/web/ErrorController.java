@@ -7,7 +7,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.repository.UserRepository;
@@ -66,9 +65,9 @@ public class ErrorController {
 	 */
 	private String getHomeUrl() {
 		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-		
-		if (authentication == null || !authentication.isAuthenticated() || 
-			authentication.getPrincipal().equals("anonymousUser")) {
+
+		if (authentication == null || !authentication.isAuthenticated() ||
+				authentication.getPrincipal().equals("anonymousUser")) {
 			return "/login";
 		}
 
@@ -88,7 +87,7 @@ public class ErrorController {
 				String email = authentication.getName();
 				User user = userRepository.findByEmailWithStores(email)
 						.orElse(null);
-				
+
 				if (user != null && user.getStores() != null && !user.getStores().isEmpty()) {
 					UUID storeId = user.getStores().iterator().next().getId();
 					return "/manager/" + storeId + "/lessons";
@@ -104,4 +103,3 @@ public class ErrorController {
 		return "/login";
 	}
 }
-

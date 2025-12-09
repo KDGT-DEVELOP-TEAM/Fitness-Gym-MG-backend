@@ -6,6 +6,8 @@
     <title>新規レッスン入力 | フィットネスジム管理システム</title>
     <link rel="stylesheet" th:href="@{/css/reset.css}" />
     <link rel="stylesheet" th:href="@{/css/style.css}" />
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         .form-group {
             margin-bottom: 15px;
@@ -107,6 +109,114 @@
             color: #007bff;
             margin-top: 5px;
         }
+        /* 姿勢画像撮影セクションのスタイル */
+        .posture-camera-section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+        .camera-controls {
+            margin-bottom: 15px;
+        }
+        .camera-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 20px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .camera-btn:hover {
+            background: #138496;
+        }
+        #cameraPreview {
+            margin: 15px 0;
+        }
+        #videoElement {
+            width: 100%;
+            max-width: 640px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            background: #000;
+        }
+        .position-selector {
+            margin: 10px 0;
+        }
+        .position-selector label {
+            margin-right: 10px;
+        }
+        .position-selector select {
+            width: auto;
+            padding: 5px 10px;
+        }
+        .capture-controls {
+            margin: 10px 0;
+        }
+        .capture-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        .capture-btn:hover {
+            background: #218838;
+        }
+        .captured-images-container {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+        .captured-images-container h4 {
+            margin-bottom: 10px;
+        }
+        .image-previews {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        .image-preview-item {
+            position: relative;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            background: #fff;
+        }
+        .image-preview-item img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .image-preview-item .preview-label {
+            padding: 5px;
+            background: #007bff;
+            color: white;
+            text-align: center;
+            font-size: 0.9em;
+        }
+        .image-preview-item .remove-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .image-preview-item .remove-btn:hover {
+            background: #c82333;
+        }
     </style>
 </head>
 <body>
@@ -207,6 +317,43 @@
                 <!-- トレーニングセクションはJavaScriptで動的に生成 -->
             </div>
             <button type="button" class="add-training-btn" id="addTrainingBtn">トレーニングを追加</button>
+        </div>
+        
+        <!-- 姿勢画像撮影セクション -->
+        <div class="form-group">
+            <label>姿勢画像撮影</label>
+            <div class="posture-camera-section">
+                <div class="camera-controls">
+                    <button type="button" id="startCameraBtn" class="camera-btn">カメラを起動</button>
+                    <button type="button" id="stopCameraBtn" class="camera-btn" style="display: none;">カメラを停止</button>
+                </div>
+                
+                <div id="cameraPreview" style="display: none;">
+                    <video id="videoElement" autoplay playsinline></video>
+                    <canvas id="canvasElement" style="display: none;"></canvas>
+                    
+                    <div class="position-selector">
+                        <label>撮影方向:</label>
+                        <select id="positionSelect">
+                            <option value="front">正面</option>
+                            <option value="right">右側</option>
+                            <option value="back">背面</option>
+                            <option value="left">左側</option>
+                        </select>
+                    </div>
+                    
+                    <div class="capture-controls">
+                        <button type="button" id="captureBtn" class="capture-btn">撮影</button>
+                    </div>
+                </div>
+                
+                <div id="capturedImages" class="captured-images-container">
+                    <h4>撮影した画像</h4>
+                    <div id="imagePreviews" class="image-previews">
+                        <!-- 撮影した画像のプレビューがここに表示されます -->
+                    </div>
+                </div>
+            </div>
         </div>
         
         <!-- 実施時間 -->
@@ -387,6 +534,329 @@
 
         // 初期状態で1つのトレーニングセクションを追加
         addTrainingSection();
+
+        // ========== 姿勢画像撮影機能 ==========
+        
+        // Supabase設定
+        // TODO: 実際のSupabase URLとanon keyに置き換えてください
+        const SUPABASE_URL = 'https://cwybkjzapzrxtcyvctuk.supabase.co';
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // 実際のanon keyに置き換え
+        
+        // Supabaseクライアントの初期化
+        let supabaseClient = null;
+        try {
+            if (typeof supabase !== 'undefined') {
+                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            } else {
+                console.error('Supabase JS SDKが読み込まれていません');
+            }
+        } catch (error) {
+            console.error('Supabaseクライアントの初期化に失敗しました:', error);
+        }
+
+        // カメラ関連の変数
+        let stream = null;
+        let capturedImages = {}; // { position: { storageKey, blob, dataUrl } }
+        const customerId = /*[[${customerId}]]*/ null;
+
+        // DOM要素の取得
+        const startCameraBtn = document.getElementById('startCameraBtn');
+        const stopCameraBtn = document.getElementById('stopCameraBtn');
+        const cameraPreview = document.getElementById('cameraPreview');
+        const videoElement = document.getElementById('videoElement');
+        const canvasElement = document.getElementById('canvasElement');
+        const positionSelect = document.getElementById('positionSelect');
+        const captureBtn = document.getElementById('captureBtn');
+        const imagePreviews = document.getElementById('imagePreviews');
+
+        // カメラ起動
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: 'environment', // 背面カメラを優先
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+                videoElement.srcObject = stream;
+                cameraPreview.style.display = 'block';
+                startCameraBtn.style.display = 'none';
+                stopCameraBtn.style.display = 'inline-block';
+                captureBtn.disabled = false;
+            } catch (error) {
+                console.error('カメラの起動に失敗しました:', error);
+                alert('カメラの起動に失敗しました。カメラの権限を確認してください。');
+            }
+        }
+
+        // カメラ停止
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            videoElement.srcObject = null;
+            cameraPreview.style.display = 'none';
+            startCameraBtn.style.display = 'inline-block';
+            stopCameraBtn.style.display = 'none';
+            captureBtn.disabled = true;
+        }
+
+        // 画像撮影
+        function captureImage() {
+            if (!stream) {
+                alert('カメラが起動していません');
+                return;
+            }
+
+            const position = positionSelect.value;
+            if (capturedImages[position]) {
+                if (!confirm(`${position}の画像は既に撮影されています。上書きしますか？`)) {
+                    return;
+                }
+            }
+
+            // キャンバスに現在のビデオフレームを描画
+            const context = canvasElement.getContext('2d');
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+            context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+
+            // 画像データを取得
+            canvasElement.toBlob(async (blob) => {
+                if (!blob) {
+                    alert('画像の取得に失敗しました');
+                    return;
+                }
+
+                // データURLを生成（プレビュー用）
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const dataUrl = e.target.result;
+                    capturedImages[position] = {
+                        blob: blob,
+                        dataUrl: dataUrl,
+                        storageKey: null // アップロード後に設定
+                    };
+                    updateImagePreviews();
+                };
+                reader.readAsDataURL(blob);
+            }, 'image/jpeg', 0.9);
+        }
+
+        // 画像プレビューの更新
+        function updateImagePreviews() {
+            imagePreviews.innerHTML = '';
+            
+            const positions = ['front', 'right', 'back', 'left'];
+            const positionLabels = {
+                front: '正面',
+                right: '右側',
+                back: '背面',
+                left: '左側'
+            };
+
+            positions.forEach(position => {
+                if (capturedImages[position]) {
+                    const item = document.createElement('div');
+                    item.className = 'image-preview-item';
+                    item.innerHTML = `
+                        <img src="${capturedImages[position].dataUrl}" alt="${positionLabels[position]}" />
+                        <div class="preview-label">${positionLabels[position]}</div>
+                        <button type="button" class="remove-btn" onclick="removeCapturedImage('${position}')" title="削除">×</button>
+                    `;
+                    imagePreviews.appendChild(item);
+                }
+            });
+        }
+
+        // 撮影した画像を削除
+        function removeCapturedImage(position) {
+            if (confirm(`${position}の画像を削除しますか？`)) {
+                delete capturedImages[position];
+                updateImagePreviews();
+            }
+        }
+
+        // Supabaseストレージに画像をアップロード
+        async function uploadImageToSupabase(lessonId, position, blob) {
+            if (!supabaseClient) {
+                throw new Error('Supabaseクライアントが初期化されていません');
+            }
+
+            // ストレージパスの生成: /customers/{customerId}/lessons/{lessonId}/{position}.jpg
+            const filePath = `${customerId}/lessons/${lessonId}/${position}.jpg`;
+
+            // ストレージにアップロード
+            const { data, error } = await supabaseClient.storage
+                .from('postures')
+                .upload(filePath, blob, {
+                    contentType: 'image/jpeg',
+                    upsert: true // 既存ファイルを上書き
+                });
+
+            if (error) {
+                throw error;
+            }
+
+            // storageKeyを返す（相対パス形式）
+            return `/${filePath}`;
+        }
+
+        // レッスン保存時に姿勢画像を登録
+        async function savePostureImages(lessonId) {
+            if (Object.keys(capturedImages).length === 0) {
+                return; // 画像がなければ何もしない
+            }
+
+            try {
+                // 姿勢画像グループを作成
+                const groupResponse = await fetch(`/api/lessons/${lessonId}/posture_groups`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!groupResponse.ok) {
+                    throw new Error('姿勢画像グループの作成に失敗しました');
+                }
+
+                const groupData = await groupResponse.json();
+                const groupId = groupData.id;
+
+                // 各方向の画像をアップロードして登録
+                for (const [position, imageData] of Object.entries(capturedImages)) {
+                    // Supabaseストレージにアップロード
+                    const storageKey = await uploadImageToSupabase(lessonId, position, imageData.blob);
+                    
+                    // 姿勢画像を登録
+                    const imageRequest = {
+                        storageKey: storageKey,
+                        position: position,
+                        consentPublication: false,
+                        takenAt: new Date().toISOString()
+                    };
+
+                    const imageResponse = await fetch(`/api/lessons/${lessonId}/posture_groups/${groupId}/images`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(imageRequest)
+                    });
+
+                    if (!imageResponse.ok) {
+                        console.error(`${position}の画像登録に失敗しました`);
+                    }
+                }
+            } catch (error) {
+                console.error('姿勢画像の保存に失敗しました:', error);
+                alert('姿勢画像の保存に失敗しました: ' + error.message);
+            }
+        }
+
+        // イベントリスナーの設定
+        startCameraBtn.addEventListener('click', startCamera);
+        stopCameraBtn.addEventListener('click', stopCamera);
+        captureBtn.addEventListener('click', captureImage);
+
+        // フォーム送信時に姿勢画像を保存
+        const form = document.querySelector('form');
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            // フォームデータをオブジェクトに変換
+            const formData = new FormData(form);
+            const lessonData = {
+                customerId: formData.get('customerId'),
+                trainerId: formData.get('trainerId'),
+                storeId: formData.get('storeId'),
+                weight: formData.get('weight') ? parseFloat(formData.get('weight')) : null,
+                condition: formData.get('condition') || null,
+                meal: formData.get('meal') || null,
+                memo: formData.get('memo') || null,
+                startDate: formData.get('startDate') || null,
+                endDate: formData.get('endDate') || null,
+                nextDate: formData.get('nextDate') || null,
+                nextStoreId: formData.get('nextStoreId') || null,
+                nextTrainerId: formData.get('nextTrainerId') || null,
+                trainings: []
+            };
+
+            // トレーニングデータを取得
+            const trainingSections = document.querySelectorAll('.training-section');
+            trainingSections.forEach((section, index) => {
+                const name = section.querySelector('input[type="text"]').value;
+                const reps = section.querySelector('input[type="number"]').value;
+                const orderNo = section.querySelector('input[type="hidden"]').value;
+                
+                if (name || reps) {
+                    lessonData.trainings.push({
+                        name: name || null,
+                        reps: reps ? parseInt(reps) : null,
+                        orderNo: parseInt(orderNo)
+                    });
+                }
+            });
+
+            // 日時文字列をISO形式に変換
+            if (lessonData.startDate) {
+                lessonData.startDate = new Date(lessonData.startDate).toISOString();
+            }
+            if (lessonData.endDate) {
+                lessonData.endDate = new Date(lessonData.endDate).toISOString();
+            }
+            if (lessonData.nextDate) {
+                lessonData.nextDate = new Date(lessonData.nextDate).toISOString();
+            }
+
+            // APIエンドポイントを使用してレッスンを作成
+            try {
+                const lessonResponse = await fetch(`/api/customers/${customerId}/lessons`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(lessonData)
+                });
+
+                if (!lessonResponse.ok) {
+                    const errorText = await lessonResponse.text();
+                    throw new Error(errorText || 'レッスンの作成に失敗しました');
+                }
+
+                const lessonResult = await lessonResponse.json();
+                const lessonId = lessonResult.id;
+
+                // 姿勢画像を保存
+                if (lessonId && Object.keys(capturedImages).length > 0) {
+                    try {
+                        await savePostureImages(lessonId);
+                    } catch (error) {
+                        console.error('姿勢画像の保存に失敗しました:', error);
+                        // 姿勢画像の保存に失敗してもレッスンは保存されているので続行
+                    }
+                }
+
+                // 成功時はリダイレクト（元のフォームアクション先）
+                // トレーナーの場合は新規レッスン入力画面に戻る
+                const isTrainer = /*[[${isTrainer}]]*/ false;
+                if (isTrainer) {
+                    window.location.href = `/customer/${customerId}/lesson/new?success=true`;
+                } else {
+                    // 管理者・店長の場合はレッスン一覧にリダイレクト
+                    window.location.href = form.action.replace('/lessons', '/lessons?success=true');
+                }
+            } catch (error) {
+                console.error('レッスンの保存に失敗しました:', error);
+                alert('レッスンの保存に失敗しました: ' + error.message);
+            }
+        });
+
+        // グローバルスコープにremoveCapturedImageを公開
+        window.removeCapturedImage = removeCapturedImage;
     </script>
     </div>
 </body>
