@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>顧客選択</title>
+</head>
+<body>
+<h1>担当顧客選択</h1>
+
+<div th:if="${!hasCustomers}">
+    直近の担当顧客はいません
+</div>
+
+<ul th:if="${hasCustomers}">
+    <li th:each="c : ${customers}">
+        <a th:href="@{'/lessons/' + ${c.id}}" th:text="${c.name}">顧客名</a>
+    </li>
+</ul>
+</body>
+</html>

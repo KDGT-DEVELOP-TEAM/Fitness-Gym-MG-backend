@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>顧客プロフィール | フィットネスジム管理システム</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .profile-section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .profile-section h2 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        
+        .form-group input[readonly] {
+            background-color: #f5f5f5;
+            cursor: not-allowed;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .bmi-display {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+            margin-top: 10px;
+        }
+        
+        .bmi-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        button, .button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+        }
+        
+        .button-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .button-primary:hover {
+            background: #0056b3;
+        }
+        
+        .button-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .button-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .button-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .button-success:hover {
+            background: #218838;
+        }
+        
+        .alert {
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .error-message {
+            color: #dc3545;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- ヘッダー -->
+    <div class="header">
+        <h1>顧客プロフィール</h1>
+    </div>
+    
+    <!-- 成功メッセージ -->
+    <div th:if="${successMessage}" class="alert alert-success">
+        <span th:text="${successMessage}"></span>
+    </div>
+    
+    <!-- エラーメッセージ -->
+    <div th:if="${errorMessage}" class="alert alert-error">
+        <span th:text="${errorMessage}"></span>
+    </div>
+    
+    <!-- プロフィールフォーム -->
+    <form th:action="@{${storeId != null ? '/manager/' + storeId + '/customers/' + customer.id : '/admin/customers/' + customer.id}}" 
+          method="post" 
+          th:object="${customer}">
+        
+        <!-- 基本情報 -->
+        <div class="profile-section">
+            <h2>基本情報</h2>
+            
+            <div class="form-group">
+                <label for="name">氏名 <span style="color: red;">*</span></label>
+                <input type="text" 
+                       id="name" 
+                       name="name" 
+                       th:value="${customer.name}" 
+                       th:readonly="${!canEdit}"
+                       required>
+                <div th:if="${#fields.hasErrors('name')}" class="error-message" th:errors="*{name}"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="kana">フリガナ</label>
+                <input type="text" 
+                       id="kana" 
+                       name="kana" 
+                       th:value="${customer.kana}" 
+                       th:readonly="${!canEdit}">
+                <div th:if="${#fields.hasErrors('kana')}" class="error-message" th:errors="*{kana}"></div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="gender">性別</label>
+                    <select id="gender" 
+                            name="gender" 
+                            th:value="${customer.gender}" 
+                            th:disabled="${!canEdit}">
+                        <option value="">選択してください</option>
+                        <option value="male" th:selected="${customer.gender == 'male'}">男性</option>
+                        <option value="female" th:selected="${customer.gender == 'female'}">女性</option>
+                        <option value="other" th:selected="${customer.gender == 'other'}">その他</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="birthdate">生年月日</label>
+                    <input type="date" 
+                           id="birthdate" 
+                           name="birthdate" 
+                           th:value="${customer.birthdate}" 
+                           th:readonly="${!canEdit}">
+                </div>
+            </div>
+        </div>
+        
+        <!-- 連絡先情報 -->
+        <div class="profile-section">
+            <h2>連絡先</h2>
+            
+            <div class="form-group">
+                <label for="email">メールアドレス</label>
+                <input type="email" 
+                       id="email" 
+                       name="email" 
+                       th:value="${customer.email}" 
+                       th:readonly="${!canEdit}">
+                <div th:if="${#fields.hasErrors('email')}" class="error-message" th:errors="*{email}"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="phone">電話番号</label>
+                <input type="tel" 
+                       id="phone" 
+                       name="phone" 
+                       th:value="${customer.phone}" 
+                       th:readonly="${!canEdit}">
+            </div>
+            
+            <div class="form-group">
+                <label for="address">住所</label>
+                <input type="text" 
+                       id="address" 
+                       name="address" 
+                       th:value="${customer.address}" 
+                       th:readonly="${!canEdit}">
+            </div>
+        </div>
+        
+        <!-- 身体情報 -->
+        <div class="profile-section">
+            <h2>身体情報</h2>
+            
+            <div class="form-group">
+                <label for="height">身長 (cm)</label>
+                <input type="number" 
+                       id="height" 
+                       name="height" 
+                       step="0.1" 
+                       th:value="${customer.height}" 
+                       th:readonly="${!canEdit}">
+                <div th:if="${#fields.hasErrors('height')}" class="error-message" th:errors="*{height}"></div>
+            </div>
+            
+            <!-- BMI表示 （最新レッスンの体重から計算） -->
+            <div th:if="${customer.latestWeight != null and customer.height != null}" class="bmi-display">
+                <div>最新BMI</div>
+                <div class="bmi-value" th:text="${#numbers.formatDecimal(customer.latestWeight / ((customer.height / 100) * (customer.height / 100)), 1, 2)}"></div>
+                <div style="font-size: 12px; color: #666;">
+                    最新体重: <span th:text="${customer.latestWeight}"></span> kg
+                </div>
+            </div>
+        </div>
+        
+        <!-- ボタングループ -->
+        <div class="button-group">
+            <!-- 編集可能な場合のみ保存ボタンを表示 -->
+            <button type="submit" class="button-success" th:if="${canEdit}">
+                💾 保存
+            </button>
+            
+            <!-- 戻るボタン -->
+            <a th:href="@{${storeId != null ? '/manager/' + storeId + '/history/' + customer.id : '/trainer/history/' + customer.id}}" 
+               class="button button-secondary">
+                ← 履歴一覧に戻る
+            </a>
+        </div>
+        
+        <!-- CSRF Token -->
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+    </form>
+</body>
+</html>

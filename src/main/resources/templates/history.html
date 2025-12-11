@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>履歴画面</title>
+</head>
+<body>
+<h1 th:text="${customer.name} + ' のレッスン履歴'">顧客名 のレッスン履歴</h1>
+
+<table border="1">
+    <tr>
+        <th>予約日時</th>
+        <th>体重</th>
+        <th>BMI</th>
+    </tr>
+    <tr th:each="l : ${lessons}">
+        <td th:text="${l.reservationDate}"></td>
+        <td th:text="${l.weight}"></td>
+        <td th:text="${l.bmi}"></td>
+    </tr>
+</table>
+</body>
+</html>
+
