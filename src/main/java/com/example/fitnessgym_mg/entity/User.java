@@ -33,7 +33,7 @@ import lombok.ToString;
 @AllArgsConstructor
 @Getter
 @Setter
-@ToString(exclude = {"stores"})
+@ToString(exclude = { "stores" })
 public class User {
 
 	@Id
@@ -50,20 +50,20 @@ public class User {
 	private String kana;
 
 	@Column(nullable = false)
-	private String pass;
+	private String password;
 
 	@JdbcTypeCode(SqlTypes.NAMED_ENUM)
 	@Column(nullable = false, columnDefinition = "user_role")
 	private UserRole role;
 
 	@Column(nullable = false)
-	private boolean isActive = true;
+	private boolean active = true;
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
 	public enum UserRole {
-		admin, manager, trainer;
+		ADMIN, MANAGER, TRAINER;
 	}
 
 	@ManyToMany

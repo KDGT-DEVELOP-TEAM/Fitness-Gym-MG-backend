@@ -15,12 +15,11 @@ import com.example.fitnessgym_mg.entity.AuditLog;
  */
 @Repository
 public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
-    
-    /**
-     * 全監査ログを取得（作成日時の降順、時系列）
-     * EntityGraphでユーザー情報も取得してN+1問題を回避
-     */
-    @EntityGraph(attributePaths = {"user"})
-    Page<AuditLog> findAllByOrderByCreatedAtDesc(Pageable pageable);
-}
 
+	/**
+	 * 全監査ログを取得（作成日時の降順、時系列）
+	 * EntityGraphでユーザー情報も取得してN+1問題を回避
+	 */
+	@EntityGraph(attributePaths = { "user" })
+	Page<AuditLog> findAllByCreatedAtDesc(Pageable pageable);
+}

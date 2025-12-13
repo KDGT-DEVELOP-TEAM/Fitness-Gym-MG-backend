@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -26,7 +27,7 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = {"users", "customers"})
+@ToString(exclude = { "users", "customers" })
 public class Store {
 	@Id
 	@GeneratedValue(strategy = GenerationType.UUID)
@@ -35,7 +36,7 @@ public class Store {
 	@Column(unique = true, nullable = false, length = 100)
 	private String name;
 
-	@ManyToMany
+	@ManyToMany(fetch = FetchType.LAZY)
 	@JoinTable(name = "user_stores", // 中間テーブル名
 			joinColumns = @JoinColumn(name = "store_id", nullable = false), // Store側のFK
 			inverseJoinColumns = @JoinColumn(name = "user_id", nullable = false), // User側のFK
@@ -43,7 +44,7 @@ public class Store {
 	)
 	private Set<User> users; // 店舗に所属するユーザーリスト
 
-	@ManyToMany
+	@ManyToMany(fetch = FetchType.LAZY)
 	@JoinTable(name = "store_customers", // 中間テーブル名
 			joinColumns = @JoinColumn(name = "store_id", nullable = false), // Store側のFK
 			inverseJoinColumns = @JoinColumn(name = "customer_id", nullable = false), // Customer側のFK

@@ -1,6 +1,6 @@
 package com.example.fitnessgym_mg.entity;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -33,29 +33,28 @@ import lombok.Setter;
 @AllArgsConstructor
 public class AuditLog {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.UUID)
+	private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "user_id", nullable = false)
+	private User user;
 
-    @Column(nullable = false)
-    private String action;
+	@Column(nullable = false)
+	private String action;
 
-    @Column(name = "target_table", nullable = false)
-    private String targetTable;
+	@Column(name = "target_table", nullable = false)
+	private String targetTable;
 
-    @Column(name = "target_id", nullable = false)
-    private UUID targetId;
+	@Column(name = "target_id", nullable = false)
+	private String targetId;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private OffsetDateTime createdAt;
 
-    @PrePersist
-    public void onPrePersist() {
-        this.createdAt = LocalDateTime.now();
-    }
+	@PrePersist
+	public void onPrePersist() {
+		this.createdAt = OffsetDateTime.now();
+	}
 }
-

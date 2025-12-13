@@ -1,5 +1,6 @@
 package com.example.fitnessgym_mg.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
@@ -50,8 +51,8 @@ public class Customer {
 	@Column(nullable = false)
 	private LocalDate birthday;
 
-	@Column(nullable = false)
-	private Double height; // numeric型に対応
+	@Column(nullable = false, precision = 5, scale = 2)
+	private BigDecimal height; // numeric型に対応
 
 	@Column(unique = true, nullable = false)
 	private String email;
@@ -87,15 +88,26 @@ public class Customer {
 		this.createdAt = LocalDateTime.now();
 	}
 
-	public enum CustomerGender {
-		男, 女;
-	}
-
 	@ManyToMany
 	@JoinTable(name = "store_customers", // 中間テーブル名
 			joinColumns = @JoinColumn(name = "customer_id", nullable = false), // Customer側のFK
 			inverseJoinColumns = @JoinColumn(name = "store_id", nullable = false), // Store側のFK
-			uniqueConstraints = @UniqueConstraint(columnNames = { "customer_id", "user_id" }) //複合ユニーク制約
+			uniqueConstraints = @UniqueConstraint(columnNames = { "customer_id", "store_id" }) //複合ユニーク制約
 	)
 	private Set<Store> stores; // 顧客が所属する店舗リスト
+
+	public enum CustomerGender {
+		MALE("男"), FEMALE("女");
+
+		private final String label;
+
+		CustomerGender(String label) {
+			this.label = label;
+		}
+
+		public String getLabel() {
+			return label;
+		}
+	}
+
 }

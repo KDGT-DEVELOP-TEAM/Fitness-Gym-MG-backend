@@ -13,23 +13,23 @@ import org.springframework.data.repository.query.Param;
 import com.example.fitnessgym_mg.entity.Lesson;
 
 public interface LessonRepository extends JpaRepository<Lesson, UUID> {
-	
+
 	/**
 	 * 顧客IDに紐づくレッスン履歴を実施日時の降順で取得（履歴一覧表示用）
 	 */
 	List<Lesson> findByCustomerIdOrderByStartDateDesc(UUID customerId);
-	
+
 	/**
 	 * 顧客IDに紐づくレッスン履歴をページネーション対応で取得（実施日時の降順）
 	 */
 	Page<Lesson> findByCustomerIdOrderByStartDateDesc(UUID customerId, Pageable pageable);
-	
+
 	// --- 1. レッスン一覧検索 (ページネーション対応) ---
 	// 終了日時が指定時刻より前のレッスンを検索し、実施日時で降順ソートする。(全店舗対象)
-	Page<Lesson> findPageByEndDateBefore(LocalDateTime endDate, Pageable pageable);
+	Page<Lesson> findByEndDateBefore(LocalDateTime endDate, Pageable pageable);
 
 	// 店舗IDで絞り込み、かつ終了日時が指定時刻より前のレッスンを検索する。
-	Page<Lesson> findPageByStoreIdAndEndDateBefore(UUID storeId, LocalDateTime endDate, Pageable pageable);
+	Page<Lesson> findByStoreIdAndEndDateBefore(UUID storeId, LocalDateTime endDate, Pageable pageable);
 
 	// --- 2. グラフデータ集計 (既存を維持) ---
 	// PostgreSQLの date_trunc を利用し、期間（週/月）別にレッスン回数を集計する。
@@ -74,7 +74,5 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	 * 開始日時が指定された日時以降のレッスンを開始日時の昇順で取得
 	 */
 	@Query("SELECT l FROM Lesson l WHERE l.trainer.id = :trainerId AND l.startDate >= :fromDate ORDER BY l.startDate ASC")
-	List<Lesson> findByTrainerIdAndStartDateAfterOrderByStartDateAsc(
-			@Param("trainerId") UUID trainerId,
-			@Param("fromDate") LocalDateTime fromDate);
+	List findUpcomingLessonsByTrainerId(UUID trainerId, LocalDateTime fromDate);
 }

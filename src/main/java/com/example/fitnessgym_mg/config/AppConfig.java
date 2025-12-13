@@ -6,6 +6,7 @@ import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -47,8 +48,8 @@ public class AppConfig {
 		public String toJson(Object obj) {
 			try {
 				return objectMapper.writeValueAsString(obj);
-			} catch (Exception e) {
-				return "{}";
+			} catch (JsonProcessingException e) {
+				throw new IllegalStateException("JSON変換に失敗しました", e);
 			}
 		}
 	}
@@ -70,4 +71,3 @@ public class AppConfig {
 		}
 	}
 }
-
