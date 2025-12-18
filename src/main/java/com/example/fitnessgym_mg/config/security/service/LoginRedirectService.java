@@ -1,60 +1,67 @@
 package com.example.fitnessgym_mg.config.security.service;
 
-import java.util.UUID;
+import java.util.Set;
 
-import org.springframework.security.core.Authentication;
-import org.springframework.stereotype.Service;
-
-import com.example.fitnessgym_mg.entity.Store;
-import com.example.fitnessgym_mg.entity.User;
-import com.example.fitnessgym_mg.repository.UserRepository;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
-@Slf4j
-@Service
-@RequiredArgsConstructor
 public class LoginRedirectService {
 
-	private final UserRepository userRepository;
+	// アプリ内で許可するリダイレクト先のみを定義
+	private static final Set<String> ALLOWED_PATHS = Set.of(
+			"/",
+			"/dashboard",
+			"/admin",
+			"/user/home");
 
-	public String resolveRedirectUrl(String email, Authentication auth) {
+	/**
+	 * ログイン成功後のリダイレクト先を決定する
+	 * 外部URLや想定外のパスはすべてデフォルトにフォールバックする
+	 */
+	public String resolveRedirectUrl(String email, Authentication authentication) {
 
-		if (hasRole(auth, "ROLE_ADMIN")) {
-			return "/admin/lessons";
+		// ここでは例として固定値（実際は権限等で分岐してもよい）
+		String redirectUrl = determineRedirectUrl(authentication);
+
+		// ===== 安全性チェック =====
+
+		// null / 空文字チェック
+		if (redirectUrl == null || redirectUrl.isBlank()) {
+			log.warn("リダイレクトURLが不正なためデフォルトへフォールバック: email={}", email);
+			return "/";
 		}
 
-		if (hasRole(auth, "ROLE_MANAGER")) {
-			return getManagerRedirect(email);
+		// 外部URL防止（http / https）
+		if (redirectUrl.startsWith("http://") || redirectUrl.startsWith("https://")) {
+			log.warn("外部URLへのリダイレクトを検知したため拒否: {}", redirectUrl);
+			return "/";
 		}
 
-		if (hasRole(auth, "ROLE_TRAINER")) {
-			return "/trainer/customers";
+		// 内部パス以外を拒否
+		if (!redirectUrl.startsWith("/")) {
+			log.warn("内部パス以外のリダイレクトを検知したため拒否: {}", redirectUrl);
+			return "/";
 		}
 
-		log.warn("不明な権限のため login に戻ります。 user={}", email);
-		return "/login";
+		// ホワイトリストチェック
+		if (!ALLOWED_PATHS.contains(redirectUrl)) {
+			log.warn("許可されていないリダイレクト先のため拒否: {}", redirectUrl);
+			return "/";
+		}
+
+		return redirectUrl;
 	}
 
-	private boolean hasRole(Authentication auth, String role) {
-		return auth.getAuthorities().stream()
-				.anyMatch(a -> a.getAuthority().equals(role));
-	}
+	/**
+	 * 認証情報からリダイレクト先を決定する
+	 * （権限別分岐などはここで行う）
+	 */
+	private String determineRedirectUrl(Authentication authentication) {
 
-	private String getManagerRedirect(String email) {
-
-		User user = userRepository.findByEmailWithStores(email)
-				.orElseThrow(() -> new IllegalStateException(
-						"ユーザーが存在しません: " + email));
-
-		if (user.getStores() == null || user.getStores().isEmpty()) {
-			throw new IllegalStateException("店長に店舗が割り当てられていません: " + email);
+		// 例：ROLE_ADMIN を持つ場合
+		if (authentication.getAuthorities().stream()
+				.anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) {
+			return "/admin";
 		}
 
-		Store store = user.getStores().iterator().next();
-		UUID storeId = store.getId();
-
-		return "/manager/" + storeId + "/lessons";
+		// それ以外
+		return "/dashboard";
 	}
 }

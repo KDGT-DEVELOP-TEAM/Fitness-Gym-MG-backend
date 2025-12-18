@@ -37,7 +37,8 @@ public class SecurityConfig {
 				// 認可設定
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers("/login", "/error", "/css/**", "/js/**", "/images/**").permitAll()
-						.requestMatchers("/api/**").permitAll() // APIは基本的に stateless の前提
+						.requestMatchers("/api/auth/**").permitAll() // ログイン・認証系のみ公開
+						.requestMatchers("/api/**").authenticated() // それ以外の API は認証必須
 						.anyRequest().authenticated())
 
 				// ログイン設定

@@ -1,10 +1,10 @@
 package com.example.fitnessgym_mg.repository;
 
+import java.awt.print.Pageable;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -33,14 +33,20 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
 	Optional<User> findByEmailWithStores(@Param("email") String email);
 
 	// keyword 単体検索（名前・かなに対して部分一致）
-	@Query("""
+	@query("""
 			SELECT u FROM User u
-			WHERE (:keyword IS NULL OR :keyword = ''
-			       OR (u.name LIKE CONCAT('%', :keyword, '%')
-			       OR u.kana LIKE CONCAT('%', :keyword, '%')))
+			WHERE (
+			:keyword IS NULL OR :keyword = ''
+			OR (
+			u.name LIKE CONCAT('%', :keyword, '%')
+			OR u.kana LIKE CONCAT('%', :keyword, '%')
+			)
+			)
+			AND (:role IS NULL OR u.role = :role)
 			""")
-	Page<User> findByKeyword(
-			@Param("keyword") String keyword,
+	Page findByKeywordAndRole(
+			@param("keyword") String keyword,
+			@param("role") UserRole role,
 			Pageable pageable);
 
 	// keyword + role の組み合わせ検索
