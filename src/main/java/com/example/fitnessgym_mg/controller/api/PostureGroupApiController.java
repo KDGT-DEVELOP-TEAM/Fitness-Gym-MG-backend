@@ -17,16 +17,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.fitnessgym_mg.dto.request.PostureImageRequest;
 import com.example.fitnessgym_mg.dto.response.PostureGroupResponse;
 import com.example.fitnessgym_mg.dto.response.PostureImageResponse;
 import com.example.fitnessgym_mg.entity.PostureGroup;
 import com.example.fitnessgym_mg.entity.PostureImage;
 import com.example.fitnessgym_mg.entity.enums.PostureImagePosition;
 import com.example.fitnessgym_mg.service.PostureGroupService;
-import com.example.fitnessgym_mg.service.PostureImageService;
-
-import jakarta.validation.Valid;
 
 import lombok.RequiredArgsConstructor;
 
@@ -48,7 +44,6 @@ public class PostureGroupApiController {
     );
 
     private final PostureGroupService postureGroupService;
-    private final PostureImageService postureImageService;
 
     /**
      * GET /api/customers/{customer_id}/posture_groups
@@ -118,21 +113,6 @@ public class PostureGroupApiController {
     public ResponseEntity<PostureGroupResponse> createPostureGroup(@PathVariable("lesson_id") UUID lessonId) {
         PostureGroup postureGroup = postureGroupService.createPostureGroup(lessonId);
         PostureGroupResponse response = toResponse(postureGroup);
-        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
-    }
-
-    /**
-     * POST /api/lessons/{lesson_id}/posture_groups/{group_id}/images
-     * 各方向(front/right/back/left)の画像撮影/追加
-     */
-    @PostMapping("/lessons/{lesson_id}/posture_groups/{group_id}/images")
-    public ResponseEntity<PostureImageResponse> createPostureImage(
-            @PathVariable("lesson_id") UUID lessonId,
-            @PathVariable("group_id") UUID groupId,
-            @Valid @RequestBody PostureImageRequest request) {
-        
-        PostureImage postureImage = postureImageService.createPostureImage(groupId, request);
-        PostureImageResponse response = toImageResponse(postureImage);
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
     }
 }

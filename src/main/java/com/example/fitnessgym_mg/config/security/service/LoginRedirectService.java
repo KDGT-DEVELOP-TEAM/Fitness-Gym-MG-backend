@@ -2,6 +2,13 @@ package com.example.fitnessgym_mg.config.security.service;
 
 import java.util.Set;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Service;
+
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+@Service
 public class LoginRedirectService {
 
 	// アプリ内で許可するリダイレクト先のみを定義
