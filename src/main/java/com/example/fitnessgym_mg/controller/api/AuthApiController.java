@@ -77,23 +77,35 @@ public class AuthApiController {
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             // ユーザー情報を取得
+            // セキュリティ: ユーザーが見つからない場合も認証失敗として扱う（情報漏洩防止）
             User user = userRepository.findByEmail(request.getEmail())
-                    .orElseThrow(() -> new RuntimeException("ユーザーが見つかりません"));
+                    .orElse(null);
+            
+            if (user == null) {
+                // ユーザーが存在しない場合も、認証失敗として扱う（情報漏洩防止）
+                log.warn("ログイン失敗: 認証エラー");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(null);
+            }
 
             // セッションIDを取得（将来JWTに移行する場合はここでトークンを生成）
-            HttpSession session = httpRequest.getSession(false);
-            String token = session != null ? session.getId() : null;
+            // 認証成功後はセッションが作成されているはずなので、getSession(true)で取得
+            HttpSession session = httpRequest.getSession(true);
+            String token = session.getId();
 
             // レスポンス作成
             LoginResponse response = createLoginResponse(user, token);
             
-            log.info("ログイン成功: ユーザー={}, 権限={}", user.getEmail(), user.getRole());
+            // セキュリティ: ログにはメールアドレスではなくユーザーIDを出力
+            log.debug("ログイン成功: ユーザーID={}, 権限={}", user.getId(), user.getRole());
             
             return ResponseEntity.ok(response);
 
         } catch (BadCredentialsException e) {
-            log.warn("ログイン失敗: メールアドレス={}", request.getEmail());
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            // セキュリティ: エラーメッセージを汎用的に（情報漏洩防止）
+            log.warn("ログイン失敗: 認証エラー");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(null);
         } catch (Exception e) {
             log.error("ログイン処理でエラーが発生しました: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -116,7 +128,7 @@ public class AuthApiController {
             // セキュリティコンテキストをクリア
             SecurityContextHolder.clearContext();
 
-            log.info("ログアウト成功");
+            log.debug("ログアウト成功");
             return ResponseEntity.ok().build();
 
         } catch (Exception e) {

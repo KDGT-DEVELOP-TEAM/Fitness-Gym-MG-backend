@@ -8,11 +8,13 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-import com.example.fitnessgym_mg.entity.User.UserRole;
+import com.example.fitnessgym_mg.entity.enums.UserRole;
 
 import lombok.Data;
+import lombok.ToString;
 
 @Data
+@ToString(exclude = "pass") // セキュリティ: パスワードをログに出力しない
 public class UserRequest {
 
 	@Email(message = "有効なメールアドレスを入力してください")

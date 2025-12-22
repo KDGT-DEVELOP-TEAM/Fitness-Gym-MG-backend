@@ -21,7 +21,6 @@ import com.example.fitnessgym_mg.dto.response.LessonResponse.LessonChartData;
 import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.service.LessonService;
-import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -31,7 +30,6 @@ public class LessonApiController {
 
 	private final LessonService lessonService;
 	private final StoreRepository storeRepository;
-	private final SecurityUtil securityUtil;
 
 	// --- 1. 本部管理者 (Admin) 用：全店舗のレッスン履歴ページ ---
 	@GetMapping("/admin/lessons")
@@ -78,7 +76,7 @@ public class LessonApiController {
 
 		// ★ 権限チェック: URLのstoreIdがデータベースに存在するか確認 ★
 		Store targetStore = storeRepository.findById(storeId)
-				.orElseThrow(() -> new RuntimeException("アクセス権限のない店舗ID、または店舗が見つかりません: " + storeId));
+				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("アクセス権限のない店舗ID、または店舗が見つかりません: " + storeId));
 
 		// 店長は自分の店舗データのみを閲覧できるため、絞り込みリストは自分の店舗のみとする
 		model.addAttribute("stores", List.of(targetStore));
@@ -183,8 +181,13 @@ public class LessonApiController {
 	@ResponseBody
 	public ResponseEntity<org.springframework.data.domain.Page<com.example.fitnessgym_mg.dto.response.LessonResponse>> getCustomerLessons(
 			@PathVariable("customer_id") UUID customerId,
-			@RequestParam(defaultValue = "0") int page,
-			@RequestParam(defaultValue = "10") int size) {
+			@RequestParam(defaultValue = "0") 
+			@jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") 
+			int page,
+			@RequestParam(defaultValue = "10") 
+			@jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") 
+			@jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") 
+			int size) {
 		
 		Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
 		org.springframework.data.domain.Page<com.example.fitnessgym_mg.dto.response.LessonResponse> lessonPage = 

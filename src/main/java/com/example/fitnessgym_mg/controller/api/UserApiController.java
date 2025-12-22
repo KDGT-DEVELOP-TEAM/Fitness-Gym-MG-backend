@@ -44,18 +44,26 @@ public class UserApiController {
      */
     @GetMapping("/admin/users")
     public ResponseEntity<Page<UserResponse>> getUsers(
-            @RequestParam(required = false) String name,
+            @RequestParam(required = false) 
+            @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") 
+            String name,
             @RequestParam(required = false) String role,
             @RequestParam(defaultValue = "created") String sort,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "0") 
+            @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") 
+            int page,
+            @RequestParam(defaultValue = "10") 
+            @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") 
+            @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") 
+            int size) {
         
         try {
             Pageable pageable = PageRequest.of(page, size);
             Page<UserResponse> userPage = accountService.searchUsers(name, role, sort, null, pageable);
+            log.debug("ユーザー一覧取得成功: page={}, size={}, total={}", page, size, userPage.getTotalElements());
             return ResponseEntity.ok(userPage);
         } catch (Exception e) {
-            log.error("ユーザー一覧取得でエラーが発生しました: {}", e.getMessage(), e);
+            log.error("ユーザー一覧取得でエラーが発生しました: page={}, size={}", page, size, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -89,12 +97,13 @@ public class UserApiController {
         try {
             accountService.create(request, 
                     request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
+            log.info("ユーザー作成成功: role={}", request.getRole());
             return ResponseEntity.status(HttpStatus.CREATED).build();
         } catch (IllegalArgumentException e) {
-            log.warn("ユーザー作成でエラーが発生しました: {}", e.getMessage());
+            log.warn("ユーザー作成でバリデーションエラー: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         } catch (Exception e) {
-            log.error("ユーザー作成でエラーが発生しました: {}", e.getMessage(), e);
+            log.error("ユーザー作成でエラーが発生しました: role={}", request.getRole(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -110,12 +119,13 @@ public class UserApiController {
         try {
             accountService.update(userId, request, 
                     request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
+            log.info("ユーザー更新成功: userId={}, role={}", userId, request.getRole());
             return ResponseEntity.ok().build();
         } catch (IllegalArgumentException e) {
-            log.warn("ユーザー更新でエラーが発生しました: {}", e.getMessage());
+            log.warn("ユーザー更新でバリデーションエラー: userId={}", userId, e);
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         } catch (Exception e) {
-            log.error("ユーザー更新でエラーが発生しました: {}", e.getMessage(), e);
+            log.error("ユーザー更新でエラーが発生しました: userId={}", userId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -129,9 +139,10 @@ public class UserApiController {
     public ResponseEntity<Void> deleteUser(@PathVariable("user_id") UUID userId) {
         try {
             accountService.delete(userId, null);
+            log.info("ユーザー削除成功: userId={}", userId);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
-            log.error("ユーザー削除でエラーが発生しました: {}", e.getMessage(), e);
+            log.error("ユーザー削除でエラーが発生しました: userId={}", userId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -145,11 +156,18 @@ public class UserApiController {
     @GetMapping("/stores/{store_id}/manager/users")
     public ResponseEntity<Page<UserResponse>> getManagerUsers(
             @PathVariable("store_id") UUID storeId,
-            @RequestParam(required = false) String name,
+            @RequestParam(required = false) 
+            @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") 
+            String name,
             @RequestParam(required = false) String role,
             @RequestParam(defaultValue = "created") String sort,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "0") 
+            @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") 
+            int page,
+            @RequestParam(defaultValue = "10") 
+            @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") 
+            @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") 
+            int size) {
         
         try {
             Pageable pageable = PageRequest.of(page, size);

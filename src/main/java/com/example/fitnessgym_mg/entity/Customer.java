@@ -1,6 +1,5 @@
 package com.example.fitnessgym_mg.entity;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
@@ -24,62 +23,111 @@ import org.hibernate.type.SqlTypes;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
+/**
+ * 顧客エンティティ
+ * ジムの顧客情報を表す
+ */
 @Entity
 @Table(name = "customers")
 @DynamicUpdate
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(exclude = { "stores" })
 public class Customer {
 
+	@EqualsAndHashCode.Include
 	@Id
 	@GeneratedValue(strategy = GenerationType.UUID)
 	private UUID id;
 
-	@Column(nullable = false)
+	/**
+	 * フリガナ
+	 */
+	@Column(nullable = false, length = 100)
 	private String kana;
 
-	@Column(nullable = false)
+	/**
+	 * 顧客名
+	 */
+	@Column(nullable = false, length = 100)
 	private String name;
 
+	/**
+	 * 性別
+	 */
 	@JdbcTypeCode(SqlTypes.NAMED_ENUM)
 	@Column(nullable = false, columnDefinition = "customer_gender")
-	private CustomerGender gender;
+	private com.example.fitnessgym_mg.entity.enums.Gender gender;
 
+	/**
+	 * 生年月日
+	 */
 	@Column(nullable = false)
 	private LocalDate birthday;
 
+	/**
+	 * 身長（cm）
+	 */
 	@Column(nullable = false, precision = 5, scale = 2)
-	private BigDecimal height; // numeric型に対応
+	private Double height;
 
-	@Column(unique = true, nullable = false)
+	/**
+	 * メールアドレス（ユニーク制約あり）
+	 */
+	@Column(unique = true, nullable = false, length = 255)
 	private String email;
 
+	/**
+	 * 電話番号
+	 */
 	@Column(nullable = false, length = 12)
 	private String phone;
 
-	@Column(nullable = false)
+	/**
+	 * 住所
+	 */
+	@Column(nullable = false, length = 500)
 	private String address;
 
-	@Column
-	private String medical; // 任意
+	/**
+	 * 医療・既往歴（任意）
+	 */
+	@Column(length = 500)
+	private String medical;
 
-	@Column
-	private String taboo; // 任意
+	/**
+	 * 禁忌事項（任意）
+	 */
+	@Column(length = 500)
+	private String taboo;
 
-	// 初回姿勢画像ID (外部キーであり、新規作成時は任意)
+	/**
+	 * 初回姿勢画像ID（外部キー、新規作成時は任意）
+	 */
 	@Column(name = "first_posture_group_id")
 	private UUID firstPostureGroupId;
 
-	@Column
-	private String memo; // 任意
+	/**
+	 * メモ（任意）
+	 */
+	@Column(length = 1000)
+	private String memo;
 
-	// 備考: 作成日時は、DB側でデフォルト値が設定されるため、Java側では変更不可 (updatable=false) とする
+	/**
+	 * 作成日時（DB登録時に自動設定、更新不可）
+	 */
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
+	/**
+	 * 有効/無効フラグ
+	 */
 	@Column(name = "is_active", nullable = false)
 	private boolean active = true;
 
@@ -95,19 +143,4 @@ public class Customer {
 			uniqueConstraints = @UniqueConstraint(columnNames = { "customer_id", "store_id" }) //複合ユニーク制約
 	)
 	private Set<Store> stores; // 顧客が所属する店舗リスト
-
-	public enum CustomerGender {
-		MALE("男"), FEMALE("女");
-
-		private final String label;
-
-		CustomerGender(String label) {
-			this.label = label;
-		}
-
-		public String getLabel() {
-			return label;
-		}
-	}
-
 }

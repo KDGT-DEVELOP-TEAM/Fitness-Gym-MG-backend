@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 
-import com.example.fitnessgym_mg.util.SecurityUtil;
+import com.example.fitnessgym_mg.controller.util.ControllerModelUtils;
 
 import lombok.RequiredArgsConstructor;
 
@@ -24,8 +24,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PostureWebController {
 
-	private final SecurityUtil securityUtil;
-
     /**
      * GET /admin/postures?customerId={customerId}
      * posture/posture-group.htmlを返す（画像一覧ページ）
@@ -34,9 +32,7 @@ public class PostureWebController {
     @GetMapping("/admin/postures")
     public String adminPostureGroupPage(@RequestParam UUID customerId, Model model) {
         model.addAttribute("customerId", customerId);
-        model.addAttribute("isAdmin", true);
-        model.addAttribute("isManager", false);
-        model.addAttribute("isTrainer", false);
+        ControllerModelUtils.setUserTypeFlags(model, true, false, false);
         return "posture/posture-group";
     }
 
@@ -52,9 +48,7 @@ public class PostureWebController {
             Model model) {
         model.addAttribute("storeId", storeId);
         model.addAttribute("customerId", customerId);
-        model.addAttribute("isAdmin", false);
-        model.addAttribute("isManager", true);
-        model.addAttribute("isTrainer", false);
+        ControllerModelUtils.setUserTypeFlags(model, false, true, false);
         return "posture/posture-group";
     }
 
@@ -92,9 +86,7 @@ public class PostureWebController {
     @GetMapping("/customer/{customerId}/posture_groups")
     public String trainerPostureGroupPage(@PathVariable UUID customerId, Model model) {
         model.addAttribute("customerId", customerId);
-        model.addAttribute("isAdmin", false);
-        model.addAttribute("isManager", false);
-        model.addAttribute("isTrainer", true);
+        ControllerModelUtils.setUserTypeFlags(model, false, false, true);
         return "posture/posture-group";
     }
 

@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.repository.UserRepository;
-import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -22,7 +21,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ErrorController {
 
-	private final SecurityUtil securityUtil;
 	private final UserRepository userRepository;
 
 	/**

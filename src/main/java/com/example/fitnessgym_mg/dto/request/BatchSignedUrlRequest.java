@@ -1,6 +1,7 @@
 package com.example.fitnessgym_mg.dto.request;
 
 import lombok.Data;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
@@ -10,6 +11,7 @@ import java.util.UUID;
 @Data
 public class BatchSignedUrlRequest {
     @NotNull(message = "imageIdsは必須です")
+    @NotEmpty(message = "imageIdsは空にできません")
     private List<UUID> imageIds;
     
     @Min(value = 60, message = "expiresInは60秒以上である必要があります")

@@ -1,18 +1,23 @@
 package com.example.fitnessgym_mg.repository;
 
-import java.awt.print.Pageable;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import com.example.fitnessgym_mg.entity.Lesson;
 
+/**
+ * レッスンエンティティ用リポジトリ
+ * レッスンの検索、履歴取得、グラフデータ集計などの機能を提供
+ */
+@Repository
 public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 
 	/**
@@ -84,7 +89,8 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	 * 指定されたトレーナーID（ユーザーID）に紐づく
 	 * レッスンレコードの件数を取得する
 	 */
-	long countByTrainerId(UUID trainerId);
+	@Query("SELECT COUNT(l) FROM Lesson l WHERE l.trainer.id = :trainerId")
+	long countByTrainerId(@Param("trainerId") UUID trainerId);
 
 	/**
 	 * トレーナーIDで直近のレッスンを取得する
@@ -100,4 +106,31 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	List<Lesson> findUpcomingLessonsByTrainerId(
 			@Param("trainerId") UUID trainerId,
 			@Param("fromDate") LocalDateTime fromDate);
+
+	/**
+	 * レッスンIDでレッスンを取得し、関連エンティティもJOIN FETCHで取得（N+1問題を回避）
+	 */
+	@Query("""
+			SELECT DISTINCT l
+			FROM Lesson l
+			LEFT JOIN FETCH l.customer
+			LEFT JOIN FETCH l.store
+			LEFT JOIN FETCH l.trainer
+			LEFT JOIN FETCH l.nextStore
+			LEFT JOIN FETCH l.nextUser
+			WHERE l.id = :lessonId
+			""")
+	java.util.Optional<Lesson> findByIdWithRelations(@Param("lessonId") UUID lessonId);
+
+	/**
+	 * 顧客IDで最新のレッスンを1件のみ取得（体重取得用）
+	 */
+	@Query("""
+			SELECT l
+			FROM Lesson l
+			WHERE l.customer.id = :customerId
+			  AND l.weight IS NOT NULL
+			ORDER BY l.startDate DESC
+			""")
+	java.util.List<Lesson> findLatestLessonsWithWeightByCustomerId(@Param("customerId") UUID customerId, org.springframework.data.domain.Pageable pageable);
 }

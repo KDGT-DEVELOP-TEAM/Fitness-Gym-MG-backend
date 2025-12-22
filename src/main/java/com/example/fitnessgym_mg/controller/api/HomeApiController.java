@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.fitnessgym_mg.dto.response.HomeResponse;
 import com.example.fitnessgym_mg.dto.response.LessonResponse;
+import com.example.fitnessgym_mg.exception.AuthenticationException;
 import com.example.fitnessgym_mg.service.LessonService;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
@@ -41,9 +43,7 @@ public class HomeApiController {
     @GetMapping("/trainers/home")
     public ResponseEntity<HomeResponse> getTrainerHome() {
         // 現在ログイン中のトレーナーを取得
-        UUID trainerId = securityUtil.getCurrentUser()
-                .orElseThrow(() -> new RuntimeException("認証されていません"))
-                .getId();
+        UUID trainerId = securityUtil.getCurrentUserOrThrow().getId();
 
         try {
             // 直近1週間のレッスンを取得
@@ -57,7 +57,7 @@ public class HomeApiController {
 
         } catch (Exception e) {
             log.error("トレーナーホームデータ取得でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(500).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
@@ -93,7 +93,7 @@ public class HomeApiController {
 
         } catch (Exception e) {
             log.error("管理者ホームデータ取得でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(500).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
@@ -130,7 +130,7 @@ public class HomeApiController {
 
         } catch (Exception e) {
             log.error("店長ホームデータ取得でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(500).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 }

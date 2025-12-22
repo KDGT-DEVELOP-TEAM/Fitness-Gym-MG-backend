@@ -59,12 +59,10 @@ public class LessonService {
 		// 1. 絞り込み (店舗ID + 終了日時)
 		if (storeId != null) {
 			// 店舗IDで絞り込み
-			// Repositoryに findPageByStoreIdAndEndDateBeforeOrderByStartDateDesc(UUID, LocalDateTime, Pageable) が必要
-			lessonPage = lessonRepository.findPageByStoreIdAndEndDateBefore(storeId, now, pageable);
+			lessonPage = lessonRepository.findByStoreIdAndEndDateBefore(storeId, now, pageable);
 		} else {
 			// 店舗絞り込みなし
-			// Repositoryに findPageByEndDateBeforeOrderByStartDateDesc(LocalDateTime, Pageable) が必要
-			lessonPage = lessonRepository.findPageByEndDateBefore(now, pageable);
+			lessonPage = lessonRepository.findByEndDateBefore(now, pageable);
 		}
 
 		// 2. マッピング
@@ -73,7 +71,6 @@ public class LessonService {
 
 	// --- レッスン回数グラフデータの作成 ---
 	public LessonChartData getLessonChartData(UUID storeId, String type) {
-
 		LocalDateTime now = LocalDateTime.now();
 		UUID storeUuid = storeId;
 
@@ -90,66 +87,7 @@ public class LessonService {
 		List<Object[]> rawChartData = lessonRepository.countLessonsGroupedByPeriod(
 				intervalType, now, storeUuid);
 
-		// 2. 結果の整形 (LessonChartDataの生成)
-		List<ChartSeries> series = new ArrayList<>();
-		int maxCount = 0;
-
-		for (Object[] row : rawChartData) {
-			// PostgreSQLはTIMESTAMP型またはInstant型を返す可能性があるため、安全に変換
-			LocalDateTime periodStartAt;
-			Object periodObj = row[0];
-			if (periodObj instanceof java.sql.Timestamp) {
-				periodStartAt = ((java.sql.Timestamp) periodObj).toInstant()
-						.atZone(ZoneId.systemDefault())
-						.toLocalDateTime();
-			} else if (periodObj instanceof java.time.Instant) {
-				periodStartAt = ((java.time.Instant) periodObj)
-						.atZone(ZoneId.systemDefault())
-						.toLocalDateTime();
-			} else if (periodObj instanceof java.time.OffsetDateTime) {
-				periodStartAt = ((java.time.OffsetDateTime) periodObj)
-						.toLocalDateTime();
-			} else {
-				// その他の型の場合は文字列として扱うか、エラーをスロー
-				throw new RuntimeException("Unsupported timestamp type: " + periodObj.getClass().getName());
-			}
-
-			long count = ((Number) row[1]).longValue();
-
-			// ラベルの生成
-			String label;
-			if ("week".equals(type)) {
-				// PostgreSQLの date_trunc('week') は通常、月曜日を返す（ただし設定依存）。
-				// Java側でラベル整形を行う
-				LocalDate startDate = periodStartAt.toLocalDate();
-				LocalDate endDate = startDate.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
-				label = startDate.getMonthValue() + "/" + startDate.getDayOfMonth() +
-						" - " + endDate.getMonthValue() + "/" + endDate.getDayOfMonth();
-			} else {
-				// 月別
-				label = periodStartAt.getYear() + "/" + periodStartAt.getMonthValue();
-			}
-
-			// maxCountの更新
-			int currentCount = (int) count;
-			if (currentCount > maxCount) {
-				maxCount = currentCount;
-			}
-
-			ChartSeries chartSeries = new ChartSeries();
-			chartSeries.setPeriod(label); // ラベルを periodStart (期間の表示名) として使用
-			chartSeries.setCount(count);
-			series.add(chartSeries);
-		}
-
-		// グラフの要件に従い、「右が最新」にするため、リストを逆順にする
-		java.util.Collections.reverse(series);
-
-		LessonChartData chartData = new LessonChartData();
-		chartData.setSeries(series);
-		chartData.setMaxCount(maxCount);
-		chartData.setType(type);
-		return chartData;
+		return buildChartData(rawChartData, type);
 	}
 
 	// --- 新規レッスン作成 ---
@@ -157,11 +95,11 @@ public class LessonService {
 	public Lesson createLesson(LessonRequest request) {
 		// エンティティの取得
 		Customer customer = customerRepository.findById(request.getCustomerId())
-			.orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
+			.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません"));
 		Store store = storeRepository.findById(request.getStoreId())
-			.orElseThrow(() -> new RuntimeException("店舗が見つかりません"));
+			.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("店舗が見つかりません"));
 		User trainer = userRepository.findById(request.getTrainerId())
-			.orElseThrow(() -> new RuntimeException("トレーナーが見つかりません"));
+			.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("トレーナーが見つかりません"));
 		
 		// 次回店舗・トレーナー（任意）
 		Store nextStore = request.getNextStoreId() != null 
@@ -199,8 +137,8 @@ public class LessonService {
 
 	// --- レッスン詳細取得 ---
 	public LessonResponse getLessonDetail(UUID lessonId) {
-		Lesson lesson = lessonRepository.findById(lessonId)
-			.orElseThrow(() -> new RuntimeException("レッスンが見つかりません"));
+		Lesson lesson = lessonRepository.findByIdWithRelations(lessonId)
+			.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("レッスンが見つかりません"));
 		
 		// トレーニング取得
 		List<TrainingResponse> trainings = trainingService.getTrainingsByLessonId(lessonId);
@@ -275,7 +213,13 @@ public class LessonService {
 		List<Object[]> rawChartData = lessonRepository.countLessonsGroupedByPeriodByCustomerId(
 				intervalType, now, customerId);
 
-		// 2. 結果の整形 (LessonChartDataの生成)
+		return buildChartData(rawChartData, type);
+	}
+
+	/**
+	 * グラフデータの構築（共通ロジック）
+	 */
+	private LessonChartData buildChartData(List<Object[]> rawChartData, String type) {
 		List<ChartSeries> series = new ArrayList<>();
 		int maxCount = 0;
 
@@ -304,6 +248,8 @@ public class LessonService {
 			// ラベルの生成
 			String label;
 			if ("week".equals(type)) {
+				// PostgreSQLの date_trunc('week') は通常、月曜日を返す（ただし設定依存）。
+				// Java側でラベル整形を行う
 				LocalDate startDate = periodStartAt.toLocalDate();
 				LocalDate endDate = startDate.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
 				label = startDate.getMonthValue() + "/" + startDate.getDayOfMonth() +
@@ -344,7 +290,7 @@ public class LessonService {
 		LocalDateTime oneWeekLater = now.plusWeeks(1);
 		
 		// 開始日時が現在から1週間以内のレッスンを取得
-		List<Lesson> lessons = lessonRepository.findByTrainerIdAndStartDateAfterOrderByStartDateAsc(
+		List<Lesson> lessons = lessonRepository.findUpcomingLessonsByTrainerId(
 				trainerId, now);
 		
 		// 1週間以内に限定
@@ -381,15 +327,15 @@ public class LessonService {
 	@Transactional
 	public LessonResponse updateLesson(UUID lessonId, LessonRequest request) {
 		Lesson lesson = lessonRepository.findById(lessonId)
-				.orElseThrow(() -> new RuntimeException("レッスンが見つかりません"));
+				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("レッスンが見つかりません"));
 
 		// エンティティの取得
 		Customer customer = customerRepository.findById(request.getCustomerId())
-				.orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
+				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません"));
 		Store store = storeRepository.findById(request.getStoreId())
-				.orElseThrow(() -> new RuntimeException("店舗が見つかりません"));
+				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("店舗が見つかりません"));
 		User trainer = userRepository.findById(request.getTrainerId())
-				.orElseThrow(() -> new RuntimeException("トレーナーが見つかりません"));
+				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("トレーナーが見つかりません"));
 		
 		// 次回店舗・トレーナー（任意）
 		Store nextStore = request.getNextStoreId() != null 

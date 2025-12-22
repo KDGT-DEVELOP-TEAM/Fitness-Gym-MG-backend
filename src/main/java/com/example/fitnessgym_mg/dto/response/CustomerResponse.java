@@ -6,9 +6,15 @@ import java.time.Period;
 import java.util.UUID;
 
 import com.example.fitnessgym_mg.entity.Customer;
+import com.example.fitnessgym_mg.entity.enums.Gender;
 
 import lombok.Data;
 
+/**
+ * 顧客レスポンスDTO
+ * 顧客情報をAPIレスポンスとして返す際に使用
+ * 年齢は自動計算される
+ */
 @Data
 public class CustomerResponse {
 
@@ -22,18 +28,26 @@ public class CustomerResponse {
 	private LocalDateTime createdAt;
 	
 	// プロフィール画面用の追加フィールド
-	private Customer.CustomerGender gender;
+	private Gender gender;
 	private LocalDate birthdate; // birthdayの別名（HTMLフォームとの互換性のため）
 	private String address;
 	private Double height;
 	private Double latestWeight; // 最新レッスンの体重（BMI計算用）
+	private UUID firstPostureGroupId; // 初回姿勢画像ID
 
 	/**
 	 * Customer エンティティから CustomerResponse DTO に変換する
 	 */
 	public static CustomerResponse fromEntity(Customer c) {
-		// 年齢計算
-		int age = Period.between(c.getBirthday(), LocalDate.now()).getYears();
+		if (c == null) {
+			return null;
+		}
+		
+		// 年齢計算（nullチェック追加）
+		int age = 0;
+		if (c.getBirthday() != null) {
+			age = Period.between(c.getBirthday(), LocalDate.now()).getYears();
+		}
 
 		CustomerResponse r = new CustomerResponse();
 		r.setId(c.getId());
@@ -48,6 +62,7 @@ public class CustomerResponse {
 		r.setBirthdate(c.getBirthday()); // birthdayをbirthdateとして設定
 		r.setAddress(c.getAddress());
 		r.setHeight(c.getHeight());
+		r.setFirstPostureGroupId(c.getFirstPostureGroupId());
 		// latestWeightは別途設定が必要（レッスンから取得）
 		return r;
 	}

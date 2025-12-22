@@ -15,7 +15,9 @@ import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
  * DB trainingsテーブルとマッピングするエンティティ
@@ -28,29 +30,32 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(exclude = { "lesson" })
 public class Training {
 
 	/**
 	 * 複合主キー（lesson_idとorder_noの組み合わせ）
 	 */
+	@EqualsAndHashCode.Include
 	@EmbeddedId
 	private TrainingId id;
 
 	/**
-	 * レッスン（Lesson）への参照
+	 * レッスン（必須リレーション、insertable/updatable=falseで複合主キーとの整合性を保つ）
 	 */
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "lesson_id", insertable = false, updatable = false, nullable = false)
 	private Lesson lesson;
 
 	/**
-	 * 種目名
+	 * トレーニング種目名
 	 */
-	@Column(nullable = false)
+	@Column(nullable = false, length = 100)
 	private String name;
 
 	/**
-	 * 回数
+	 * 実施回数
 	 */
 	@Column(nullable = false)
 	private Integer reps;

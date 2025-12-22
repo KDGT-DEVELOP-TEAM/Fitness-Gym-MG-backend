@@ -22,8 +22,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.example.fitnessgym_mg.dto.request.CustomerRequest;
 import com.example.fitnessgym_mg.dto.response.CustomerResponse;
-import com.example.fitnessgym_mg.entity.Customer;
-import com.example.fitnessgym_mg.entity.Customer.CustomerGender;
+import com.example.fitnessgym_mg.entity.enums.Gender;
+import com.example.fitnessgym_mg.exception.AuthenticationException;
 import com.example.fitnessgym_mg.service.CustomerService;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
@@ -56,13 +56,13 @@ public class CustomerApiController {
 
 		model.addAttribute("keyword", keyword);
 		model.addAttribute("sort", sort);
-		model.addAttribute("genders", CustomerGender.values());
+		model.addAttribute("genders", Gender.values());
 		model.addAttribute("storeId", storeId);
-		
+
 		// BASE_PATHを設定（Thymeleafテンプレートで使用）
 		String basePath = storeId != null ? "/manager/" + storeId + "/customers" : "/admin/customers";
 		model.addAttribute("BASE_PATH", basePath);
-		
+
 		// Admin/Manager用サイドバー表示のためのフラグ
 		model.addAttribute("isAdmin", storeId == null);
 		model.addAttribute("isManager", storeId != null);
@@ -85,11 +85,11 @@ public class CustomerApiController {
 	// --- 編集モーダル表示用にデータ取得 ---
 	@GetMapping({ "/admin/customers/{id}/detail", "/manager/{storeId}/customers/{id}/detail" })
 	@ResponseBody
-	public ResponseEntity<Customer> getCustomer(
+	public ResponseEntity<CustomerResponse> getCustomer(
 			@PathVariable(required = false) UUID storeId,
 			@PathVariable UUID id) {
 
-		Customer customer = service.findById(id, storeId);
+		CustomerResponse customer = service.getCustomerById(id);
 		return ResponseEntity.ok(customer);
 	}
 
@@ -165,11 +165,11 @@ public class CustomerApiController {
 	@GetMapping("/api/admin/customers")
 	@ResponseBody
 	public ResponseEntity<Page<CustomerResponse>> getAdminCustomers(
-			@RequestParam(required = false) String name,
+			@RequestParam(required = false) @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") String name,
 			@RequestParam(defaultValue = "created") String sort,
-			@RequestParam(defaultValue = "0") int page,
-			@RequestParam(defaultValue = "10") int size) {
-		
+			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
+			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
+
 		Pageable pageable = PageRequest.of(page, size);
 		Page<CustomerResponse> customerPage = service.searchCustomers(name, sort, null, pageable);
 		return ResponseEntity.ok(customerPage);
@@ -232,11 +232,11 @@ public class CustomerApiController {
 	@ResponseBody
 	public ResponseEntity<Page<CustomerResponse>> getManagerCustomers(
 			@PathVariable("store_id") UUID storeId,
-			@RequestParam(required = false) String name,
+			@RequestParam(required = false) @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") String name,
 			@RequestParam(defaultValue = "created") String sort,
-			@RequestParam(defaultValue = "0") int page,
-			@RequestParam(defaultValue = "10") int size) {
-		
+			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
+			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
+
 		Pageable pageable = PageRequest.of(page, size);
 		Page<CustomerResponse> customerPage = service.searchCustomers(name, sort, storeId, pageable);
 		return ResponseEntity.ok(customerPage);
@@ -307,12 +307,10 @@ public class CustomerApiController {
 	@ResponseBody
 	public ResponseEntity<java.util.List<CustomerResponse>> getTrainerCustomers(
 			@PathVariable("store_id") UUID storeId) {
-		
+
 		// 現在ログイン中のトレーナーを取得
-		UUID trainerId = securityUtil.getCurrentUser()
-				.orElseThrow(() -> new RuntimeException("認証されていません"))
-				.getId();
-		
+		UUID trainerId = securityUtil.getCurrentUserOrThrow().getId();
+
 		java.util.List<CustomerResponse> customers = service.getCustomersByTrainer(trainerId);
 		return ResponseEntity.ok(customers);
 	}

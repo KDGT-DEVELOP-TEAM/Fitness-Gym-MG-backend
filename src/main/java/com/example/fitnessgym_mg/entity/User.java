@@ -21,50 +21,72 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import lombok.ToString;
 
+/**
+ * ユーザーエンティティ
+ * システムユーザー（管理者、店長、トレーナー）を表す
+ */
 @Entity
 @Table(name = "users") // 明示的にテーブル名を指定
 @DynamicUpdate
 @NoArgsConstructor
 @AllArgsConstructor
-@Getter
-@Setter
-@ToString(exclude = { "stores" })
+@Data
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(exclude = { "stores", "password" })
 public class User {
 
+	@EqualsAndHashCode.Include
 	@Id
 	@GeneratedValue(strategy = GenerationType.UUID)
 	private UUID id;
 
-	@Column(unique = true, nullable = false)
+	/**
+	 * メールアドレス（ユニーク制約あり）
+	 */
+	@Column(unique = true, nullable = false, length = 255)
 	private String email;
 
-	@Column(nullable = false)
+	/**
+	 * ユーザー名
+	 */
+	@Column(nullable = false, length = 100)
 	private String name;
 
-	@Column(nullable = false)
+	/**
+	 * フリガナ
+	 */
+	@Column(nullable = false, length = 100)
 	private String kana;
 
-	@Column(nullable = false)
+	/**
+	 * パスワード（ハッシュ化済み）
+	 */
+	@Column(nullable = false, length = 255)
 	private String password;
 
+	/**
+	 * ユーザーロール（ADMIN, MANAGER, TRAINER）
+	 */
 	@JdbcTypeCode(SqlTypes.NAMED_ENUM)
 	@Column(nullable = false, columnDefinition = "user_role")
-	private UserRole role;
+	private com.example.fitnessgym_mg.entity.enums.UserRole role;
 
+	/**
+	 * 有効/無効フラグ
+	 */
 	@Column(nullable = false)
 	private boolean active = true;
 
+	/**
+	 * 作成日時
+	 */
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
-
-	public enum UserRole {
-		ADMIN, MANAGER, TRAINER;
-	}
 
 	@ManyToMany
 	@JoinTable(name = "user_stores", // 中間テーブル名
@@ -76,25 +98,5 @@ public class User {
 	@PrePersist
 	public void onPrePersist() {
 		this.createdAt = LocalDateTime.now();
-	}
-
-	@Override
-	public int hashCode() {
-		if (id == null) {
-			return super.hashCode();
-		}
-		return id.hashCode();
-	}
-
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj) {
-			return true;
-		}
-		if (obj == null || getClass() != obj.getClass()) {
-			return false;
-		}
-		User user = (User) obj;
-		return id != null && id.equals(user.id);
 	}
 }

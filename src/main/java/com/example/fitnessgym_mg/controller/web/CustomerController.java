@@ -3,8 +3,6 @@ package com.example.fitnessgym_mg.controller.web;
 import java.util.List;
 import java.util.UUID;
 
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -15,31 +13,36 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import jakarta.servlet.http.HttpServletRequest;
+
+import com.example.fitnessgym_mg.controller.util.ControllerModelUtils;
+import com.example.fitnessgym_mg.controller.util.ControllerPathUtils;
 import com.example.fitnessgym_mg.dto.request.CustomerRequest;
 import com.example.fitnessgym_mg.dto.response.CustomerResponse;
-import com.example.fitnessgym_mg.entity.Customer;
 import com.example.fitnessgym_mg.entity.PostureGroup;
 import com.example.fitnessgym_mg.entity.User;
-import com.example.fitnessgym_mg.repository.CustomerRepository;
-import com.example.fitnessgym_mg.repository.UserRepository;
+import com.example.fitnessgym_mg.exception.AuthenticationException;
+import com.example.fitnessgym_mg.exception.EntityNotFoundException;
 import com.example.fitnessgym_mg.service.CustomerService;
 import com.example.fitnessgym_mg.service.PostureGroupService;
+import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 顧客管理画面コントローラー
  * 顧客選択、顧客プロフィール表示・編集を提供
  */
+@Slf4j
 @Controller
 @RequiredArgsConstructor
 public class CustomerController {
 
     private final CustomerService customerService;
-    private final UserRepository userRepository;
     private final PostureGroupService postureGroupService;
-    private final CustomerRepository customerRepository;
+    private final SecurityUtil securityUtil;
 
     /**
      * GET /trainer/customers
@@ -57,7 +60,7 @@ public class CustomerController {
             Model model) {
         
         // ログインユーザー（トレーナー）を取得
-        User currentUser = getCurrentUser();
+        User currentUser = securityUtil.getCurrentUserOrThrow();
         
         // 担当顧客リストを取得
         List<CustomerResponse> customers = customerService.getCustomersByTrainer(currentUser.getId());
@@ -95,38 +98,27 @@ public class CustomerController {
     public String customerProfile(
             @PathVariable(required = false) UUID storeId,
             @PathVariable UUID customerId,
+            HttpServletRequest request,
             Model model) {
         
         try {
-            // 顧客詳細を取得
+            // 顧客詳細を取得（firstPostureGroupIdも含まれる）
             CustomerResponse customerResponse = customerService.getCustomerById(customerId);
-            Customer customer = customerRepository.findById(customerId)
-                    .orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
-            User currentUser = getCurrentUser();
+            User currentUser = securityUtil.getCurrentUserOrThrow();
             
             // 編集可能かどうかを判定（管理者/店長のみ）
-            boolean canEdit = hasRole("ROLE_ADMIN") || hasRole("ROLE_MANAGER");
+            boolean canEdit = securityUtil.hasRole("ROLE_ADMIN") || securityUtil.hasRole("ROLE_MANAGER");
             
-            // ユーザータイプを判定
-            boolean isAdmin = hasRole("ROLE_ADMIN");
-            boolean isManager = hasRole("ROLE_MANAGER");
-            boolean isTrainer = !isAdmin && !isManager;
+            // ユーザータイプを判定（共通ユーティリティを使用）
+            String requestPath = request.getRequestURI();
+            ControllerPathUtils.UserTypeInfo userTypeInfo = ControllerPathUtils.determineUserTypeFromPath(requestPath);
+            ControllerModelUtils.setUserTypeFlags(model, userTypeInfo.isAdmin(), userTypeInfo.isManager(), userTypeInfo.isTrainer());
             
             // 姿勢画像グループ一覧を取得
             List<PostureGroup> postureGroups = postureGroupService.findByCustomerId(customerId);
             
             // CustomerResponseからCustomerRequestを作成（フォーム用）
-            CustomerRequest customerRequest = new CustomerRequest();
-            customerRequest.setKana(customerResponse.getKana());
-            customerRequest.setName(customerResponse.getName());
-            customerRequest.setGender(customerResponse.getGender());
-            customerRequest.setBirthday(customerResponse.getBirthdate());
-            customerRequest.setHeight(customerResponse.getHeight());
-            customerRequest.setEmail(customerResponse.getEmail());
-            customerRequest.setPhone(customerResponse.getPhone());
-            customerRequest.setAddress(customerResponse.getAddress());
-            customerRequest.setActive(customerResponse.isActive());
-            customerRequest.setFirstPostureGroupId(customer.getFirstPostureGroupId()); // 初回姿勢画像IDを設定
+            CustomerRequest customerRequest = CustomerRequest.fromResponse(customerResponse, customerResponse.getFirstPostureGroupId());
             
             model.addAttribute("customer", customerResponse); // 表示用
             model.addAttribute("customerRequest", customerRequest); // フォーム用
@@ -135,13 +127,19 @@ public class CustomerController {
             model.addAttribute("canEdit", canEdit);
             model.addAttribute("currentUser", currentUser);
             model.addAttribute("customerId", customerId);
-            model.addAttribute("isAdmin", isAdmin);
-            model.addAttribute("isManager", isManager);
-            model.addAttribute("isTrainer", isTrainer);
             
             return "customer/customer-profile";
             
-        } catch (RuntimeException e) {
+        } catch (EntityNotFoundException e) {
+            log.warn("顧客情報の取得に失敗しました: customerId={}, error={}", customerId, e.getMessage());
+            model.addAttribute("errorMessage", "顧客情報の取得に失敗しました: " + e.getMessage());
+            return "redirect:/trainer/customers";
+        } catch (AuthenticationException e) {
+            log.warn("認証エラーが発生しました: customerId={}, error={}", customerId, e.getMessage());
+            model.addAttribute("errorMessage", "認証エラーが発生しました: " + e.getMessage());
+            return "redirect:/trainer/customers";
+        } catch (Exception e) {
+            log.error("予期しないエラーが発生しました: customerId={}, error={}", customerId, e.getMessage(), e);
             model.addAttribute("errorMessage", "顧客情報の取得に失敗しました: " + e.getMessage());
             return "redirect:/trainer/customers";
         }
@@ -170,48 +168,15 @@ public class CustomerController {
         
         // バリデーションエラーがある場合
         if (result.hasErrors()) {
-            CustomerResponse customer = customerService.getCustomerById(customerId);
-            Customer customerEntity = customerRepository.findById(customerId)
-                    .orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
-            User currentUser = getCurrentUser();
-            
-            // ユーザータイプを判定
-            boolean isAdmin = hasRole("ROLE_ADMIN");
-            boolean isManager = hasRole("ROLE_MANAGER");
-            boolean isTrainer = !isAdmin && !isManager;
-            
-            // 姿勢画像グループ一覧を取得
-            List<PostureGroup> postureGroups = postureGroupService.findByCustomerId(customerId);
-            
-            // CustomerResponseからCustomerRequestを作成（フォーム用）
-            CustomerRequest customerRequest = new CustomerRequest();
-            customerRequest.setKana(customer.getKana());
-            customerRequest.setName(customer.getName());
-            customerRequest.setGender(customer.getGender());
-            customerRequest.setBirthday(customer.getBirthdate());
-            customerRequest.setHeight(customer.getHeight());
-            customerRequest.setEmail(customer.getEmail());
-            customerRequest.setPhone(customer.getPhone());
-            customerRequest.setAddress(customer.getAddress());
-            customerRequest.setActive(customer.isActive());
-            customerRequest.setFirstPostureGroupId(request.getFirstPostureGroupId()); // リクエストから取得した値を設定
-            
-            model.addAttribute("customer", customer);
-            model.addAttribute("customerRequest", customerRequest);
-            model.addAttribute("postureGroups", postureGroups); // 姿勢画像グループ一覧
-            model.addAttribute("storeId", storeId);
-            model.addAttribute("canEdit", true);
-            model.addAttribute("currentUser", currentUser);
-            model.addAttribute("customerId", customerId);
-            model.addAttribute("isAdmin", isAdmin);
-            model.addAttribute("isManager", isManager);
-            model.addAttribute("isTrainer", isTrainer);
+            prepareCustomerProfileModel(customerId, storeId, request.getFirstPostureGroupId(), model, null);
             return "customer/customer-profile";
         }
         
         try {
             // 顧客情報を更新
             customerService.update(customerId, request, storeId);
+            
+            log.info("顧客情報を更新しました: customerId={}, storeId={}", customerId, storeId);
             
             // 成功メッセージ
             redirectAttributes.addFlashAttribute("successMessage", "顧客情報を更新しました");
@@ -223,75 +188,51 @@ public class CustomerController {
                 return "redirect:/admin/customers/" + customerId;
             }
             
+        } catch (EntityNotFoundException e) {
+            log.warn("顧客情報の更新に失敗しました: customerId={}, storeId={}, error={}", customerId, storeId, e.getMessage());
+            prepareCustomerProfileModel(customerId, storeId, request.getFirstPostureGroupId(), model, "顧客情報の更新に失敗しました: " + e.getMessage());
+            return "customer/customer-profile";
+        } catch (IllegalArgumentException e) {
+            log.warn("バリデーションエラー: customerId={}, storeId={}, error={}", customerId, storeId, e.getMessage());
+            prepareCustomerProfileModel(customerId, storeId, request.getFirstPostureGroupId(), model, "入力値が不正です: " + e.getMessage());
+            return "customer/customer-profile";
         } catch (Exception e) {
-            CustomerResponse customer = customerService.getCustomerById(customerId);
-            Customer customerEntity = customerRepository.findById(customerId)
-                    .orElseThrow(() -> new RuntimeException("顧客が見つかりません"));
-            User currentUser = getCurrentUser();
-            
-            // ユーザータイプを判定
-            boolean isAdmin = hasRole("ROLE_ADMIN");
-            boolean isManager = hasRole("ROLE_MANAGER");
-            boolean isTrainer = !isAdmin && !isManager;
-            
-            // 姿勢画像グループ一覧を取得
-            List<PostureGroup> postureGroups = postureGroupService.findByCustomerId(customerId);
-            
-            // CustomerResponseからCustomerRequestを作成（フォーム用）
-            CustomerRequest customerRequest = new CustomerRequest();
-            customerRequest.setKana(customer.getKana());
-            customerRequest.setName(customer.getName());
-            customerRequest.setGender(customer.getGender());
-            customerRequest.setBirthday(customer.getBirthdate());
-            customerRequest.setHeight(customer.getHeight());
-            customerRequest.setEmail(customer.getEmail());
-            customerRequest.setPhone(customer.getPhone());
-            customerRequest.setAddress(customer.getAddress());
-            customerRequest.setActive(customer.isActive());
-            customerRequest.setFirstPostureGroupId(request.getFirstPostureGroupId()); // リクエストから取得した値を設定
-            
-            model.addAttribute("errorMessage", "顧客情報の更新に失敗しました: " + e.getMessage());
-            model.addAttribute("customer", customer);
-            model.addAttribute("customerRequest", customerRequest);
-            model.addAttribute("postureGroups", postureGroups); // 姿勢画像グループ一覧
-            model.addAttribute("storeId", storeId);
-            model.addAttribute("canEdit", true);
-            model.addAttribute("currentUser", currentUser);
-            model.addAttribute("customerId", customerId);
-            model.addAttribute("isAdmin", isAdmin);
-            model.addAttribute("isManager", isManager);
-            model.addAttribute("isTrainer", isTrainer);
+            log.error("予期しないエラーが発生しました: customerId={}, storeId={}, error={}", customerId, storeId, e.getMessage(), e);
+            prepareCustomerProfileModel(customerId, storeId, request.getFirstPostureGroupId(), model, "顧客情報の更新に失敗しました: " + e.getMessage());
             return "customer/customer-profile";
         }
     }
 
     /**
-     * 現在ログイン中のユーザーを取得
-     * 
-     * 処理の流れ：
-     * 1. Spring Securityのセキュリティコンテキストから認証情報を取得
-     * 2. 認証情報からメールアドレスを取得
-     * 3. メールアドレスでユーザーを検索して返す
+     * 顧客プロフィール画面表示用のModelを準備する共通メソッド
      */
-    private User getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String email = authentication.getName();
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("ログインユーザーが見つかりません"));
+    private void prepareCustomerProfileModel(UUID customerId, UUID storeId, UUID firstPostureGroupId, Model model, String errorMessage) {
+        CustomerResponse customer = customerService.getCustomerById(customerId);
+        User currentUser = securityUtil.getCurrentUserOrThrow();
+        
+        // ユーザータイプを判定（securityUtilを使用、リクエストパスが利用できないため）
+        boolean isAdmin = securityUtil.hasRole("ROLE_ADMIN");
+        boolean isManager = securityUtil.hasRole("ROLE_MANAGER");
+        boolean isTrainer = !isAdmin && !isManager;
+        ControllerModelUtils.setUserTypeFlags(model, isAdmin, isManager, isTrainer);
+        
+        // 姿勢画像グループ一覧を取得
+        List<PostureGroup> postureGroups = postureGroupService.findByCustomerId(customerId);
+        
+        // CustomerResponseからCustomerRequestを作成（フォーム用）
+        CustomerRequest customerRequest = CustomerRequest.fromResponse(customer, firstPostureGroupId);
+        
+        if (errorMessage != null) {
+            model.addAttribute("errorMessage", errorMessage);
+        }
+        model.addAttribute("customer", customer);
+        model.addAttribute("customerRequest", customerRequest);
+        model.addAttribute("postureGroups", postureGroups);
+        model.addAttribute("storeId", storeId);
+        model.addAttribute("canEdit", true);
+        model.addAttribute("currentUser", currentUser);
+        model.addAttribute("customerId", customerId);
     }
 
-    /**
-     * 現在のユーザーが指定されたロールを持っているか確認
-     * 
-     * 処理の流れ：
-     * 1. Spring Securityのセキュリティコンテキストから認証情報を取得
-     * 2. 認証情報から権限のリストを取得
-     * 3. 指定されたロールが権限リストに含まれているか確認
-     */
-    private boolean hasRole(String role) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication.getAuthorities().stream()
-                .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals(role));
-    }
 }
 

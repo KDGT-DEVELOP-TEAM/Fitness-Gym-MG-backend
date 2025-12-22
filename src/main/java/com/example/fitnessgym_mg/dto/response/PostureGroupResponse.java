@@ -5,29 +5,71 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import com.example.fitnessgym_mg.entity.PostureGroup;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Getter
-@Setter
+/**
+ * 姿勢グループレスポンスDTO
+ * 姿勢画像グループ情報をAPIレスポンスとして返す際に使用
+ */
+@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class PostureGroupResponse {
 
+    /**
+     * 姿勢グループID
+     */
     private UUID id;
+    
+    /**
+     * レッスンID
+     */
     private UUID lessonId;
     
-    // lessonStartDate: Lessonエンティティのstart_dateフィールドから取得
-    // 注: マージ後にLessonエンティティの実装を確認すること
+    /**
+     * レッスン開始日時（Lessonエンティティのstart_dateフィールドから取得）
+     */
     private OffsetDateTime lessonStartDate;
     
+    /**
+     * 撮影日時
+     */
     private OffsetDateTime capturedAt;
     
+    /**
+     * 姿勢画像リスト
+     */
     @Builder.Default
     private List<PostureImageResponse> images = new ArrayList<>();
+    
+    /**
+     * PostureGroupエンティティからレスポンスDTOに変換
+     * 
+     * @param entity PostureGroupエンティティ
+     * @return PostureGroupResponse
+     */
+    public static PostureGroupResponse fromEntity(PostureGroup entity) {
+        if (entity == null) {
+            return null;
+        }
+        
+        return PostureGroupResponse.builder()
+                .id(entity.getId())
+                .lessonId(entity.getLesson() != null ? entity.getLesson().getId() : null)
+                .lessonStartDate(entity.getLesson() != null ? entity.getLesson().getStartDate() : null)
+                .capturedAt(entity.getCapturedAt())
+                .images(entity.getImages() != null 
+                        ? entity.getImages().stream()
+                                .map(PostureImageResponse::fromEntity)
+                                .collect(java.util.stream.Collectors.toList())
+                        : new ArrayList<>())
+                .build();
+    }
 }
 

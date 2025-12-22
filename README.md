@@ -8,119 +8,177 @@
 - Spring Boot
 - Gradle
 - Thymeleaf、CSS（静的ファイル）
+- RestApi
+- React + TS 
 
 ## ディレクトリ構成
 ```text
 project-root/
-├── build.gradle または pom.xml        # 依存関係・ビルド設定
-├── gradlew / gradlew.bat              # Gradle実行スクリプト
-├── settings.gradle                    # Gradle設定ファイル
+├── build.gradle                          # 依存関係・ビルド設定
+├── gradlew / gradlew.bat                 # Gradle実行スクリプト
+├── settings.gradle                       # Gradle設定ファイル
 │
 ├── src/
 │   ├── main/
 │   │   ├── java/
 │   │   │   └── com/example/fitnessgym_mg/
 │   │   │       ├── entity/                      # データベース構造（エンティティ）
-│   │   │       │   ├── User.java
-│   │   │       │   ├── Customer.java
-│   │   │       │   ├── Store.java
-│   │   │       │   ├── Lesson.java
-│   │   │       │   ├── Training.java
-│   │   │       │   ├── PostureGroup.java
-│   │   │       │   └── PostureImage.java
+│   │   │       │   ├── User.java                # システムユーザー（管理者、店長、トレーナー）エンティティ
+│   │   │       │   ├── Customer.java            # 顧客エンティティ
+│   │   │       │   ├── Store.java                # 店舗エンティティ
+│   │   │       │   ├── Lesson.java               # レッスンエンティティ
+│   │   │       │   ├── Training.java             # トレーニング種目エンティティ
+│   │   │       │   ├── PostureGroup.java         # 姿勢画像グループエンティティ
+│   │   │       │   ├── PostureImage.java         # 姿勢画像エンティティ
+│   │   │       │   ├── AuditLog.java             # 監査ログエンティティ
+│   │   │       │   ├── UserCustomer.java         # ユーザーと顧客の中間テーブルエンティティ
+│   │   │       │   ├── converter/               # JPAコンバーター
+│   │   │       │   │   ├── GenderConverter.java # 性別列挙型のDB変換
+│   │   │       │   │   ├── PostureImagePositionConverter.java # 姿勢画像位置列挙型のDB変換
+│   │   │       │   │   └── UserRoleConverter.java # ユーザーロール列挙型のDB変換
+│   │   │       │   └── enums/                   # 列挙型
+│   │   │       │       ├── Gender.java           # 性別列挙型（MALE, FEMALE）
+│   │   │       │       ├── PostureImagePosition.java # 姿勢画像位置列挙型（FRONT, RIGHT, BACK, LEFT）
+│   │   │       │       └── UserRole.java        # ユーザーロール列挙型（ADMIN, MANAGER, TRAINER）
 │   │   │       │
 │   │   │       ├── repository/                  # DBアクセス層（JPAなど）
-│   │   │       │   ├── UserRepository.java
-│   │   │       │   ├── CustomerRepository.java
-│   │   │       │   ├── StoreRepository.java
-│   │   │       │   ├── LessonRepository.java
-│   │   │       │   ├── TrainingRepository.java
-│   │   │       │   ├── PostureGroupRepository.java
-│   │   │       │   └── PostureImageRepository.java
+│   │   │       │   ├── UserRepository.java      # ユーザーエンティティのリポジトリ
+│   │   │       │   ├── CustomerRepository.java  # 顧客エンティティのリポジトリ
+│   │   │       │   ├── StoreRepository.java     # 店舗エンティティのリポジトリ
+│   │   │       │   ├── LessonRepository.java    # レッスンエンティティのリポジトリ
+│   │   │       │   ├── TrainingRepository.java   # トレーニング種目エンティティのリポジトリ
+│   │   │       │   ├── PostureGroupRepository.java # 姿勢画像グループエンティティのリポジトリ
+│   │   │       │   ├── PostureImageRepository.java # 姿勢画像エンティティのリポジトリ
+│   │   │       │   ├── AuditLogRepository.java  # 監査ログエンティティのリポジトリ
+│   │   │       │   └── UserCustomerRepository.java # ユーザー顧客中間テーブルのリポジトリ
 │   │   │       │
 │   │   │       ├── service/                     # ビジネスロジック層
-│   │   │       │   ├── AuthService.java
-│   │   │       │   ├── AccountService.java
-│   │   │       │   ├── CustomerService.java
-│   │   │       │   ├── LessonService.java
-│   │   │       │   ├── TrainingService.java
-│   │   │       │   ├── PostureGroupService.java
-│   │   │       │   └── PostureImageService.java
+│   │   │       │   ├── AccountService.java      # ユーザーアカウント管理サービス
+│   │   │       │   ├── AuditLogService.java     # 監査ログ管理サービス
+│   │   │       │   ├── CustomerService.java     # 顧客管理サービス
+│   │   │       │   ├── CustomUserDetailsService.java # Spring Security認証用ユーザー詳細サービス
+│   │   │       │   ├── LessonService.java       # レッスン管理サービス
+│   │   │       │   ├── PostureGroupService.java # 姿勢画像グループ管理サービス
+│   │   │       │   ├── PostureImageService.java # 姿勢画像管理サービス
+│   │   │       │   ├── SupabaseStorageService.java # Supabaseストレージ操作サービス
+│   │   │       │   └── TrainingService.java     # トレーニング種目管理サービス
 │   │   │       │
 │   │   │       ├── dto/                         # データ転送用オブジェクト
-│   │   │       │   ├── request/
-│   │   │       │   │   ├── LoginRequest.java
-│   │   │       │   │   ├── UserRequest.java
-│   │   │       │   │   ├── CustomerRequest.java
-│   │   │       │   │   ├── LessonRequest.java
-│   │   │       │   │   ├── TrainingRequest.java
-│   │   │       │   │   ├── PostureGroupRequest.java
-│   │   │       │   │   └── PostureImageRequest.java
+│   │   │       │   ├── request/                 # APIリクエスト用DTO
+│   │   │       │   │   ├── LoginRequest.java     # ログインリクエストDTO
+│   │   │       │   │   ├── UserRequest.java      # ユーザー作成・更新リクエストDTO
+│   │   │       │   │   ├── CustomerRequest.java  # 顧客作成・更新リクエストDTO
+│   │   │       │   │   ├── LessonRequest.java    # レッスン作成・更新リクエストDTO
+│   │   │       │   │   ├── TrainingRequest.java  # トレーニング種目作成・更新リクエストDTO
+│   │   │       │   │   ├── PostureGroupRequest.java # 姿勢画像グループ作成リクエストDTO
+│   │   │       │   │   ├── PostureImageUploadRequest.java # 姿勢画像アップロードリクエストDTO
+│   │   │       │   │   └── BatchSignedUrlRequest.java # 一括署名URL取得リクエストDTO
 │   │   │       │   │
-│   │   │       │   └── response/
-│   │   │       │       ├── LoginResponse.java
-│   │   │       │       ├── UserResponse.java
-│   │   │       │       ├── CustomerResponse.java
-│   │   │       │       ├── LessonResponse.java
-│   │   │       │       ├── TrainingResponse.java
-│   │   │       │       ├── PostureGroupResponse.java
-│   │   │       │       └── PostureImageResponse.java
+│   │   │       │   └── response/                # APIレスポンス用DTO
+│   │   │       │       ├── LoginResponse.java    # ログインレスポンスDTO
+│   │   │       │       ├── UserResponse.java     # ユーザー情報レスポンスDTO
+│   │   │       │       ├── CustomerResponse.java # 顧客情報レスポンスDTO
+│   │   │       │       ├── LessonResponse.java   # レッスン情報レスポンスDTO
+│   │   │       │       ├── TrainingResponse.java  # トレーニング種目情報レスポンスDTO
+│   │   │       │       ├── PostureGroupResponse.java # 姿勢画像グループ情報レスポンスDTO
+│   │   │       │       ├── PostureImageResponse.java # 姿勢画像情報レスポンスDTO
+│   │   │       │       ├── PostureImageUploadResponse.java # 姿勢画像アップロードレスポンスDTO
+│   │   │       │       ├── AuditLogResponse.java # 監査ログ情報レスポンスDTO
+│   │   │       │       ├── BatchSignedUrlResponse.java # 一括署名URLレスポンスDTO
+│   │   │       │       ├── SignedUrlResponse.java # 署名URLレスポンスDTO
+│   │   │       │       ├── HomeResponse.java     # ホーム画面情報レスポンスDTO
+│   │   │       │       └── VitalsHistoryResponse.java # バイタル履歴情報レスポンスDTO
 │   │   │       │
 │   │   │       ├── controller/                  # エンドポイント（Web/API）
-│   │   │       │   ├── AuthController.java
-│   │   │       │   ├── UserController.java
-│   │   │       │   ├── CustomerController.java
-│   │   │       │   ├── LessonController.java
-│   │   │       │   ├── TrainingController.java
-│   │   │       │   ├── PostureGroupController.java
-│   │   │       │   └── PostureImageController.java
+│   │   │       │   ├── UserController.java      # ユーザー管理Webコントローラー
+│   │   │       │   ├── api/                     # REST API用コントローラー
+│   │   │       │   │   ├── AuthApiController.java # 認証APIコントローラー
+│   │   │       │   │   ├── UserApiController.java # ユーザー管理APIコントローラー
+│   │   │       │   │   ├── CustomerApiController.java # 顧客管理APIコントローラー
+│   │   │       │   │   ├── LessonApiController.java # レッスン管理APIコントローラー
+│   │   │       │   │   ├── PostureGroupApiController.java # 姿勢画像グループ管理APIコントローラー
+│   │   │       │   │   ├── PostureImageApiController.java # 姿勢画像管理APIコントローラー
+│   │   │       │   │   ├── AuditLogApiController.java # 監査ログAPIコントローラー
+│   │   │       │   │   ├── HomeApiController.java # ホーム画面APIコントローラー
+│   │   │       │   │   └── VitalsApiController.java # バイタル情報APIコントローラー
+│   │   │       │   ├── web/                     # Web用コントローラー
+│   │   │       │   │   ├── AuthController.java  # 認証Webコントローラー
+│   │   │       │   │   ├── CustomerController.java # 顧客管理Webコントローラー
+│   │   │       │   │   ├── LessonController.java # レッスン管理Webコントローラー
+│   │   │       │   │   ├── PostureWebController.java # 姿勢画像管理Webコントローラー
+│   │   │       │   │   └── ErrorController.java # エラー処理Webコントローラー
+│   │   │       │   └── util/                    # コントローラー用ユーティリティ
+│   │   │       │       ├── ControllerModelUtils.java # コントローラー用モデルユーティリティ
+│   │   │       │       └── ControllerPathUtils.java # コントローラー用パスユーティリティ
 │   │   │       │
 │   │   │       ├── config/                      # 設定クラス群
-│   │   │       │   ├── SecurityConfig.java
-│   │   │       │   ├── WebConfig.java
-│   │   │       │   └── AppConfig.java
+│   │   │       │   ├── AppConfig.java          # アプリケーション設定
+│   │   │       │   ├── WebConfig.java          # Web設定（MVC設定など）
+│   │   │       │   ├── SupabaseStorageProperties.java # Supabaseストレージ設定プロパティ
+│   │   │       │   ├── JsonUtilsControllerAdvice.java # JSON変換用ControllerAdvice
+│   │   │       │   └── security/                # セキュリティ設定
+│   │   │       │       ├── SecurityConfig.java # Spring Security設定
+│   │   │       │       ├── handler/            # 認証ハンドラー
+│   │   │       │       │   └── CustomAuthenticationSuccessHandler.java # カスタム認証成功ハンドラー
+│   │   │       │       └── service/            # セキュリティサービス
+│   │   │       │           └── LoginRedirectService.java # ログイン後リダイレクトサービス
 │   │   │       │
-│   │   │       └── FitnessGym_MG.java           # Spring Boot メインクラス
+│   │   │       ├── exception/                   # 例外処理
+│   │   │       │   ├── AuthenticationException.java # 認証例外
+│   │   │       │   ├── EntityNotFoundException.java # エンティティ未検出例外
+│   │   │       │   ├── JsonConversionException.java # JSON変換例外
+│   │   │       │   ├── ErrorResponse.java      # エラーレスポンスDTO
+│   │   │       │   ├── GlobalExceptionHandler.java # グローバル例外ハンドラー
+│   │   │       │   └── WebExceptionHandler.java # Web例外ハンドラー
+│   │   │       │
+│   │   │       ├── util/                        # ユーティリティクラス
+│   │   │       │   ├── JsonUtils.java           # JSON操作ユーティリティ
+│   │   │       │   └── SecurityUtil.java        # セキュリティユーティリティ
+│   │   │       │
+│   │   │       └── FitnessgymMgApplication.java # Spring Boot メインクラス
 │   │   │
 │   │   └── resources/
 │   │       ├── static/                          # CSS・JS・画像など静的ファイル
 │   │       │   └── css/
-│   │       │       ├── style.css
-│   │       │       └── reset.css
+│   │       │       ├── style.css                # メインスタイルシート
+│   │       │       └── reset.css                 # CSSリセット
 │   │       │
 │   │       ├── templates/                       # HTMLテンプレート（Thymeleaf）
 │   │       │   ├── layout/
 │   │       │   │   └── base.html                # 共通レイアウト
 │   │       │   ├── auth/
-│   │       │   │   ├── login.html
-│   │       │   │   └── register.html
+│   │       │   │   ├── login.html                # ログイン画面
+│   │       │   │   └── register.html             # ユーザー登録画面
 │   │       │   ├── user/
-│   │       │   │   └── user-list.html
+│   │       │   │   └── user-list.html            # ユーザー一覧画面
 │   │       │   ├── customer/
-│   │       │   │   └── customer-detail.html
+│   │       │   │   ├── customer_list.html       # 顧客一覧画面
+│   │       │   │   ├── customer-detail.html     # 顧客詳細画面
+│   │       │   │   ├── customer-profile.html    # 顧客プロフィール画面
+│   │       │   │   └── customer-select.html     # 顧客選択画面
 │   │       │   ├── lesson/
-│   │       │   │   └── lesson-list.html
+│   │       │   │   ├── lesson-list.html         # レッスン一覧画面
+│   │       │   │   ├── lesson-detail.html       # レッスン詳細画面
+│   │       │   │   └── lesson-new.html          # レッスン新規作成画面
 │   │       │   ├── training/
-│   │       │   │   └── training-detail.html
-│   │       │   └── posture/
-│   │       │       ├── posture-group.html
-│   │       │       └── posture-image.html
+│   │       │   │   └── training-detail.html     # トレーニング詳細画面
+│   │       │   ├── posture/
+│   │       │   │   ├── posture-group.html       # 姿勢画像グループ画面
+│   │       │   │   └── posture-image.html       # 姿勢画像画面
+│   │       │   └── error/
+│   │       │       ├── 403.html                 # 403 Forbiddenエラー画面
+│   │       │       ├── 404.html                 # 404 Not Foundエラー画面
+│   │       │       └── error.html               # 汎用エラー画面
 │   │       │
-│   │       ├── application.properties     # 設定ファイル
-│   │       ├── schema.sql                 # DBスキーマ初期化
-│   │       └── data.sql                   # 初期データ投入
+│   │       └── application.properties           # 設定ファイル
 │   │
 │   └── test/
 │       └── java/
 │           └── com/example/fitnessgym_mg/
-│               ├── entity/
-│               │   └── UserEntityTest.java
-│               ├── service/
-│               │   └── UserServiceTest.java
-│               ├── repository/
-│               │   └── UserRepositoryTest.java
+│               ├── FitnessgymMgApplicationTests.java # Spring Bootアプリケーションテスト
+│               ├── PasswordHashGenerator.java        # パスワードハッシュ生成ユーティリティ
 │               └── controller/
-│                   └── UserControllerTest.java
+│                   └── PostureGroupControllerTest.java # 姿勢画像グループコントローラーテスト
 │
 └── README.md
 ```

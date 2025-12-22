@@ -14,6 +14,9 @@ public class UserRoleConverter implements AttributeConverter<UserRole, String> {
 
     @Override
     public UserRole convertToEntityAttribute(String dbData) {
+        if (dbData == null) {
+            return null;
+        }
         return UserRole.fromCode(dbData);
     }
 }

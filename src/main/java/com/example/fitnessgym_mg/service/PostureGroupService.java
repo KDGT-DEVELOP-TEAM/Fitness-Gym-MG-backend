@@ -12,7 +12,6 @@ import org.springframework.web.server.ResponseStatusException;
 import com.example.fitnessgym_mg.entity.Customer;
 import com.example.fitnessgym_mg.entity.Lesson;
 import com.example.fitnessgym_mg.entity.PostureGroup;
-import com.example.fitnessgym_mg.repository.CustomerRepository;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.PostureGroupRepository;
 
@@ -28,7 +27,6 @@ public class PostureGroupService {
 
     private final PostureGroupRepository postureGroupRepository;
     private final LessonRepository lessonRepository;
-    private final CustomerRepository customerRepository;
 
     /**
      * 顧客IDで姿勢画像グループ一覧をDBから取得
@@ -61,12 +59,12 @@ public class PostureGroupService {
         
         Customer customer = lesson.getCustomer();
         
-        PostureGroup postureGroup = PostureGroup.builder()
-                .customer(customer)
-                .lesson(lesson)
-                .capturedAt(OffsetDateTime.now())
-                .createdAt(OffsetDateTime.now())
-                .build();
+        // PostureGroupエンティティの作成（@Builderがないためnewで作成）
+        PostureGroup postureGroup = new PostureGroup();
+        postureGroup.setCustomer(customer);
+        postureGroup.setLesson(lesson);
+        postureGroup.setCapturedAt(OffsetDateTime.now());
+        postureGroup.setCreatedAt(OffsetDateTime.now());
         
         return postureGroupRepository.save(postureGroup);
     }

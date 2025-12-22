@@ -35,19 +35,8 @@ public class AuditLogService {
 	 * - その他のCRUD操作ログ
 	 */
 	public Page<AuditLogResponse> getAuditLogs(Pageable pageable) {
-		Page<AuditLog> auditLogPage = auditLogRepository.findAllByOrderByCreatedAtDesc(pageable);
+		Page<AuditLog> auditLogPage = auditLogRepository.findAllByCreatedAtDesc(pageable);
 
-		return auditLogPage.map(auditLog -> {
-			AuditLogResponse response = AuditLogResponse.builder()
-					.id(auditLog.getId())
-					.userId(auditLog.getUser().getId())
-					.userName(auditLog.getUser().getName())
-					.action(auditLog.getAction())
-					.targetTable(auditLog.getTargetTable())
-					.targetId(auditLog.getTargetId())
-					.createdAt(auditLog.getCreatedAt())
-					.build();
-			return response;
-		});
+		return auditLogPage.map(AuditLogResponse::fromEntity);
 	}
 }

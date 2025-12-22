@@ -54,7 +54,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         // Spring SecurityのUserDetailsに変換
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getEmail())
-                .password(user.getPass()) // 既にBCryptハッシュ化済み
+                .password(user.getPassword()) // 既にBCryptハッシュ化済み
                 .authorities(getAuthorities(user))
                 .accountExpired(false)
                 .accountLocked(false)

@@ -27,7 +27,9 @@ import com.example.fitnessgym_mg.entity.PostureGroup;
 import com.example.fitnessgym_mg.entity.PostureImage;
 import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.entity.User;
+import com.example.fitnessgym_mg.entity.enums.Gender;
 import com.example.fitnessgym_mg.entity.enums.PostureImagePosition;
+import com.example.fitnessgym_mg.entity.enums.UserRole;
 import com.example.fitnessgym_mg.service.PostureGroupService;
 import com.example.fitnessgym_mg.service.PostureImageService;
 
@@ -60,7 +62,7 @@ class PostureGroupControllerTest {
         customer.setId(customerId);
         customer.setKana("ヤマダタロウ");
         customer.setName("山田 太郎");
-        customer.setGender(Customer.CustomerGender.男);
+        customer.setGender(Gender.MALE);
         customer.setEmail("sample@example.com");
         customer.setPhone("00000000000");
         customer.setAddress("東京都千代田区");
@@ -80,7 +82,7 @@ class PostureGroupControllerTest {
         trainer.setEmail("trainer@example.com");
         trainer.setName("トレーナー");
         trainer.setKana("トレーナー");
-        trainer.setRole(User.UserRole.trainer);
+        trainer.setRole(UserRole.TRAINER);
 
         // Lessonエンティティの作成（@Builderがないためnewで作成）
         Lesson lesson = new Lesson();
@@ -101,14 +103,13 @@ class PostureGroupControllerTest {
                 .createdAt(OffsetDateTime.parse("2025-01-10T10:06:00Z"))
                 .build();
 
-        // PostureGroupエンティティの作成
-        PostureGroup group = PostureGroup.builder()
-                .id(groupId)
-                .customer(customer)
-                .lesson(lesson)
-                .capturedAt(OffsetDateTime.parse("2025-01-10T10:07:00Z"))
-                .createdAt(OffsetDateTime.parse("2025-01-10T10:08:00Z"))
-                .build();
+        // PostureGroupエンティティの作成（@Builderがないためnewで作成）
+        PostureGroup group = new PostureGroup();
+        group.setId(groupId);
+        group.setCustomer(customer);
+        group.setLesson(lesson);
+        group.setCapturedAt(OffsetDateTime.parse("2025-01-10T10:07:00Z"));
+        group.setCreatedAt(OffsetDateTime.parse("2025-01-10T10:08:00Z"));
         group.getImages().add(image);
         image.setPostureGroup(group);
 

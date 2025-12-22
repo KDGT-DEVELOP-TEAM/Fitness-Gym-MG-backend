@@ -3,6 +3,7 @@ package com.example.fitnessgym_mg.service;
 import com.example.fitnessgym_mg.config.SupabaseStorageProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -35,8 +36,8 @@ public class SupabaseStorageService {
             
             HttpEntity<byte[]> entity = new HttpEntity<>(file.getBytes(), headers);
             
-            ResponseEntity<Map> response = restTemplate.exchange(
-                url, HttpMethod.POST, entity, Map.class
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.POST, entity, new ParameterizedTypeReference<Map<String, Object>>() {}
             );
             
             if (response.getStatusCode().is2xxSuccessful()) {
@@ -91,8 +92,8 @@ public class SupabaseStorageService {
             Map<String, Object> body = Map.of("expiresIn", expiresInSeconds);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
             
-            ResponseEntity<Map> response = restTemplate.exchange(
-                url, HttpMethod.POST, entity, Map.class
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.POST, entity, new ParameterizedTypeReference<Map<String, Object>>() {}
             );
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {

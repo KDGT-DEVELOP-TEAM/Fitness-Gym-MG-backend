@@ -10,6 +10,10 @@ import com.example.fitnessgym_mg.entity.User;
 
 import lombok.Data;
 
+/**
+ * ユーザーレスポンスDTO
+ * ユーザー情報をAPIレスポンスとして返す際に使用
+ */
 @Data
 public class UserResponse {
 

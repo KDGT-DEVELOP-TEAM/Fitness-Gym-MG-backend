@@ -16,85 +16,114 @@ import jakarta.persistence.Table;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
+/**
+ * レッスンエンティティ
+ * ジムのレッスン情報を表す
+ */
 @Entity
 @Table(name = "lessons")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(exclude = { "store", "trainer", "customer", "postureGroup", "nextStore", "nextUser" })
 public class Lesson {
 
+	@EqualsAndHashCode.Include
 	@Id
 	@GeneratedValue(strategy = GenerationType.UUID)
 	private UUID id;
 
-	// 実施時間
-	@Column(name = "start_date", nullable = true) // NOT NULLではない
+	/**
+	 * レッスン開始日時
+	 */
+	@Column(name = "start_date", nullable = true)
 	private LocalDateTime startDate;
 
-	@Column(name = "end_date", nullable = true) // NOT NULLではない
+	/**
+	 * レッスン終了日時
+	 */
+	@Column(name = "end_date", nullable = true)
 	private LocalDateTime endDate;
 
-	// ------------------------------------
-	// 必須リレーション
-	// ------------------------------------
-
-	// 実施店舗 (FK: store_id)
+	/**
+	 * 実施店舗（必須リレーション）
+	 */
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "store_id", nullable = false)
 	private Store store;
 
-	// 担当トレーナー (FK: user_id)
+	/**
+	 * 担当トレーナー（必須リレーション、DBはuser_idだがJava側はtrainerと命名）
+	 */
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "user_id", nullable = false)
-	private User trainer; // DBは user_id だが、Java側は trainer と命名
+	private User trainer;
 
-	// 顧客 (FK: customer_id)
+	/**
+	 * 顧客（必須リレーション）
+	 */
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "customer_id", nullable = false)
 	private Customer customer;
 
-	// 姿勢画像グループ (FK: posture_group_id)
+	/**
+	 * 姿勢画像グループ（任意リレーション）
+	 */
 	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "posture_group_id", nullable = true) // NOT NULLではない
+	@JoinColumn(name = "posture_group_id", nullable = true)
 	private PostureGroup postureGroup;
 
-	// ------------------------------------
-	// フィールド
-	// ------------------------------------
-
-	@Column(length = 50)
-	private String condition; // 体調
-
-	private Double weight; // 体重 (numeric は Double/BigDecimal)
-
-	@Column(length = 150)
-	private String meal; // 食事
-
+	/**
+	 * 体調
+	 */
 	@Column(length = 500)
-	private String memo; // 会話などのメモ
+	private String condition;
 
-	// ------------------------------------
-	// 次回予約関連
-	// ------------------------------------
+	/**
+	 * 体重（numeric型に対応）
+	 */
+	private Double weight;
 
-	// 次回のレッスン予約
+	/**
+	 * 食事内容
+	 */
+	@Column(length = 500)
+	private String meal;
+
+	/**
+	 * メモ（会話などの記録）
+	 */
+	@Column(length = 500)
+	private String memo;
+
+	/**
+	 * 次回レッスン予約日時
+	 */
 	@Column(name = "next_date", nullable = true)
 	private LocalDateTime nextDate;
 
-	// 次回の実施店舗 (FK: next_store_id)
+	/**
+	 * 次回実施店舗（任意リレーション）
+	 */
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "next_store_id", nullable = true)
 	private Store nextStore;
 
-	// 次回の担当トレーナー (FK: next_user_id)
+	/**
+	 * 次回担当トレーナー（任意リレーション）
+	 */
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "next_user_id", nullable = true)
 	private User nextUser;
 
-	// ------------------------------------
-
+	/**
+	 * 作成日時（DB登録時に自動設定、更新不可）
+	 */
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 

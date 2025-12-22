@@ -52,11 +52,7 @@ public class TrainingService {
     public List<TrainingResponse> getTrainingsByLessonId(UUID lessonId) {
         List<Training> trainings = trainingRepository.findByIdLessonIdOrderByIdOrderNoAsc(lessonId);
         return trainings.stream()
-            .map(t -> TrainingResponse.builder()
-                .orderNo(t.getId().getOrderNo())
-                .name(t.getName())
-                .reps(t.getReps())
-                .build())
+            .map(TrainingResponse::fromEntity)
             .collect(Collectors.toList());
     }
     

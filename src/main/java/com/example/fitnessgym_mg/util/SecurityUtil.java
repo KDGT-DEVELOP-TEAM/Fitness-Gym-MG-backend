@@ -93,5 +93,16 @@ public class SecurityUtil {
         
         return authentication.getName();
     }
+
+    /**
+     * 現在ログイン中のユーザーを取得（認証されていない場合は例外をスロー）
+     * 
+     * @return 現在ログイン中のユーザー
+     * @throws AuthenticationException 認証されていない場合
+     */
+    public User getCurrentUserOrThrow() {
+        return getCurrentUser()
+                .orElseThrow(() -> new com.example.fitnessgym_mg.exception.AuthenticationException("ログインユーザーが見つかりません"));
+    }
 }
 

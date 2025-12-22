@@ -22,7 +22,9 @@ import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.UserCustomerRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -74,14 +76,7 @@ public class CustomerService {
 		Customer customer = new Customer();
 
 		// 必須項目を設定
-		customer.setKana(req.getKana());
-		customer.setName(req.getName());
-		customer.setGender(req.getGender());
-		customer.setBirthday(req.getBirthday());
-		customer.setHeight(req.getHeight());
-		customer.setEmail(req.getEmail());
-		customer.setPhone(req.getPhone());
-		customer.setAddress(req.getAddress());
+		setCustomerBasicFields(customer, req);
 
 		// 任意項目を設定
 		customer.setMedical(req.getMedical());
@@ -102,14 +97,7 @@ public class CustomerService {
 		Customer customer = findCustomerById(id, storeId); // 権限チェック付き取得
 
 		// 必須項目を更新
-		customer.setKana(req.getKana());
-		customer.setName(req.getName());
-		customer.setGender(req.getGender());
-		customer.setBirthday(req.getBirthday());
-		customer.setHeight(req.getHeight());
-		customer.setEmail(req.getEmail());
-		customer.setPhone(req.getPhone());
-		customer.setAddress(req.getAddress());
+		setCustomerBasicFields(customer, req);
 
 		// 任意項目を更新
 		customer.setMedical(req.getMedical());
@@ -184,16 +172,14 @@ public class CustomerService {
 	@Transactional(readOnly = true)
 	public CustomerResponse getCustomerById(UUID customerId) {
 		Customer customer = customerRepository.findById(customerId)
-				.orElseThrow(() -> new RuntimeException("顧客が見つかりません: " + customerId));
+				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません: " + customerId));
 		CustomerResponse response = CustomerResponse.fromEntity(customer);
 		
-		// 最新レッスンの体重を取得
-		List<com.example.fitnessgym_mg.entity.Lesson> lessons = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId);
+		// 最新レッスンの体重を取得（パフォーマンス最適化：1件のみ取得）
+		org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 1);
+		java.util.List<com.example.fitnessgym_mg.entity.Lesson> lessons = lessonRepository.findLatestLessonsWithWeightByCustomerId(customerId, pageable);
 		if (!lessons.isEmpty()) {
-			com.example.fitnessgym_mg.entity.Lesson latestLesson = lessons.get(0);
-			if (latestLesson.getWeight() != null) {
-				response.setLatestWeight(latestLesson.getWeight());
-			}
+			response.setLatestWeight(lessons.get(0).getWeight());
 		}
 		
 		return response;
@@ -202,24 +188,44 @@ public class CustomerService {
 	// --- ヘルパーメソッド ---
 
 	/**
+	 * 顧客の基本情報フィールドを設定（共通ロジック）
+	 * 
+	 * @param customer 顧客エンティティ
+	 * @param req 顧客リクエストDTO
+	 */
+	private void setCustomerBasicFields(Customer customer, CustomerRequest req) {
+		customer.setKana(req.getKana());
+		customer.setName(req.getName());
+		customer.setGender(req.getGender());
+		customer.setBirthday(req.getBirthday());
+		customer.setHeight(req.getHeight());
+		customer.setEmail(req.getEmail());
+		customer.setPhone(req.getPhone());
+		customer.setAddress(req.getAddress());
+	}
+
+	/**
 	 * IDでCustomerエンティティを取得し、storeIdが提供されていれば中間テーブル経由の権限チェックを行う
 	 */
 	private Customer findCustomerById(UUID id, UUID storeId) {
 		Customer customer = customerRepository.findById(id)
-				// RuntimeExceptionに置き換え
-				.orElseThrow(() -> new RuntimeException("Customer not found with id: " + id));
+				.orElseThrow(() -> {
+					log.warn("顧客が見つかりません: customerId={}", id);
+					return new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません: " + id);
+				});
 
-		//		// 店長の場合 (storeId != null)、操作対象の顧客が自分の店舗に属するかチェック
-		//		if (storeId != null) {
-		//			// Customerが持つ stores コレクションに、該当 storeId が存在するか確認
-		//			boolean isAssignedToStore = customer.getStores().stream()
-		//					.anyMatch(store -> store.getId().equals(storeId));
-		//
-		//			if (!isAssignedToStore) {
-		//				// 権限外の顧客への操作は拒否
-		//				throw new RuntimeException("Customer not found (or access denied) with id: " + id);
-		//			}
-		//		}
+		// 店長の場合 (storeId != null)、操作対象の顧客が自分の店舗に属するかチェック
+		if (storeId != null) {
+			// Customerが持つ stores コレクションに、該当 storeId が存在するか確認
+			boolean isAssignedToStore = customer.getStores().stream()
+					.anyMatch(store -> store.getId().equals(storeId));
+
+			if (!isAssignedToStore) {
+				// 権限外の顧客への操作は拒否
+				log.warn("権限外の顧客への操作が試みられました: customerId={}, storeId={}", id, storeId);
+				throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません（またはアクセス権限がありません）: " + id);
+			}
+		}
 		return customer;
 	}
 

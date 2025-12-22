@@ -8,6 +8,11 @@ import com.example.fitnessgym_mg.entity.Lesson;
 
 import lombok.Data;
 
+/**
+ * レッスンレスポンスDTO
+ * レッスン情報をAPIレスポンスとして返す際に使用
+ * 関連エンティティ（店舗、トレーナー、顧客）の名前も含む
+ */
 @Data
 public class LessonResponse {
 
@@ -42,16 +47,26 @@ public class LessonResponse {
 
 	// Lesson エンティティから DTO に変換する
 	public static LessonResponse fromEntity(Lesson lesson) {
+		if (lesson == null) {
+			return null;
+		}
+		
 		LessonResponse r = new LessonResponse();
 		r.setId(lesson.getId());
 		r.setStartDate(lesson.getStartDate());
 		r.setEndDate(lesson.getEndDate());
 
-		// 関連エンティティから名前を取得（※関連がロードされている前提）
-		r.setStoreName(lesson.getStore().getName());
-		r.setTrainerName(lesson.getTrainer().getName());
-		r.setCustomerId(lesson.getCustomer().getId());
-		r.setCustomerName(lesson.getCustomer().getName());
+		// 関連エンティティのnullチェック
+		if (lesson.getStore() != null) {
+			r.setStoreName(lesson.getStore().getName());
+		}
+		if (lesson.getTrainer() != null) {
+			r.setTrainerName(lesson.getTrainer().getName());
+		}
+		if (lesson.getCustomer() != null) {
+			r.setCustomerId(lesson.getCustomer().getId());
+			r.setCustomerName(lesson.getCustomer().getName());
+		}
 
 		return r;
 	}

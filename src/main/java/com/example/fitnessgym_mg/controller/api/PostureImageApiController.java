@@ -50,7 +50,7 @@ public class PostureImageApiController {
         @RequestParam(value = "consentPublication", defaultValue = "false") boolean consentPublication,
         @RequestParam(value = "takenAt", required = false) OffsetDateTime takenAt
     ) {
-        log.info("Upload image request: groupId={}, position={}", postureGroupId, position);
+        log.debug("Upload image request: groupId={}, position={}", postureGroupId, position);
         
         PostureImageUploadRequest request = new PostureImageUploadRequest();
         request.setPostureGroupId(postureGroupId);
@@ -70,9 +70,12 @@ public class PostureImageApiController {
     @GetMapping("/{imageId}/signed-url")
     public ResponseEntity<SignedUrlResponse> getSignedUrl(
         @PathVariable UUID imageId,
-        @RequestParam(defaultValue = "3600") int expiresIn
+        @RequestParam(defaultValue = "3600") 
+        @jakarta.validation.constraints.Min(value = 60, message = "ExpiresIn must be at least 60 seconds") 
+        @jakarta.validation.constraints.Max(value = 604800, message = "ExpiresIn must not exceed 604800 seconds (7 days)") 
+        int expiresIn
     ) {
-        log.info("Generate signed URL request: imageId={}, expiresIn={}", imageId, expiresIn);
+        log.debug("Generate signed URL request: imageId={}, expiresIn={}", imageId, expiresIn);
         
         SignedUrlResponse response = postureImageService.generateSignedUrl(imageId, expiresIn);
         
@@ -87,7 +90,7 @@ public class PostureImageApiController {
     public ResponseEntity<BatchSignedUrlResponse> getBatchSignedUrls(
         @RequestBody @Valid BatchSignedUrlRequest request
     ) {
-        log.info("Generate batch signed URLs request: imageIds count={}", request.getImageIds().size());
+        log.debug("Generate batch signed URLs request: imageIds count={}", request.getImageIds().size());
         
         BatchSignedUrlResponse response = postureImageService.generateBatchSignedUrls(
             request.getImageIds(), 
@@ -103,7 +106,7 @@ public class PostureImageApiController {
      */
     @DeleteMapping("/{imageId}")
     public ResponseEntity<Void> deleteImage(@PathVariable UUID imageId) {
-        log.info("Delete image request: imageId={}", imageId);
+        log.debug("Delete image request: imageId={}", imageId);
         
         postureImageService.deleteImageWithStorage(imageId);
         

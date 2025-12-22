@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.header.writers.XXssProtectionHeaderWriter;
 
 import com.example.fitnessgym_mg.config.security.handler.CustomAuthenticationSuccessHandler;
 
@@ -19,21 +20,37 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+	/**
+	 * BCryptパスワードエンコーダーのストレングス
+	 * デフォルトは10だが、セキュリティ強化のため12に設定
+	 */
+	private static final int BCRYPT_STRENGTH = 12;
+
+	/**
+	 * Content Security Policy (CSP)
+	 * XSS攻撃を防ぐためのセキュリティヘッダー
+	 */
+	private static final String CSP_POLICY = 
+			"default-src 'self'; " +
+			"script-src 'self' 'unsafe-inline'; " +
+			"style-src 'self' 'unsafe-inline'; " +
+			"img-src 'self' data: https:; " +
+			"font-src 'self' data:";
+
 	private final CustomAuthenticationSuccessHandler successHandler;
 
 	@Bean
-	public PasswordEncoder passwordEncoder() {
-		// ストレングス12で強力な暗号化（デフォルトは10）
-		return new BCryptPasswordEncoder(12);
+	PasswordEncoder passwordEncoder() {
+		return new BCryptPasswordEncoder(BCRYPT_STRENGTH);
 	}
 
 	@Bean
-	public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+	AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
 		return configuration.getAuthenticationManager();
 	}
 
 	@Bean
-	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+	SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 		http
 				// 認可設定
 				.authorizeHttpRequests(auth -> auth
@@ -67,11 +84,9 @@ public class SecurityConfig {
 
 				// セキュリティヘッダー設定
 				.headers(headers -> headers
-						.contentSecurityPolicy(csp -> csp
-								.policyDirectives(
-										"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:"))
+						.contentSecurityPolicy(csp -> csp.policyDirectives(CSP_POLICY))
 						.frameOptions(frame -> frame.deny()) // Clickjacking対策
-						.xssProtection(xss -> xss.headerValue("1; mode=block")) // XSS対策
+						.xssProtection(xss -> xss.headerValue(XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK)) // XSS対策
 						.contentTypeOptions(options -> options.disable()) // MIME sniffing対策（デフォルトで有効）
 				)
 

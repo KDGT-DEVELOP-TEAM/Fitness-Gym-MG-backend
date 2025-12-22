@@ -17,3 +17,4 @@ public class ErrorResponse {
         this.timestamp = OffsetDateTime.now();
     }
 }
+

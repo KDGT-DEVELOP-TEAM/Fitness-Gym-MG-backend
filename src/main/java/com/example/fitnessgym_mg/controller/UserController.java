@@ -27,7 +27,6 @@ import com.example.fitnessgym_mg.dto.response.UserResponse;
 import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.service.AccountService;
-import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
 
@@ -37,7 +36,6 @@ public class UserController {
 
 	private final AccountService service;
 	private final StoreRepository storeRepository;
-	private final SecurityUtil securityUtil;
 
 	// --- ユーザー一覧（本部管理者 /admin/users, 店長 /manager/{storeId}/users）---
 	@GetMapping({ "/admin/users", "/manager/{storeId}/users" })

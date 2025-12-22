@@ -20,7 +20,7 @@ import com.example.fitnessgym_mg.dto.request.UserRequest;
 import com.example.fitnessgym_mg.dto.response.UserResponse;
 import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.entity.User;
-import com.example.fitnessgym_mg.entity.User.UserRole;
+import com.example.fitnessgym_mg.entity.enums.UserRole;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.repository.UserRepository;
@@ -87,19 +87,12 @@ public class AccountService {
 	public void create(UserRequest req, Set<UUID> storeIds) {
 
 		// マネージャーの権限チェック: マネージャーはトレーナーのみ作成可能
-		if (securityUtil.isManager()) {
-			if (req.getRole() != UserRole.trainer) {
-				throw new IllegalArgumentException("マネージャーはトレーナーのみ作成可能です。");
-			}
-		}
+		validateManagerPermission(req.getRole());
 
 		// 1. 店長ロールのバリデーション (単一の店舗必須)
-		if (req.getRole() == UserRole.manager) {
-			// 店長の場合、店舗IDが1つだけ存在することを確認
-			if (storeIds == null || storeIds.size() != 1) { // 必須チェックをサイズチェックに変更
-				throw new IllegalArgumentException("店長ユーザーには、割り当てる店舗を一つだけ選択する必要があります。");
-			}
-		} else if (req.getRole() == UserRole.trainer) {
+		validateManagerRole(req.getRole(), storeIds);
+		
+		if (req.getRole() == UserRole.TRAINER) {
 			// トレーナーの場合、店舗は0個以上でOK。ただし、Setがnullの場合は空Setとして扱う
 			if (storeIds == null) {
 				storeIds = Collections.emptySet();
@@ -116,25 +109,11 @@ public class AccountService {
 
 		// 2. ユーザーの基本情報設定
 		User user = new User();
-		user.setEmail(req.getEmail());
-		user.setName(req.getName());
-		user.setKana(req.getKana());
-		user.setRole(req.getRole());
-		user.setActive(req.isActive());
-		user.setPass(passwordEncoder.encode(req.getPass()));
+		setUserBasicFields(user, req);
+		user.setPassword(passwordEncoder.encode(req.getPass()));
 
 		// 3. 店舗の紐づけ
-		Set<Store> storesToAssign = Collections.emptySet();
-
-		if (storeIds != null && !storeIds.isEmpty()) {
-			storesToAssign = storeRepository.findAllById(storeIds).stream().collect(Collectors.toSet());
-
-			// 全てのIDが見つかったかチェック
-			if (storesToAssign.size() != storeIds.size()) {
-				throw new RuntimeException("指定された店舗IDの一部が見つかりません。");
-			}
-		}
-
+		Set<Store> storesToAssign = validateAndGetStores(storeIds);
 		user.setStores(storesToAssign);
 		userRepository.save(user);
 	}
@@ -144,17 +123,7 @@ public class AccountService {
 		User user = findUserById(id, null);
 
 		// マネージャーの権限チェック: マネージャーはトレーナーのみ編集可能
-		if (securityUtil.isManager()) {
-			// 編集対象ユーザーのロールをチェック
-			UserRole targetUserRole = user.getRole();
-			if (targetUserRole != UserRole.trainer) {
-				throw new IllegalArgumentException("マネージャーはトレーナーのみ編集可能です。");
-			}
-			// 編集後のロールもトレーナーである必要がある
-			if (req.getRole() != UserRole.trainer) {
-				throw new IllegalArgumentException("マネージャーはトレーナーのみ編集可能です。");
-			}
-		}
+		validateManagerPermission(user.getRole(), req.getRole());
 
 		// StoreIdsのnullチェック (フロントから空配列[]が来る想定だが念のため)
 		if (storeIds == null) {
@@ -162,37 +131,17 @@ public class AccountService {
 		}
 
 		// 1. 店長ロールのバリデーション (単一の店舗必須)
-		if (req.getRole() == UserRole.manager) {
-			// 店長の場合、店舗IDが1つだけ存在することを確認
-			if (storeIds.size() != 1) {
-				throw new IllegalArgumentException("店長ユーザーには、割り当てる店舗を一つだけ選択する必要があります。");
-			}
-		}
+		validateManagerRole(req.getRole(), storeIds);
 
 		// 既存の更新ロジック
-		user.setEmail(req.getEmail());
-		user.setName(req.getName());
-		user.setKana(req.getKana());
-		user.setRole(req.getRole());
-		user.setActive(req.isActive());
+		setUserBasicFields(user, req);
 
 		if (req.getPass() != null && !req.getPass().isEmpty()) {
-			user.setPass(passwordEncoder.encode(req.getPass()));
+			user.setPassword(passwordEncoder.encode(req.getPass()));
 		}
 
-		// 2. 店舗の紐づけ情報の上書き (findAllByIdで一括取得)
-		Set<Store> storesToAssign = Collections.emptySet();
-
-		if (!storeIds.isEmpty()) {
-			// findAllByIdはIterable<Store>を返すため、Setに変換
-			storesToAssign = storeRepository.findAllById(storeIds).stream().collect(Collectors.toSet());
-
-			// 全てのIDが見つかったかチェック
-			if (storesToAssign.size() != storeIds.size()) {
-				throw new RuntimeException("指定された店舗IDの一部が見つかりません。");
-			}
-		}
-
+		// 2. 店舗の紐づけ情報の上書き
+		Set<Store> storesToAssign = validateAndGetStores(storeIds);
 		user.setStores(storesToAssign);
 		userRepository.save(user);
 	}
@@ -202,11 +151,7 @@ public class AccountService {
 		User user = findUserById(id, storeId);
 		
 		// マネージャーの権限チェック: マネージャーはトレーナーのみ編集可能
-		if (securityUtil.isManager()) {
-			if (user.getRole() != UserRole.trainer) {
-				throw new IllegalArgumentException("マネージャーはトレーナーのみ編集可能です。");
-			}
-		}
+		validateManagerPermission(user.getRole());
 		
 		if (user.isActive()) {
 			return;
@@ -220,11 +165,7 @@ public class AccountService {
 		User user = findUserById(id, storeId);
 		
 		// マネージャーの権限チェック: マネージャーはトレーナーのみ編集可能
-		if (securityUtil.isManager()) {
-			if (user.getRole() != UserRole.trainer) {
-				throw new IllegalArgumentException("マネージャーはトレーナーのみ編集可能です。");
-			}
-		}
+		validateManagerPermission(user.getRole());
 		
 		if (!user.isActive()) {
 			return;
@@ -257,20 +198,34 @@ public class AccountService {
 
 	// --- ヘルパーメソッド ---
 
+	/**
+	 * ユーザーの基本情報フィールドを設定（共通ロジック）
+	 * 
+	 * @param user ユーザーエンティティ
+	 * @param req ユーザーリクエストDTO
+	 */
+	private void setUserBasicFields(User user, UserRequest req) {
+		user.setEmail(req.getEmail());
+		user.setName(req.getName());
+		user.setKana(req.getKana());
+		user.setRole(req.getRole());
+		user.setActive(req.isActive());
+	}
+
 	private User findUserById(UUID id, UUID storeId) {
 		User user = userRepository.findById(id)
-				.orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + id));
 
-		//		// 店長の場合 (storeId != null)、操作対象のユーザーが自分の店舗に属するかチェック
-		//		if (storeId != null) {
-		//			// ユーザーが自分の店舗に属さない場合は拒否
-		//			boolean isAssignedToStore = user.getStores().stream()
-		//					.anyMatch(store -> store.getId().equals(storeId));
-		//
-		//			if (!isAssignedToStore) {
-		//				throw new RuntimeException("User not found (or access denied) with id: " + id);
-		//			}
-		//		}
+		// 店長の場合 (storeId != null)、操作対象のユーザーが自分の店舗に属するかチェック
+		if (storeId != null) {
+			// ユーザーが自分の店舗に属さない場合は拒否
+			boolean isAssignedToStore = user.getStores().stream()
+					.anyMatch(store -> store.getId().equals(storeId));
+
+			if (!isAssignedToStore) {
+				throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found (or access denied) with id: " + id);
+			}
+		}
 		return user;
 	}
 
@@ -292,5 +247,65 @@ public class AccountService {
 
 	private boolean hasRelatedData(UUID userId) {
 		return lessonRepository.countByTrainerId(userId) > 0;
+	}
+
+	/**
+	 * 店舗IDの検証と取得（共通ロジック）
+	 * 
+	 * @param storeIds 店舗IDのセット
+	 * @return 検証済みの店舗エンティティのセット
+	 */
+	private Set<Store> validateAndGetStores(Set<UUID> storeIds) {
+		if (storeIds == null || storeIds.isEmpty()) {
+			return Collections.emptySet();
+		}
+		
+		Set<Store> stores = storeRepository.findAllById(storeIds).stream()
+				.collect(Collectors.toSet());
+		
+		if (stores.size() != storeIds.size()) {
+			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("指定された店舗IDの一部が見つかりません。");
+		}
+		
+		return stores;
+	}
+
+	/**
+	 * 店長ロールのバリデーション（共通ロジック）
+	 * 
+	 * @param role ユーザーロール
+	 * @param storeIds 店舗IDのセット
+	 */
+	private void validateManagerRole(UserRole role, Set<UUID> storeIds) {
+		if (role == UserRole.MANAGER) {
+			// 店長の場合、店舗IDが1つだけ存在することを確認
+			if (storeIds == null || storeIds.size() != 1) {
+				throw new IllegalArgumentException("店長ユーザーには、割り当てる店舗を一つだけ選択する必要があります。");
+			}
+		}
+	}
+
+	/**
+	 * マネージャー権限チェック（共通ロジック）
+	 * マネージャーはトレーナーのみ編集可能
+	 * 
+	 * @param targetRole 対象ユーザーのロール
+	 */
+	private void validateManagerPermission(UserRole targetRole) {
+		if (securityUtil.isManager() && targetRole != UserRole.TRAINER) {
+			throw new IllegalArgumentException("マネージャーはトレーナーのみ編集可能です。");
+		}
+	}
+
+	/**
+	 * マネージャー権限チェック（オーバーロード）
+	 * 編集前と編集後の両方のロールをチェック
+	 * 
+	 * @param currentRole 現在のロール
+	 * @param newRole 新しいロール
+	 */
+	private void validateManagerPermission(UserRole currentRole, UserRole newRole) {
+		validateManagerPermission(currentRole);
+		validateManagerPermission(newRole);
 	}
 }
