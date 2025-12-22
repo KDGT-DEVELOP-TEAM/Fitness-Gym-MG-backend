@@ -28,10 +28,17 @@ public class CustomAuthenticationSuccessHandler implements AuthenticationSuccess
 			Authentication authentication) throws IOException {
 
 		String email = authentication.getName();
-		log.info("ログイン成功: {}", email);
-		String redirectUrl = redirectService.resolveRedirectUrl(email, authentication);
+		log.debug("ログイン成功: {}", email); // DEBUGレベルに変更（セキュリティ考慮）
 
-		log.info("リダイレクト先: {}", redirectUrl);
-		response.sendRedirect(redirectUrl);
+		String redirectUrl = redirectService.resolveRedirectUrl(authentication);
+		log.debug("リダイレクト先: {}", redirectUrl);
+
+		try {
+			response.sendRedirect(redirectUrl);
+		} catch (IOException e) {
+			log.error("リダイレクト失敗: email={}, url={}", email, redirectUrl, e);
+			// フォールバック：エラーが発生した場合はルートへリダイレクト
+			response.sendRedirect("/");
+		}
 	}
 }
