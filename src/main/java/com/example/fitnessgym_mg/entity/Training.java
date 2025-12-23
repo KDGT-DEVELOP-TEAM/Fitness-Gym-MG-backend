@@ -65,6 +65,7 @@ public class Training {
 	 * lesson_idとorder_noの組み合わせで主キーを構成
 	 */
 	@Embeddable
+	@Data
 	@NoArgsConstructor
 	@AllArgsConstructor
 	public static class TrainingId implements Serializable {

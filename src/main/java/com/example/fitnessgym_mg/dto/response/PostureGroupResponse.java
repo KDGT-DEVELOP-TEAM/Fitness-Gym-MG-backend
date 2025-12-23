@@ -1,6 +1,7 @@
 package com.example.fitnessgym_mg.dto.response;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -62,7 +63,9 @@ public class PostureGroupResponse {
         return PostureGroupResponse.builder()
                 .id(entity.getId())
                 .lessonId(entity.getLesson() != null ? entity.getLesson().getId() : null)
-                .lessonStartDate(entity.getLesson() != null ? entity.getLesson().getStartDate() : null)
+                .lessonStartDate(entity.getLesson() != null && entity.getLesson().getStartDate() != null
+                        ? entity.getLesson().getStartDate().atZone(ZoneId.systemDefault()).toOffsetDateTime()
+                        : null)
                 .capturedAt(entity.getCapturedAt())
                 .images(entity.getImages() != null 
                         ? entity.getImages().stream()

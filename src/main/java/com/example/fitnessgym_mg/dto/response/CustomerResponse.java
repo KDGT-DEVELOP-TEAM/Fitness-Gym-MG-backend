@@ -1,5 +1,6 @@
 package com.example.fitnessgym_mg.dto.response;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
@@ -31,8 +32,8 @@ public class CustomerResponse {
 	private Gender gender;
 	private LocalDate birthdate; // birthdayの別名（HTMLフォームとの互換性のため）
 	private String address;
-	private Double height;
-	private Double latestWeight; // 最新レッスンの体重（BMI計算用）
+	private BigDecimal height;
+	private BigDecimal latestWeight; // 最新レッスンの体重（BMI計算用）
 	private UUID firstPostureGroupId; // 初回姿勢画像ID
 
 	/**

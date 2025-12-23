@@ -1,5 +1,6 @@
 package com.example.fitnessgym_mg.dto.request;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -34,7 +35,7 @@ public class LessonRequest {
     
     @Min(value = 0, message = "体重は0以上である必要があります")
     @Max(value = 500, message = "体重は500以下である必要があります")
-    private Double weight;
+    private BigDecimal weight;
     
     @Size(max = 500, message = "食事内容は500文字以内で入力してください")
     private String meal;

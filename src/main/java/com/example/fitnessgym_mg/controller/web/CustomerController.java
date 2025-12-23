@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import com.example.fitnessgym_mg.controller.util.ControllerModelUtils;
 import com.example.fitnessgym_mg.controller.util.ControllerPathUtils;
+import com.example.fitnessgym_mg.dto.mapper.CustomerMapper;
 import com.example.fitnessgym_mg.dto.request.CustomerRequest;
 import com.example.fitnessgym_mg.dto.response.CustomerResponse;
 import com.example.fitnessgym_mg.entity.PostureGroup;
@@ -118,7 +119,7 @@ public class CustomerController {
             List<PostureGroup> postureGroups = postureGroupService.findByCustomerId(customerId);
             
             // CustomerResponseからCustomerRequestを作成（フォーム用）
-            CustomerRequest customerRequest = CustomerRequest.fromResponse(customerResponse, customerResponse.getFirstPostureGroupId());
+            CustomerRequest customerRequest = CustomerMapper.fromResponse(customerResponse, customerResponse.getFirstPostureGroupId());
             
             model.addAttribute("customer", customerResponse); // 表示用
             model.addAttribute("customerRequest", customerRequest); // フォーム用
@@ -132,15 +133,15 @@ public class CustomerController {
             
         } catch (EntityNotFoundException e) {
             log.warn("顧客情報の取得に失敗しました: customerId={}, error={}", customerId, e.getMessage());
-            model.addAttribute("errorMessage", "顧客情報の取得に失敗しました: " + e.getMessage());
+            model.addAttribute("errorMessage", "顧客情報の取得に失敗しました");
             return "redirect:/trainer/customers";
         } catch (AuthenticationException e) {
             log.warn("認証エラーが発生しました: customerId={}, error={}", customerId, e.getMessage());
-            model.addAttribute("errorMessage", "認証エラーが発生しました: " + e.getMessage());
+            model.addAttribute("errorMessage", "認証エラーが発生しました");
             return "redirect:/trainer/customers";
         } catch (Exception e) {
             log.error("予期しないエラーが発生しました: customerId={}, error={}", customerId, e.getMessage(), e);
-            model.addAttribute("errorMessage", "顧客情報の取得に失敗しました: " + e.getMessage());
+            model.addAttribute("errorMessage", "顧客情報の取得に失敗しました");
             return "redirect:/trainer/customers";
         }
     }
@@ -190,15 +191,16 @@ public class CustomerController {
             
         } catch (EntityNotFoundException e) {
             log.warn("顧客情報の更新に失敗しました: customerId={}, storeId={}, error={}", customerId, storeId, e.getMessage());
-            prepareCustomerProfileModel(customerId, storeId, request.getFirstPostureGroupId(), model, "顧客情報の更新に失敗しました: " + e.getMessage());
+            prepareCustomerProfileModel(customerId, storeId, request.getFirstPostureGroupId(), model, "顧客情報の更新に失敗しました");
             return "customer/customer-profile";
         } catch (IllegalArgumentException e) {
             log.warn("バリデーションエラー: customerId={}, storeId={}, error={}", customerId, storeId, e.getMessage());
+            // バリデーションエラーはユーザーに表示しても問題ないため、詳細メッセージを返す
             prepareCustomerProfileModel(customerId, storeId, request.getFirstPostureGroupId(), model, "入力値が不正です: " + e.getMessage());
             return "customer/customer-profile";
         } catch (Exception e) {
             log.error("予期しないエラーが発生しました: customerId={}, storeId={}, error={}", customerId, storeId, e.getMessage(), e);
-            prepareCustomerProfileModel(customerId, storeId, request.getFirstPostureGroupId(), model, "顧客情報の更新に失敗しました: " + e.getMessage());
+            prepareCustomerProfileModel(customerId, storeId, request.getFirstPostureGroupId(), model, "顧客情報の更新に失敗しました");
             return "customer/customer-profile";
         }
     }
@@ -220,7 +222,7 @@ public class CustomerController {
         List<PostureGroup> postureGroups = postureGroupService.findByCustomerId(customerId);
         
         // CustomerResponseからCustomerRequestを作成（フォーム用）
-        CustomerRequest customerRequest = CustomerRequest.fromResponse(customer, firstPostureGroupId);
+        CustomerRequest customerRequest = CustomerMapper.fromResponse(customer, firstPostureGroupId);
         
         if (errorMessage != null) {
             model.addAttribute("errorMessage", errorMessage);

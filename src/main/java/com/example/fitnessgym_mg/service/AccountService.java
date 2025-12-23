@@ -214,15 +214,25 @@ public class AccountService {
 
 	private User findUserById(UUID id, UUID storeId) {
 		User user = userRepository.findById(id)
-				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + id));
+				.orElseThrow(() -> {
+					// システムエラーではなく、ビジネスロジックエラー（エンティティが見つからない）
+					// log.warnを使用（log.errorではない）
+					return new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + id);
+				});
 
 		// 店長の場合 (storeId != null)、操作対象のユーザーが自分の店舗に属するかチェック
 		if (storeId != null) {
 			// ユーザーが自分の店舗に属さない場合は拒否
+			if (user.getStores() == null || user.getStores().isEmpty()) {
+				// ビジネスロジックエラー（権限エラー）なのでlog.warnを使用
+				throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found (or access denied) with id: " + id);
+			}
+			
 			boolean isAssignedToStore = user.getStores().stream()
 					.anyMatch(store -> store.getId().equals(storeId));
 
 			if (!isAssignedToStore) {
+				// ビジネスロジックエラー（権限エラー）なのでlog.warnを使用
 				throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found (or access denied) with id: " + id);
 			}
 		}

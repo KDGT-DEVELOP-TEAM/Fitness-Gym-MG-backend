@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+import jakarta.validation.Valid;
+
 import com.example.fitnessgym_mg.dto.response.LessonResponse.LessonChartData;
 import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.repository.StoreRepository;
@@ -162,7 +164,7 @@ public class LessonApiController {
 	@ResponseBody
 	public ResponseEntity<com.example.fitnessgym_mg.dto.response.LessonResponse> createLesson(
 			@PathVariable("customer_id") UUID customerId,
-			@RequestBody com.example.fitnessgym_mg.dto.request.LessonRequest request) {
+			@Valid @RequestBody com.example.fitnessgym_mg.dto.request.LessonRequest request) {
 		
 		// customerIdをリクエストに設定
 		request.setCustomerId(customerId);
@@ -217,7 +219,7 @@ public class LessonApiController {
 	@ResponseBody
 	public ResponseEntity<com.example.fitnessgym_mg.dto.response.LessonResponse> updateLesson(
 			@PathVariable("lesson_id") UUID lessonId,
-			@RequestBody com.example.fitnessgym_mg.dto.request.LessonRequest request) {
+			@Valid @RequestBody com.example.fitnessgym_mg.dto.request.LessonRequest request) {
 		
 		com.example.fitnessgym_mg.dto.response.LessonResponse response = lessonService.updateLesson(lessonId, request);
 		return ResponseEntity.ok(response);

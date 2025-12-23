@@ -70,9 +70,9 @@ public class PostureImageApiController {
     @GetMapping("/{imageId}/signed-url")
     public ResponseEntity<SignedUrlResponse> getSignedUrl(
         @PathVariable UUID imageId,
-        @RequestParam(defaultValue = "3600") 
-        @jakarta.validation.constraints.Min(value = 60, message = "ExpiresIn must be at least 60 seconds") 
-        @jakarta.validation.constraints.Max(value = 604800, message = "ExpiresIn must not exceed 604800 seconds (7 days)") 
+        @RequestParam(defaultValue = "" + com.example.fitnessgym_mg.config.ApplicationConstants.DEFAULT_SIGNED_URL_EXPIRES_IN) 
+        @jakarta.validation.constraints.Min(value = com.example.fitnessgym_mg.config.ApplicationConstants.MIN_SIGNED_URL_EXPIRES_IN, message = "ExpiresIn must be at least 60 seconds") 
+        @jakarta.validation.constraints.Max(value = com.example.fitnessgym_mg.config.ApplicationConstants.MAX_SIGNED_URL_EXPIRES_IN, message = "ExpiresIn must not exceed 604800 seconds (7 days)") 
         int expiresIn
     ) {
         log.debug("Generate signed URL request: imageId={}, expiresIn={}", imageId, expiresIn);

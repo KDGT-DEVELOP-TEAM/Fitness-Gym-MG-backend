@@ -14,7 +14,7 @@ public class BatchSignedUrlRequest {
     @NotEmpty(message = "imageIdsは空にできません")
     private List<UUID> imageIds;
     
-    @Min(value = 60, message = "expiresInは60秒以上である必要があります")
-    @Max(value = 604800, message = "expiresInは604800秒（7日）以下である必要があります")
-    private int expiresIn = 3600; // デフォルト: 1時間
+    @Min(value = com.example.fitnessgym_mg.config.ApplicationConstants.MIN_SIGNED_URL_EXPIRES_IN, message = "expiresInは60秒以上である必要があります")
+    @Max(value = com.example.fitnessgym_mg.config.ApplicationConstants.MAX_SIGNED_URL_EXPIRES_IN, message = "expiresInは604800秒（7日）以下である必要があります")
+    private int expiresIn = com.example.fitnessgym_mg.config.ApplicationConstants.DEFAULT_SIGNED_URL_EXPIRES_IN; // デフォルト: 1時間
 }

@@ -31,12 +31,12 @@ import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.PostureGroupRepository;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.repository.UserRepository;
+import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class LessonService {
 
 	private final LessonRepository lessonRepository;
@@ -45,9 +45,11 @@ public class LessonService {
 	private final CustomerRepository customerRepository;
 	private final StoreRepository storeRepository;
 	private final UserRepository userRepository;
+	private final SecurityUtil securityUtil;
 
 	// --- レッスン一覧の検索と絞り込み (Pageable対応に修正) ---
 	// ★ Pageable を引数に追加し、戻り値を Page に変更 ★
+	@Transactional(readOnly = true)
 	public Page<LessonResponse> searchLessons(UUID storeId, String keyword, Pageable pageable) {
 
 		Page<Lesson> lessonPage;
@@ -70,6 +72,7 @@ public class LessonService {
 	}
 
 	// --- レッスン回数グラフデータの作成 ---
+	@Transactional(readOnly = true)
 	public LessonChartData getLessonChartData(UUID storeId, String type) {
 		LocalDateTime now = LocalDateTime.now();
 		UUID storeUuid = storeId;
@@ -94,35 +97,11 @@ public class LessonService {
 	@Transactional
 	public Lesson createLesson(LessonRequest request) {
 		// エンティティの取得
-		Customer customer = customerRepository.findById(request.getCustomerId())
-			.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません"));
-		Store store = storeRepository.findById(request.getStoreId())
-			.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("店舗が見つかりません"));
-		User trainer = userRepository.findById(request.getTrainerId())
-			.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("トレーナーが見つかりません"));
-		
-		// 次回店舗・トレーナー（任意）
-		Store nextStore = request.getNextStoreId() != null 
-			? storeRepository.findById(request.getNextStoreId()).orElse(null) 
-			: null;
-		User nextTrainer = request.getNextTrainerId() != null 
-			? userRepository.findById(request.getNextTrainerId()).orElse(null) 
-			: null;
+		LessonEntities entities = prepareLessonEntities(request);
 		
 		// レッスンエンティティの作成
 		Lesson lesson = new Lesson();
-		lesson.setCustomer(customer);
-		lesson.setStore(store);
-		lesson.setTrainer(trainer);
-		lesson.setCondition(request.getCondition());
-		lesson.setWeight(request.getWeight());
-		lesson.setMeal(request.getMeal());
-		lesson.setMemo(request.getMemo());
-		lesson.setStartDate(request.getStartDate());
-		lesson.setEndDate(request.getEndDate());
-		lesson.setNextDate(request.getNextDate());
-		lesson.setNextStore(nextStore);
-		lesson.setNextUser(nextTrainer);
+		applyLessonRequestToEntity(lesson, request, entities);
 		
 		// レッスン保存
 		Lesson savedLesson = lessonRepository.save(lesson);
@@ -136,9 +115,21 @@ public class LessonService {
 	}
 
 	// --- レッスン詳細取得 ---
+	@Transactional(readOnly = true)
 	public LessonResponse getLessonDetail(UUID lessonId) {
 		Lesson lesson = lessonRepository.findByIdWithRelations(lessonId)
 			.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("レッスンが見つかりません"));
+		
+		// 関連エンティティのnullチェック
+		if (lesson.getCustomer() == null) {
+			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("レッスンに顧客情報が紐づいていません");
+		}
+		if (lesson.getTrainer() == null) {
+			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("レッスンにトレーナー情報が紐づいていません");
+		}
+		if (lesson.getStore() == null) {
+			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("レッスンに店舗情報が紐づいていません");
+		}
 		
 		// トレーニング取得
 		List<TrainingResponse> trainings = trainingService.getTrainingsByLessonId(lessonId);
@@ -150,21 +141,13 @@ public class LessonService {
 			.map(PostureImageResponse::fromEntity)
 			.collect(Collectors.toList());
 		
-		// BMI計算
-		Double bmi = LessonResponse.calculateBmi(lesson.getWeight(), lesson.getCustomer().getHeight());
+		// レスポンス作成（fromEntityを使用して基本データを設定）
+		LessonResponse response = LessonResponse.fromEntity(lesson);
 		
-		// レスポンス作成
-		LessonResponse response = new LessonResponse();
-		response.setId(lesson.getId());
-		response.setCustomerId(lesson.getCustomer().getId());
-		response.setCustomerName(lesson.getCustomer().getName());
-		response.setTrainerName(lesson.getTrainer().getName());
-		response.setStoreName(lesson.getStore().getName());
-		response.setStartDate(lesson.getStartDate());
-		response.setEndDate(lesson.getEndDate());
+		// 追加データを設定
 		response.setCondition(lesson.getCondition());
 		response.setWeight(lesson.getWeight());
-		response.setBmi(bmi);
+		response.setBmi(LessonResponse.calculateBmi(lesson.getWeight(), lesson.getCustomer().getHeight()));
 		response.setMeal(lesson.getMeal());
 		response.setMemo(lesson.getMemo());
 		response.setNextDate(lesson.getNextDate());
@@ -180,6 +163,7 @@ public class LessonService {
 	/**
 	 * 顧客IDに紐づくレッスン履歴を開始日時の降順で取得し、LessonResponseに変換
 	 */
+	@Transactional(readOnly = true)
 	public List<LessonResponse> getLessonsByCustomerId(UUID customerId) {
 		return lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId).stream()
 				.map(LessonResponse::fromEntity)
@@ -189,6 +173,7 @@ public class LessonService {
 	/**
 	 * 顧客IDに紐づくレッスン履歴をページネーション対応で取得
 	 */
+	@Transactional(readOnly = true)
 	public Page<LessonResponse> getLessonsByCustomerId(UUID customerId, Pageable pageable) {
 		Page<Lesson> lessonPage = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId, pageable);
 		return lessonPage.map(LessonResponse::fromEntity);
@@ -197,6 +182,7 @@ public class LessonService {
 	/**
 	 * 顧客IDでレッスン回数グラフデータの作成
 	 */
+	@Transactional(readOnly = true)
 	public LessonChartData getLessonChartDataByCustomerId(UUID customerId, String type) {
 		LocalDateTime now = LocalDateTime.now();
 
@@ -285,6 +271,7 @@ public class LessonService {
 	 * トレーナーIDで直近1週間以内（当日含む）のレッスンを取得
 	 * 当日・直近(1週間以内)の予約状況/レッスン概要の取得用
 	 */
+	@Transactional(readOnly = true)
 	public List<LessonResponse> getUpcomingLessonsByTrainerId(UUID trainerId) {
 		LocalDateTime now = LocalDateTime.now();
 		LocalDateTime oneWeekLater = now.plusWeeks(1);
@@ -309,9 +296,9 @@ public class LessonService {
 		List<Lesson> lessons = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId);
 		
 		return lessons.stream()
-				.filter(lesson -> lesson.getWeight() != null && lesson.getStartDate() != null)
+				.filter(lesson -> lesson.getWeight() != null && lesson.getStartDate() != null && lesson.getCustomer() != null)
 				.map(lesson -> {
-					Double bmi = LessonResponse.calculateBmi(lesson.getWeight(), lesson.getCustomer().getHeight());
+					java.math.BigDecimal bmi = LessonResponse.calculateBmi(lesson.getWeight(), lesson.getCustomer().getHeight());
 					return com.example.fitnessgym_mg.dto.response.VitalsHistoryResponse.VitalsData.builder()
 							.date(lesson.getStartDate())
 							.weight(lesson.getWeight())
@@ -330,34 +317,10 @@ public class LessonService {
 				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("レッスンが見つかりません"));
 
 		// エンティティの取得
-		Customer customer = customerRepository.findById(request.getCustomerId())
-				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません"));
-		Store store = storeRepository.findById(request.getStoreId())
-				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("店舗が見つかりません"));
-		User trainer = userRepository.findById(request.getTrainerId())
-				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("トレーナーが見つかりません"));
-		
-		// 次回店舗・トレーナー（任意）
-		Store nextStore = request.getNextStoreId() != null 
-				? storeRepository.findById(request.getNextStoreId()).orElse(null) 
-				: null;
-		User nextTrainer = request.getNextTrainerId() != null 
-				? userRepository.findById(request.getNextTrainerId()).orElse(null) 
-				: null;
+		LessonEntities entities = prepareLessonEntities(request);
 		
 		// レッスン情報を更新
-		lesson.setCustomer(customer);
-		lesson.setStore(store);
-		lesson.setTrainer(trainer);
-		lesson.setCondition(request.getCondition());
-		lesson.setWeight(request.getWeight());
-		lesson.setMeal(request.getMeal());
-		lesson.setMemo(request.getMemo());
-		lesson.setStartDate(request.getStartDate());
-		lesson.setEndDate(request.getEndDate());
-		lesson.setNextDate(request.getNextDate());
-		lesson.setNextStore(nextStore);
-		lesson.setNextUser(nextTrainer);
+		applyLessonRequestToEntity(lesson, request, entities);
 		
 		// レッスン保存
 		Lesson savedLesson = lessonRepository.save(lesson);
@@ -373,4 +336,105 @@ public class LessonService {
 		// レスポンスを返す
 		return getLessonDetail(savedLesson.getId());
 	}
+
+	/**
+	 * レッスンリクエストから必要なエンティティを取得する共通メソッド
+	 */
+	private LessonEntities prepareLessonEntities(LessonRequest request) {
+		Customer customer = customerRepository.findById(request.getCustomerId())
+			.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません"));
+		Store store = storeRepository.findById(request.getStoreId())
+			.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("店舗が見つかりません"));
+		User trainer = userRepository.findById(request.getTrainerId())
+			.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("トレーナーが見つかりません"));
+		
+		// 次回店舗・トレーナー（任意）
+		Store nextStore = request.getNextStoreId() != null 
+			? storeRepository.findById(request.getNextStoreId()).orElse(null) 
+			: null;
+		User nextTrainer = request.getNextTrainerId() != null 
+			? userRepository.findById(request.getNextTrainerId()).orElse(null) 
+			: null;
+		
+		return new LessonEntities(customer, store, trainer, nextStore, nextTrainer);
+	}
+
+	/**
+	 * レッスンリクエストの内容をレッスンエンティティに適用する共通メソッド
+	 */
+	private void applyLessonRequestToEntity(Lesson lesson, LessonRequest request, LessonEntities entities) {
+		lesson.setCustomer(entities.customer());
+		lesson.setStore(entities.store());
+		lesson.setTrainer(entities.trainer());
+		lesson.setCondition(request.getCondition());
+		lesson.setWeight(request.getWeight());
+		lesson.setMeal(request.getMeal());
+		lesson.setMemo(request.getMemo());
+		lesson.setStartDate(request.getStartDate());
+		lesson.setEndDate(request.getEndDate());
+		lesson.setNextDate(request.getNextDate());
+		lesson.setNextStore(entities.nextStore());
+		lesson.setNextUser(entities.nextTrainer());
+	}
+
+	/**
+	 * レッスンエンティティを保持するレコード
+	 */
+	private record LessonEntities(
+			Customer customer,
+			Store store,
+			User trainer,
+			Store nextStore,
+			User nextTrainer
+	) {}
+
+	/**
+	 * レッスンフォーム表示用のデータを準備する
+	 * ビジネスロジックをサービス層に集約
+	 * 
+	 * @param customerId 顧客ID
+	 * @param storeId 店舗ID（店長の場合に必要）
+	 * @param requestPath リクエストパス（ユーザータイプ判定用）
+	 * @return レッスンフォームデータ
+	 */
+	@Transactional(readOnly = true)
+	public LessonFormData prepareLessonFormData(UUID customerId, UUID storeId, String requestPath) {
+		Customer customer = customerRepository.findById(customerId)
+				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません: " + customerId));
+		
+		boolean isTrainer = requestPath != null && requestPath.startsWith("/customer/");
+		
+		List<Store> stores;
+		List<User> trainers;
+		
+		if (isTrainer) {
+			// トレーナーの場合：ログインユーザーの所属店舗のみ
+			User currentUser = securityUtil.getCurrentUserOrThrow();
+			stores = currentUser.getStores() != null && !currentUser.getStores().isEmpty()
+					? new java.util.ArrayList<>(currentUser.getStores())
+					: List.of();
+			trainers = List.of(currentUser);
+		} else if (storeId != null) {
+			// 店長の場合：所属店舗のみ
+			stores = List.of(storeRepository.findById(storeId)
+					.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("店舗が見つかりません: " + storeId)));
+			trainers = userRepository.findAll();
+		} else {
+			// 管理者の場合：全店舗
+			stores = storeRepository.findAll();
+			trainers = userRepository.findAll();
+		}
+		
+		return new LessonFormData(customer, stores, trainers, isTrainer);
+	}
+
+	/**
+	 * レッスンフォームデータを保持するレコード
+	 */
+	public record LessonFormData(
+			Customer customer,
+			List<Store> stores,
+			List<User> trainers,
+			boolean isTrainer
+	) {}
 }

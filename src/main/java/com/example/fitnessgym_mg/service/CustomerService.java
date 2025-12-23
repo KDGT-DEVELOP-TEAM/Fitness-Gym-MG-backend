@@ -171,12 +171,15 @@ public class CustomerService {
 	 */
 	@Transactional(readOnly = true)
 	public CustomerResponse getCustomerById(UUID customerId) {
-		Customer customer = customerRepository.findById(customerId)
+		// JOIN FETCHで顧客とstoresを一括取得（パフォーマンス最適化）
+		Customer customer = customerRepository.findByIdWithStores(customerId)
 				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません: " + customerId));
 		CustomerResponse response = CustomerResponse.fromEntity(customer);
 		
 		// 最新レッスンの体重を取得（パフォーマンス最適化：1件のみ取得）
-		org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 1);
+		// 注意: CustomerエンティティにLessonへの直接リレーションがないため、別クエリが必要
+		org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+			com.example.fitnessgym_mg.config.ApplicationConstants.DEFAULT_PAGE_NUMBER, 1);
 		java.util.List<com.example.fitnessgym_mg.entity.Lesson> lessons = lessonRepository.findLatestLessonsWithWeightByCustomerId(customerId, pageable);
 		if (!lessons.isEmpty()) {
 			response.setLatestWeight(lessons.get(0).getWeight());
@@ -217,6 +220,11 @@ public class CustomerService {
 		// 店長の場合 (storeId != null)、操作対象の顧客が自分の店舗に属するかチェック
 		if (storeId != null) {
 			// Customerが持つ stores コレクションに、該当 storeId が存在するか確認
+			if (customer.getStores() == null || customer.getStores().isEmpty()) {
+				log.warn("顧客に店舗が紐づいていません: customerId={}, storeId={}", id, storeId);
+				throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません（またはアクセス権限がありません）: " + id);
+			}
+			
 			boolean isAssignedToStore = customer.getStores().stream()
 					.anyMatch(store -> store.getId().equals(storeId));
 

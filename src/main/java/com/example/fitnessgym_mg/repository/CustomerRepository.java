@@ -36,4 +36,17 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID>, JpaSp
 	Page<Customer> findByKeyword(
 			@Param("keyword") String keyword,
 			Pageable pageable);
+
+	/**
+	 * 顧客IDで顧客を取得し、storesもJOIN FETCHで一括取得
+	 * パフォーマンス最適化のため、storesの遅延読み込みを回避
+	 * 注意: 最新レッスンの体重は別途取得が必要（CustomerエンティティにLessonへの直接リレーションがないため）
+	 */
+	@Query("""
+			SELECT DISTINCT c
+			FROM Customer c
+			LEFT JOIN FETCH c.stores
+			WHERE c.id = :customerId
+			""")
+	java.util.Optional<Customer> findByIdWithStores(@Param("customerId") UUID customerId);
 }

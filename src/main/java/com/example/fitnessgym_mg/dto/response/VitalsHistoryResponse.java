@@ -1,5 +1,6 @@
 package com.example.fitnessgym_mg.dto.response;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.AllArgsConstructor;
@@ -22,8 +23,8 @@ public class VitalsHistoryResponse {
     @AllArgsConstructor
     public static class VitalsData {
         private LocalDateTime date;
-        private Double weight;
-        private Double bmi;
+        private BigDecimal weight;
+        private BigDecimal bmi;
     }
     
     private List<VitalsData> data;

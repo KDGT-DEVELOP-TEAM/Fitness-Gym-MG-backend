@@ -1,5 +1,6 @@
 package com.example.fitnessgym_mg.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
@@ -75,7 +76,7 @@ public class Customer {
 	 * 身長（cm）
 	 */
 	@Column(nullable = false, precision = 5, scale = 2)
-	private Double height;
+	private BigDecimal height;
 
 	/**
 	 * メールアドレス（ユニーク制約あり）

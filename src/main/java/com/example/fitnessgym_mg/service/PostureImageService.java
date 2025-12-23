@@ -41,7 +41,7 @@ public class PostureImageService {
     private final SupabaseStorageService storageService;
     
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("image/jpeg", "image/jpg");
-    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    private static final long MAX_FILE_SIZE = com.example.fitnessgym_mg.config.ApplicationConstants.MAX_FILE_SIZE_BYTES;
 
     /**
      * グループIDで姿勢画像リストをDBから取得（撮影日時昇順）
@@ -126,7 +126,8 @@ public class PostureImageService {
         }
         
         // 8. 署名付きURL生成
-        String signedUrl = storageService.generateSignedUrl(uploadedStorageKey, 3600); // 1時間
+        String signedUrl = storageService.generateSignedUrl(uploadedStorageKey, 
+            com.example.fitnessgym_mg.config.ApplicationConstants.DEFAULT_SIGNED_URL_EXPIRES_IN);
         
         // 9. レスポンス作成
         return PostureImageUploadResponse.builder()
@@ -215,7 +216,8 @@ public class PostureImageService {
         // ファイルサイズチェック
         if (file.getSize() > MAX_FILE_SIZE) {
             throw new IllegalArgumentException(
-                String.format("File size exceeds limit: %dMB", MAX_FILE_SIZE / (1024 * 1024))
+                String.format("File size exceeds limit: %dMB", 
+                    com.example.fitnessgym_mg.config.ApplicationConstants.MAX_FILE_SIZE_MB)
             );
         }
         

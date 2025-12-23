@@ -1,5 +1,7 @@
 package com.example.fitnessgym_mg.dto.response;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -34,8 +36,8 @@ public class LessonResponse {
 
 	// 詳細表示用フィールド
 	private String condition;
-	private Double weight;
-	private Double bmi; // 計算値
+	private BigDecimal weight;
+	private BigDecimal bmi; // 計算値
 	private String meal;
 	private String memo;
 	private LocalDateTime nextDate;
@@ -72,12 +74,15 @@ public class LessonResponse {
 	}
 
 	// BMI計算メソッド
-	public static Double calculateBmi(Double weight, Double height) {
-		if (weight == null || height == null || height == 0) {
+	public static BigDecimal calculateBmi(BigDecimal weight, BigDecimal height) {
+		if (weight == null || height == null || height.compareTo(BigDecimal.ZERO) == 0) {
 			return null;
 		}
-		double heightInMeters = height / 100.0;
-		return Math.round((weight / (heightInMeters * heightInMeters)) * 100.0) / 100.0;
+		BigDecimal heightInMeters = height.divide(
+			new BigDecimal(com.example.fitnessgym_mg.config.ApplicationConstants.HEIGHT_CONVERSION_FACTOR), 
+			2, RoundingMode.HALF_UP);
+		BigDecimal bmi = weight.divide(heightInMeters.multiply(heightInMeters), 2, RoundingMode.HALF_UP);
+		return bmi;
 	}
 
 	// グラフデータを格納するための内部クラス

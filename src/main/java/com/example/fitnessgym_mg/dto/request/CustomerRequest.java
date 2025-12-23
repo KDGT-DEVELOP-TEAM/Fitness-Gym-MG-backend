@@ -1,5 +1,6 @@
 package com.example.fitnessgym_mg.dto.request;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -11,7 +12,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-import com.example.fitnessgym_mg.dto.response.CustomerResponse;
 import com.example.fitnessgym_mg.entity.enums.Gender;
 
 import lombok.Data;
@@ -40,7 +40,7 @@ public class CustomerRequest {
 	@NotNull(message = "身長は必須です")
 	@Min(value = 50, message = "身長は50cm以上である必要があります")
 	@Max(value = 300, message = "身長は300cm以下である必要があります")
-	private Double height;
+	private BigDecimal height;
 
 	@NotBlank(message = "メールアドレスは必須です")
 	@Email(message = "有効なメールアドレスを入力してください")
@@ -72,31 +72,4 @@ public class CustomerRequest {
 
 	// 有効/無効（新規作成時は必ず true で送信）
 	private boolean active = true;
-
-	/**
-	 * CustomerResponseからCustomerRequestを作成（フォーム用）
-	 * 
-	 * @param response CustomerResponse
-	 * @param firstPostureGroupId 初回姿勢画像ID（編集時に使用、null可）
-	 * @return CustomerRequest
-	 */
-	public static CustomerRequest fromResponse(CustomerResponse response, UUID firstPostureGroupId) {
-		if (response == null) {
-			return null;
-		}
-		
-		CustomerRequest request = new CustomerRequest();
-		request.setKana(response.getKana());
-		request.setName(response.getName());
-		request.setGender(response.getGender());
-		request.setBirthday(response.getBirthdate());
-		request.setHeight(response.getHeight());
-		request.setEmail(response.getEmail());
-		request.setPhone(response.getPhone());
-		request.setAddress(response.getAddress());
-		request.setActive(response.isActive());
-		request.setFirstPostureGroupId(firstPostureGroupId != null ? firstPostureGroupId : response.getFirstPostureGroupId());
-		
-		return request;
-	}
 }

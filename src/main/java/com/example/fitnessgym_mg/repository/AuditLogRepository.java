@@ -21,5 +21,5 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
 	 * EntityGraphでユーザー情報も取得してN+1問題を回避
 	 */
 	@EntityGraph(attributePaths = { "user" })
-	Page<AuditLog> findAllByCreatedAtDesc(Pageable pageable);
+	Page<AuditLog> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }

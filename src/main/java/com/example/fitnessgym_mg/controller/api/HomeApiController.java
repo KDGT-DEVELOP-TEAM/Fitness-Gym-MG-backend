@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.fitnessgym_mg.dto.response.HomeResponse;
 import com.example.fitnessgym_mg.dto.response.LessonResponse;
-import com.example.fitnessgym_mg.exception.AuthenticationException;
 import com.example.fitnessgym_mg.service.LessonService;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
@@ -33,105 +32,104 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class HomeApiController {
 
-    private final LessonService lessonService;
-    private final SecurityUtil securityUtil;
+	private final LessonService lessonService;
+	private final SecurityUtil securityUtil;
 
-    /**
-     * GET /api/trainers/home
-     * 当日・直近(1週間以内)の予約状況/レッスン概要の取得
-     */
-    @GetMapping("/trainers/home")
-    public ResponseEntity<HomeResponse> getTrainerHome() {
-        // 現在ログイン中のトレーナーを取得
-        UUID trainerId = securityUtil.getCurrentUserOrThrow().getId();
+	/**
+	 * GET /api/trainers/home
+	 * 当日・直近(1週間以内)の予約状況/レッスン概要の取得
+	 */
+	@GetMapping("/trainers/home")
+	public ResponseEntity<HomeResponse> getTrainerHome() {
+		// 現在ログイン中のトレーナーを取得
+		UUID trainerId = securityUtil.getCurrentUserOrThrow().getId();
 
-        try {
-            // 直近1週間のレッスンを取得
-            List<LessonResponse> upcomingLessons = lessonService.getUpcomingLessonsByTrainerId(trainerId);
+		try {
+			// 直近1週間のレッスンを取得
+			List<LessonResponse> upcomingLessons = lessonService.getUpcomingLessonsByTrainerId(trainerId);
 
-            HomeResponse response = HomeResponse.builder()
-                    .upcomingLessons(upcomingLessons)
-                    .build();
+			HomeResponse response = HomeResponse.builder()
+					.upcomingLessons(upcomingLessons)
+					.build();
 
-            return ResponseEntity.ok(response);
+			return ResponseEntity.ok(response);
 
-        } catch (Exception e) {
-            log.error("トレーナーホームデータ取得でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
+		} catch (Exception e) {
+			log.error("トレーナーホームデータ取得でエラーが発生しました: {}", e.getMessage(), e);
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		}
+	}
 
-    /**
-     * GET /api/admin/home
-     * 全店舗のレッスン実施回数/レッスン履歴 ==統計情報概要の取得
-     */
-    @GetMapping("/admin/home")
-    public ResponseEntity<HomeResponse> getAdminHome(
-            @RequestParam(defaultValue = "month") String chartType,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        
-        try {
-            // レッスン履歴一覧（最新の数件）
-            Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
-            var lessonPage = lessonService.searchLessons(null, null, pageable);
-            List<LessonResponse> recentLessons = lessonPage.getContent();
+	/**
+	 * GET /api/admin/home
+	 * 全店舗のレッスン実施回数/レッスン履歴 ==統計情報概要の取得
+	 */
+	@GetMapping("/admin/home")
+	public ResponseEntity<HomeResponse> getAdminHome(
+			@RequestParam(defaultValue = "month") String chartType,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size) {
 
-            // グラフデータ
-            var chartData = lessonService.getLessonChartData(null, chartType);
+		try {
+			// レッスン履歴一覧（最新の数件）
+			Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
+			var lessonPage = lessonService.searchLessons(null, null, pageable);
+			List<LessonResponse> recentLessons = lessonPage.getContent();
 
-            // 総レッスン数（簡易版：ページネーションの総件数を使用）
-            long totalLessonCount = lessonPage.getTotalElements();
+			// グラフデータ
+			var chartData = lessonService.getLessonChartData(null, chartType);
 
-            HomeResponse response = HomeResponse.builder()
-                    .recentLessons(recentLessons)
-                    .totalLessonCount(totalLessonCount)
-                    .chartData(chartData)
-                    .build();
+			// 総レッスン数（簡易版：ページネーションの総件数を使用）
+			long totalLessonCount = lessonPage.getTotalElements();
 
-            return ResponseEntity.ok(response);
+			HomeResponse response = HomeResponse.builder()
+					.recentLessons(recentLessons)
+					.totalLessonCount(totalLessonCount)
+					.chartData(chartData)
+					.build();
 
-        } catch (Exception e) {
-            log.error("管理者ホームデータ取得でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
+			return ResponseEntity.ok(response);
 
-    /**
-     * GET /api/stores/{store_id}/manager/home
-     * 所属店舗のレッスン実施回数/レッスン履歴 ==統計情報概要の取得
-     */
-    @GetMapping("/stores/{store_id}/manager/home")
-    public ResponseEntity<HomeResponse> getManagerHome(
-            @PathVariable("store_id") UUID storeId,
-            @RequestParam(defaultValue = "month") String chartType,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        
-        try {
-            // レッスン履歴一覧（最新の数件）
-            Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
-            var lessonPage = lessonService.searchLessons(storeId, null, pageable);
-            List<LessonResponse> recentLessons = lessonPage.getContent();
+		} catch (Exception e) {
+			log.error("管理者ホームデータ取得でエラーが発生しました: {}", e.getMessage(), e);
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		}
+	}
 
-            // グラフデータ
-            var chartData = lessonService.getLessonChartData(storeId, chartType);
+	/**
+	 * GET /api/stores/{store_id}/manager/home
+	 * 所属店舗のレッスン実施回数/レッスン履歴 ==統計情報概要の取得
+	 */
+	@GetMapping("/stores/{store_id}/manager/home")
+	public ResponseEntity<HomeResponse> getManagerHome(
+			@PathVariable("store_id") UUID storeId,
+			@RequestParam(defaultValue = "month") String chartType,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size) {
 
-            // 総レッスン数（簡易版：ページネーションの総件数を使用）
-            long totalLessonCount = lessonPage.getTotalElements();
+		try {
+			// レッスン履歴一覧（最新の数件）
+			Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
+			var lessonPage = lessonService.searchLessons(storeId, null, pageable);
+			List<LessonResponse> recentLessons = lessonPage.getContent();
 
-            HomeResponse response = HomeResponse.builder()
-                    .recentLessons(recentLessons)
-                    .totalLessonCount(totalLessonCount)
-                    .chartData(chartData)
-                    .build();
+			// グラフデータ
+			var chartData = lessonService.getLessonChartData(storeId, chartType);
 
-            return ResponseEntity.ok(response);
+			// 総レッスン数（簡易版：ページネーションの総件数を使用）
+			long totalLessonCount = lessonPage.getTotalElements();
 
-        } catch (Exception e) {
-            log.error("店長ホームデータ取得でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
+			HomeResponse response = HomeResponse.builder()
+					.recentLessons(recentLessons)
+					.totalLessonCount(totalLessonCount)
+					.chartData(chartData)
+					.build();
+
+			return ResponseEntity.ok(response);
+
+		} catch (Exception e) {
+			log.error("店長ホームデータ取得でエラーが発生しました: {}", e.getMessage(), e);
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		}
+	}
 }
-

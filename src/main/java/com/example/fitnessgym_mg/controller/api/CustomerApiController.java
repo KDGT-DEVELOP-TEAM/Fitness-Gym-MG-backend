@@ -23,12 +23,26 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import com.example.fitnessgym_mg.dto.request.CustomerRequest;
 import com.example.fitnessgym_mg.dto.response.CustomerResponse;
 import com.example.fitnessgym_mg.entity.enums.Gender;
-import com.example.fitnessgym_mg.exception.AuthenticationException;
 import com.example.fitnessgym_mg.service.CustomerService;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
 
+/**
+ * 顧客管理コントローラー
+ * 
+ * 注意: このクラスはWebコントローラーとREST APIコントローラーが混在しています
+ * - Web用メソッド: `@Controller`アノテーションを使用し、Thymeleafテンプレートを返す（例: `list()`）
+ * - REST API用メソッド: `@ResponseBody`アノテーションを使用し、JSONを返す（例: `create()`, `getCustomer()`）
+ * 
+ * 将来的な改善案:
+ * - Web用メソッドを`CustomerController`に移行
+ * - REST API用メソッドを`CustomerRestController`に分離し、`@RestController`を使用
+ * - または、すべてのメソッドを`@RestController`に統一し、Web用は別コントローラーに分離
+ * 
+ * 現状は`@ResponseBody`を使用しているため、機能的には問題ありませんが、
+ * アーキテクチャの明確化のため、将来的な分離を推奨します。
+ */
 @Controller
 @RequiredArgsConstructor
 public class CustomerApiController {
@@ -36,7 +50,12 @@ public class CustomerApiController {
 	private final CustomerService service;
 	private final SecurityUtil securityUtil;
 
-	// --- カスタマー一覧（検索・並び替え対応） ---
+	// ========== Web用エンドポイント（Thymeleafテンプレートを返す） ==========
+	
+	/**
+	 * カスタマー一覧（検索・並び替え対応）
+	 * Web用エンドポイント: Thymeleafテンプレートを返す
+	 */
 	@GetMapping({ "/admin/customers", "/manager/{storeId}/customers" })
 	public String list(
 			@PathVariable(required = false) UUID storeId, // 店長アクセス時のみ取得
@@ -72,7 +91,12 @@ public class CustomerApiController {
 		return "customer/customer_list";
 	}
 
-	// --- 作成 ---
+	// ========== REST API用エンドポイント（JSONを返す） ==========
+	
+	/**
+	 * 顧客作成
+	 * REST API用エンドポイント: JSONを返す（@ResponseBody使用）
+	 */
 	@PostMapping({ "/admin/customers/create", "/manager/{storeId}/customers/create" })
 	@ResponseBody
 	public ResponseEntity<Void> create(
@@ -82,7 +106,10 @@ public class CustomerApiController {
 		return ResponseEntity.ok().build();
 	}
 
-	// --- 編集モーダル表示用にデータ取得 ---
+	/**
+	 * 編集モーダル表示用にデータ取得
+	 * REST API用エンドポイント: JSONを返す（@ResponseBody使用）
+	 */
 	@GetMapping({ "/admin/customers/{id}/detail", "/manager/{storeId}/customers/{id}/detail" })
 	@ResponseBody
 	public ResponseEntity<CustomerResponse> getCustomer(
@@ -93,7 +120,10 @@ public class CustomerApiController {
 		return ResponseEntity.ok(customer);
 	}
 
-	// --- 更新 ---
+	/**
+	 * 顧客更新
+	 * REST API用エンドポイント: JSONを返す（@ResponseBody使用）
+	 */
 	@PutMapping({ "/admin/customers/{id}/edit", "/manager/{storeId}/customers/{id}/edit" })
 	@ResponseBody
 	public ResponseEntity<Void> update(
@@ -105,7 +135,10 @@ public class CustomerApiController {
 		return ResponseEntity.ok().build();
 	}
 
-	// 無効化 (Disable)
+	/**
+	 * 顧客無効化
+	 * REST API用エンドポイント: JSONを返す（@ResponseBody使用）
+	 */
 	@PatchMapping({ "/admin/customers/{id}/disable", "/manager/{storeId}/customers/{id}/disable" })
 	@ResponseBody
 	public ResponseEntity<Void> disableCustomer(
@@ -116,7 +149,10 @@ public class CustomerApiController {
 		return ResponseEntity.ok().build();
 	}
 
-	// 有効化 (Enable)
+	/**
+	 * 顧客有効化
+	 * REST API用エンドポイント: JSONを返す（@ResponseBody使用）
+	 */
 	@PatchMapping({ "/admin/customers/{id}/enable", "/manager/{storeId}/customers/{id}/enable" })
 	@ResponseBody
 	public ResponseEntity<Void> enableCustomer(
@@ -127,7 +163,10 @@ public class CustomerApiController {
 		return ResponseEntity.ok().build();
 	}
 
-	// --- 削除 ---
+	/**
+	 * 顧客削除
+	 * REST API用エンドポイント: JSONを返す（@ResponseBody使用）
+	 */
 	@DeleteMapping({ "/admin/customers/{id}/delete", "/manager/{storeId}/customers/{id}/delete" })
 	@ResponseBody
 	public ResponseEntity<Void> delete(
@@ -138,8 +177,11 @@ public class CustomerApiController {
 		return ResponseEntity.ok().build();
 	}
 
-	// --- 顧客レッスン履歴画面 ---
-	// パスは admin と manager の両方を受け付け、LessonController.lessonHistory にリダイレクト
+	/**
+	 * 顧客レッスン履歴画面
+	 * Web用エンドポイント: Thymeleafテンプレートを返す（リダイレクト）
+	 * パスは admin と manager の両方を受け付け、LessonController.lessonHistory にリダイレクト
+	 */
 	@GetMapping({ "/admin/customers/{id}/lessons", "/manager/{storeId}/customers/{id}/lessons" })
 	public String showCustomerLessons(
 			@PathVariable(required = false) UUID storeId, // storeIdはURLに含まれるため取得
@@ -157,6 +199,8 @@ public class CustomerApiController {
 	// 注意: このクラスはWebコントローラーとREST APIコントローラーが混在しているため、
 	// @RequestMapping("/api")をクラスレベルで設定できない
 	// そのため、各メソッドで完全なパスを指定している
+	// 
+	// これらのメソッドはすべてREST API用エンドポイント（JSONを返す）です
 
 	/**
 	 * GET /api/admin/customers

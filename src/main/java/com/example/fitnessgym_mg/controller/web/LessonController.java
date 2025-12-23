@@ -23,13 +23,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import com.example.fitnessgym_mg.dto.request.LessonRequest;
 import com.example.fitnessgym_mg.dto.response.LessonResponse;
 import com.example.fitnessgym_mg.entity.Customer;
-import com.example.fitnessgym_mg.entity.Store;
-import com.example.fitnessgym_mg.entity.User;
-import com.example.fitnessgym_mg.exception.AuthenticationException;
 import com.example.fitnessgym_mg.exception.EntityNotFoundException;
-import com.example.fitnessgym_mg.repository.CustomerRepository;
-import com.example.fitnessgym_mg.repository.StoreRepository;
-import com.example.fitnessgym_mg.repository.UserRepository;
 import com.example.fitnessgym_mg.controller.util.ControllerModelUtils;
 import com.example.fitnessgym_mg.controller.util.ControllerPathUtils;
 import com.example.fitnessgym_mg.service.LessonService;
@@ -48,10 +42,6 @@ import lombok.extern.slf4j.Slf4j;
 public class LessonController {
 
 	private final LessonService lessonService;
-	private final CustomerRepository customerRepository;
-	private final StoreRepository storeRepository;
-	private final UserRepository userRepository;
-	private final SecurityUtil securityUtil;
 
 	/**
 	 * GET /admin/lessons/new
@@ -80,12 +70,9 @@ public class LessonController {
 			throw new IllegalArgumentException("顧客IDが指定されていません");
 		}
 
-		// 顧客情報を取得
-		Customer customer = customerRepository.findById(actualCustomerId)
-				.orElseThrow(() -> new EntityNotFoundException("顧客が見つかりません: " + actualCustomerId));
-
 		// レッスンフォームデータを準備
-		LessonFormData formData = prepareLessonFormData(actualCustomerId, storeId, request);
+		String requestPath = request.getRequestURI();
+		LessonService.LessonFormData formData = lessonService.prepareLessonFormData(actualCustomerId, storeId, requestPath);
 		
 		// 空のリクエストオブジェクトを作成
 		LessonRequest lessonRequest = LessonRequest.builder()
@@ -136,14 +123,14 @@ public class LessonController {
 			request.setCustomerId(customerId);
 		}
 
-		// リクエストパスから判定
+		// リクエストパスから判定（複数箇所で使用するため、最初に取得）
 		String requestPath = httpRequest.getRequestURI();
 		boolean isTrainer = requestPath.startsWith("/customer/");
 
 		// バリデーションエラーがある場合はフォームに戻る
 		if (result.hasErrors()) {
 			// 再表示用のデータを準備
-			LessonFormData formData = prepareLessonFormData(request.getCustomerId(), storeId, httpRequest);
+			LessonService.LessonFormData formData = lessonService.prepareLessonFormData(request.getCustomerId(), storeId, requestPath);
 			
 			model.addAttribute("customer", formData.customer());
 			model.addAttribute("stores", formData.stores());
@@ -176,11 +163,11 @@ public class LessonController {
 
 		} catch (EntityNotFoundException e) {
 			log.warn("レッスンの保存に失敗しました: customerId={}, storeId={}, error={}", request.getCustomerId(), storeId, e.getMessage());
-			// エラーメッセージを設定してフォームに戻る
-			model.addAttribute("errorMessage", "レッスンの保存に失敗しました: " + e.getMessage());
+			// エラーメッセージを設定してフォームに戻る（情報漏洩を防ぐため、詳細情報は含めない）
+			model.addAttribute("errorMessage", "レッスンの保存に失敗しました");
 
 			// 再表示用のデータを準備
-			LessonFormData formData = prepareLessonFormData(request.getCustomerId(), storeId, httpRequest);
+			LessonService.LessonFormData formData = lessonService.prepareLessonFormData(request.getCustomerId(), storeId, requestPath);
 
 			model.addAttribute("customer", formData.customer());
 			model.addAttribute("stores", formData.stores());
@@ -192,45 +179,21 @@ public class LessonController {
 			return "lesson/lesson-new";
 		} catch (Exception e) {
 			log.error("予期しないエラーが発生しました: customerId={}, storeId={}, error={}", request.getCustomerId(), storeId, e.getMessage(), e);
-			// エラーメッセージを設定してフォームに戻る
-			model.addAttribute("errorMessage", "レッスンの保存に失敗しました: " + e.getMessage());
+			// エラーメッセージを設定してフォームに戻る（情報漏洩を防ぐため、詳細情報は含めない）
+			model.addAttribute("errorMessage", "レッスンの保存に失敗しました");
 
-			// 再表示用のデータを準備
-			try {
-				Customer customer = customerRepository.findById(request.getCustomerId())
-						.orElseThrow(() -> new EntityNotFoundException("顧客が見つかりません: " + request.getCustomerId()));
-
-				List<Store> stores;
-				List<User> trainers;
-				if (isTrainer) {
-					// トレーナーの場合
-					User currentUser = securityUtil.getCurrentUserOrThrow();
-					if (currentUser.getStores() != null && !currentUser.getStores().isEmpty()) {
-						stores = new java.util.ArrayList<>(currentUser.getStores());
-					} else {
-						stores = List.of();
-					}
-					trainers = List.of(currentUser);
-				} else if (storeId != null) {
-					// 店長の場合
-					stores = List.of(storeRepository.findById(storeId)
-							.orElseThrow(() -> new EntityNotFoundException("店舗が見つかりません: " + storeId)));
-					trainers = userRepository.findAll();
-				} else {
-					// 管理者の場合
-					stores = storeRepository.findAll();
-					trainers = userRepository.findAll();
+				// 再表示用のデータを準備
+				try {
+					LessonService.LessonFormData formData = lessonService.prepareLessonFormData(request.getCustomerId(), storeId, requestPath);
+					model.addAttribute("customer", formData.customer());
+					model.addAttribute("stores", formData.stores());
+					model.addAttribute("trainers", formData.trainers());
+					model.addAttribute("storeId", storeId);
+					model.addAttribute("customerId", request.getCustomerId());
+					model.addAttribute("isTrainer", formData.isTrainer());
+				} catch (Exception ex) {
+					log.error("再表示用データの取得に失敗しました: error={}", ex.getMessage(), ex);
 				}
-
-				model.addAttribute("customer", customer);
-				model.addAttribute("stores", stores);
-				model.addAttribute("trainers", trainers);
-				model.addAttribute("storeId", storeId);
-				model.addAttribute("customerId", request.getCustomerId());
-				model.addAttribute("isTrainer", isTrainer);
-			} catch (Exception ex) {
-				log.error("再表示用データの取得に失敗しました: error={}", ex.getMessage(), ex);
-			}
 
 			return "lesson/lesson-new";
 		}
@@ -262,19 +225,18 @@ public class LessonController {
 			Model model) {
 
 		try {
-			// 顧客情報を取得
-			Customer customer = customerRepository.findById(customerId)
-					.orElseThrow(() -> new EntityNotFoundException("顧客が見つかりません: " + customerId));
+			// リクエストパスを取得（複数箇所で使用するため、最初に取得）
+			String requestPath = request.getRequestURI();
+			
+			// レッスンフォームデータから顧客情報を取得（顧客情報の存在確認も兼ねる）
+			LessonService.LessonFormData formData = lessonService.prepareLessonFormData(customerId, storeId, requestPath);
+			Customer customer = formData.customer();
 
 			// ページネーション対応のレッスン履歴を取得
 			Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
 			var lessonPage = lessonService.getLessonsByCustomerId(customerId, pageable);
 
-			// グラフデータを取得
-			var chartData = lessonService.getLessonChartDataByCustomerId(customerId, chartType);
-
 			// BASE_PATHを設定（リクエストパスから判定）
-			String requestPath = request.getRequestURI();
 			ControllerPathUtils.BasePathInfo pathInfo = ControllerPathUtils.determineBasePaths(requestPath, storeId, customerId);
 			String basePath = pathInfo.basePath();
 			String detailBasePath = pathInfo.detailBasePath();
@@ -285,7 +247,6 @@ public class LessonController {
 			model.addAttribute("count", lessonPage.getTotalElements());
 			model.addAttribute("customerId", customerId);
 			model.addAttribute("storeId", storeId);
-			model.addAttribute("chartData", chartData);
 			model.addAttribute("chartType", chartType);
 			model.addAttribute("BASE_PATH", basePath);
 			model.addAttribute("DETAIL_BASE_PATH", detailBasePath);
@@ -331,6 +292,7 @@ public class LessonController {
 
 		} catch (IllegalStateException | IllegalArgumentException e) {
 			// ビジネスロジックエラーのみをキャッチ
+			// バリデーションエラーはユーザーに表示しても問題ないため、詳細メッセージを返す
 			model.addAttribute("errorMessage", "履歴の取得に失敗しました: " + e.getMessage());
 			return "redirect:/trainer/customers";
 		}
@@ -377,82 +339,36 @@ public class LessonController {
 
 		} catch (EntityNotFoundException e) {
 			log.warn("レッスンの取得に失敗しました: lessonId={}, storeId={}, error={}", lessonId, storeId, e.getMessage());
-			model.addAttribute("errorMessage", "レッスンの取得に失敗しました: " + e.getMessage());
+			model.addAttribute("errorMessage", "レッスンの取得に失敗しました");
 
 			// リクエストパスから判定してリダイレクト先を決定
 			String requestPath = request.getRequestURI();
-			if (requestPath.startsWith("/manager/")) {
-				return "redirect:/manager/" + storeId + "/lessons";
-			} else if (requestPath.startsWith("/trainer/") || requestPath.startsWith("/lesson/")) {
-				// トレーナーの場合は、レッスンから顧客IDを取得して履歴ページにリダイレクト
-				// ただし、レッスンが見つからない場合は顧客選択画面にリダイレクト
-				return "redirect:/trainer/customers";
-			} else {
-				return "redirect:/admin/lessons";
-			}
+			return determineRedirectUrl(requestPath, storeId);
 		} catch (Exception e) {
 			log.error("予期しないエラーが発生しました: lessonId={}, storeId={}, error={}", lessonId, storeId, e.getMessage(), e);
-			model.addAttribute("errorMessage", "レッスンの取得に失敗しました: " + e.getMessage());
+			model.addAttribute("errorMessage", "レッスンの取得に失敗しました");
 
 			// リクエストパスから判定してリダイレクト先を決定
 			String requestPath = request.getRequestURI();
-			if (requestPath.startsWith("/manager/")) {
-				return "redirect:/manager/" + storeId + "/lessons";
-			} else if (requestPath.startsWith("/trainer/") || requestPath.startsWith("/lesson/")) {
-				return "redirect:/trainer/customers";
-			} else {
-				return "redirect:/admin/lessons";
-			}
+			return determineRedirectUrl(requestPath, storeId);
 		}
 	}
 
 	/**
-	 * レッスンフォーム表示用のデータを準備する共通メソッド
+	 * リダイレクト先URLを決定する共通メソッド
 	 * 
-	 * @param customerId 顧客ID
+	 * @param requestPath リクエストパス
 	 * @param storeId 店舗ID（店長の場合に必要）
-	 * @param request HTTPリクエスト（パス判定用）
-	 * @return レッスンフォームデータ
+	 * @return リダイレクト先URL
 	 */
-	private LessonFormData prepareLessonFormData(UUID customerId, UUID storeId, HttpServletRequest request) {
-		Customer customer = customerRepository.findById(customerId)
-				.orElseThrow(() -> new EntityNotFoundException("顧客が見つかりません: " + customerId));
-		
-		String requestPath = request.getRequestURI();
-		boolean isTrainer = requestPath.startsWith("/customer/");
-		
-		List<Store> stores;
-		List<User> trainers;
-		
-		if (isTrainer) {
-			// トレーナーの場合：ログインユーザーの所属店舗のみ
-			User currentUser = securityUtil.getCurrentUserOrThrow();
-			stores = currentUser.getStores() != null && !currentUser.getStores().isEmpty()
-					? new java.util.ArrayList<>(currentUser.getStores())
-					: List.of();
-			trainers = List.of(currentUser);
-		} else if (storeId != null) {
-			// 店長の場合：所属店舗のみ
-			stores = List.of(storeRepository.findById(storeId)
-					.orElseThrow(() -> new EntityNotFoundException("店舗が見つかりません: " + storeId)));
-			trainers = userRepository.findAll();
+	private String determineRedirectUrl(String requestPath, UUID storeId) {
+		if (requestPath.startsWith("/manager/")) {
+			return "redirect:/manager/" + storeId + "/lessons";
+		} else if (requestPath.startsWith("/trainer/") || requestPath.startsWith("/lesson/")) {
+			return "redirect:/trainer/customers";
 		} else {
-			// 管理者の場合：全店舗
-			stores = storeRepository.findAll();
-			trainers = userRepository.findAll();
+			return "redirect:/admin/lessons";
 		}
-		
-		return new LessonFormData(customer, stores, trainers, isTrainer);
 	}
-
-	/**
-	 * レッスンフォームデータを保持するレコード
-	 */
-	private record LessonFormData(
-			Customer customer,
-			List<Store> stores,
-			List<User> trainers,
-			boolean isTrainer
-	) {}
 
 }

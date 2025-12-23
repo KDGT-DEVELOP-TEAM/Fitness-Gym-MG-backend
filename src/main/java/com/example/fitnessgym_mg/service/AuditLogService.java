@@ -35,7 +35,7 @@ public class AuditLogService {
 	 * - その他のCRUD操作ログ
 	 */
 	public Page<AuditLogResponse> getAuditLogs(Pageable pageable) {
-		Page<AuditLog> auditLogPage = auditLogRepository.findAllByCreatedAtDesc(pageable);
+		Page<AuditLog> auditLogPage = auditLogRepository.findAllByOrderByCreatedAtDesc(pageable);
 
 		return auditLogPage.map(AuditLogResponse::fromEntity);
 	}

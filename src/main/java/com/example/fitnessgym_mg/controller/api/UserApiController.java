@@ -57,15 +57,10 @@ public class UserApiController {
             @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") 
             int size) {
         
-        try {
-            Pageable pageable = PageRequest.of(page, size);
-            Page<UserResponse> userPage = accountService.searchUsers(name, role, sort, null, pageable);
-            log.debug("ユーザー一覧取得成功: page={}, size={}, total={}", page, size, userPage.getTotalElements());
-            return ResponseEntity.ok(userPage);
-        } catch (Exception e) {
-            log.error("ユーザー一覧取得でエラーが発生しました: page={}, size={}", page, size, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        Pageable pageable = PageRequest.of(page, size);
+        Page<UserResponse> userPage = accountService.searchUsers(name, role, sort, null, pageable);
+        log.debug("ユーザー一覧取得成功: page={}, size={}, total={}", page, size, userPage.getTotalElements());
+        return ResponseEntity.ok(userPage);
     }
 
     /**
@@ -79,13 +74,8 @@ public class UserApiController {
      */
     @GetMapping("/admin/users/{user_id}")
     public ResponseEntity<UserResponse> getUser(@PathVariable("user_id") UUID userId) {
-        try {
-            UserResponse user = accountService.findById(userId, null);
-            return ResponseEntity.ok(user);
-        } catch (Exception e) {
-            log.error("ユーザー詳細取得でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+        UserResponse user = accountService.findById(userId, null);
+        return ResponseEntity.ok(user);
     }
 
     /**
@@ -94,18 +84,10 @@ public class UserApiController {
      */
     @PostMapping("/admin/users")
     public ResponseEntity<Void> createUser(@Valid @RequestBody UserRequest request) {
-        try {
-            accountService.create(request, 
-                    request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
-            log.info("ユーザー作成成功: role={}", request.getRole());
-            return ResponseEntity.status(HttpStatus.CREATED).build();
-        } catch (IllegalArgumentException e) {
-            log.warn("ユーザー作成でバリデーションエラー: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        } catch (Exception e) {
-            log.error("ユーザー作成でエラーが発生しました: role={}", request.getRole(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        accountService.create(request, 
+                request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
+        log.info("ユーザー作成成功: role={}", request.getRole());
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     /**
@@ -116,18 +98,10 @@ public class UserApiController {
     public ResponseEntity<Void> updateUser(
             @PathVariable("user_id") UUID userId,
             @Valid @RequestBody UserRequest request) {
-        try {
-            accountService.update(userId, request, 
-                    request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
-            log.info("ユーザー更新成功: userId={}, role={}", userId, request.getRole());
-            return ResponseEntity.ok().build();
-        } catch (IllegalArgumentException e) {
-            log.warn("ユーザー更新でバリデーションエラー: userId={}", userId, e);
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        } catch (Exception e) {
-            log.error("ユーザー更新でエラーが発生しました: userId={}", userId, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        accountService.update(userId, request, 
+                request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
+        log.info("ユーザー更新成功: userId={}, role={}", userId, request.getRole());
+        return ResponseEntity.ok().build();
     }
 
     /**
@@ -137,14 +111,9 @@ public class UserApiController {
      */
     @DeleteMapping("/admin/users/{user_id}")
     public ResponseEntity<Void> deleteUser(@PathVariable("user_id") UUID userId) {
-        try {
-            accountService.delete(userId, null);
-            log.info("ユーザー削除成功: userId={}", userId);
-            return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            log.error("ユーザー削除でエラーが発生しました: userId={}", userId, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        accountService.delete(userId, null);
+        log.info("ユーザー削除成功: userId={}", userId);
+        return ResponseEntity.ok().build();
     }
 
     // 店長用エンドポイント
@@ -169,14 +138,9 @@ public class UserApiController {
             @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") 
             int size) {
         
-        try {
-            Pageable pageable = PageRequest.of(page, size);
-            Page<UserResponse> userPage = accountService.searchUsers(name, role, sort, storeId, pageable);
-            return ResponseEntity.ok(userPage);
-        } catch (Exception e) {
-            log.error("店長用ユーザー一覧取得でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        Pageable pageable = PageRequest.of(page, size);
+        Page<UserResponse> userPage = accountService.searchUsers(name, role, sort, storeId, pageable);
+        return ResponseEntity.ok(userPage);
     }
 
     /**
@@ -192,13 +156,8 @@ public class UserApiController {
     public ResponseEntity<UserResponse> getManagerUser(
             @PathVariable("store_id") UUID storeId,
             @PathVariable("user_id") UUID userId) {
-        try {
-            UserResponse user = accountService.findById(userId, storeId);
-            return ResponseEntity.ok(user);
-        } catch (Exception e) {
-            log.error("店長用ユーザー詳細取得でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+        UserResponse user = accountService.findById(userId, storeId);
+        return ResponseEntity.ok(user);
     }
 
     /**
@@ -209,17 +168,9 @@ public class UserApiController {
     public ResponseEntity<Void> createManagerUser(
             @PathVariable("store_id") UUID storeId,
             @Valid @RequestBody UserRequest request) {
-        try {
-            accountService.create(request, 
-                    request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
-            return ResponseEntity.status(HttpStatus.CREATED).build();
-        } catch (IllegalArgumentException e) {
-            log.warn("店長用ユーザー作成でエラーが発生しました: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        } catch (Exception e) {
-            log.error("店長用ユーザー作成でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        accountService.create(request, 
+                request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     /**
@@ -231,17 +182,9 @@ public class UserApiController {
             @PathVariable("store_id") UUID storeId,
             @PathVariable("user_id") UUID userId,
             @Valid @RequestBody UserRequest request) {
-        try {
-            accountService.update(userId, request, 
-                    request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
-            return ResponseEntity.ok().build();
-        } catch (IllegalArgumentException e) {
-            log.warn("店長用ユーザー更新でエラーが発生しました: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        } catch (Exception e) {
-            log.error("店長用ユーザー更新でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        accountService.update(userId, request, 
+                request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
+        return ResponseEntity.ok().build();
     }
 
     /**
@@ -252,13 +195,8 @@ public class UserApiController {
     public ResponseEntity<Void> deleteManagerUser(
             @PathVariable("store_id") UUID storeId,
             @PathVariable("user_id") UUID userId) {
-        try {
-            accountService.delete(userId, storeId);
-            return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            log.error("店長用ユーザー削除でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        accountService.delete(userId, storeId);
+        return ResponseEntity.ok().build();
     }
 }
 

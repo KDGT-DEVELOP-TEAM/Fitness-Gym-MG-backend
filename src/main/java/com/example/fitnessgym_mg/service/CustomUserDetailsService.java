@@ -48,7 +48,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         // メールアドレスでアクティブなユーザーを検索
-        User user = userRepository.findByEmailAndIsActiveTrue(email)
+        User user = userRepository.findByEmailAndActiveTrue(email)
                 .orElseThrow(() -> new UsernameNotFoundException("ユーザーが見つかりません: " + email));
 
         // Spring SecurityのUserDetailsに変換

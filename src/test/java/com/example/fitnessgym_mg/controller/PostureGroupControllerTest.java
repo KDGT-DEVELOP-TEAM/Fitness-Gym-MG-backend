@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -67,7 +68,7 @@ class PostureGroupControllerTest {
         customer.setPhone("00000000000");
         customer.setAddress("東京都千代田区");
         customer.setBirthday(LocalDate.of(1990, 1, 1));
-        customer.setHeight(170.0);
+        customer.setHeight(BigDecimal.valueOf(170.0));
         customer.setCreatedAt(LocalDateTime.now());
         customer.setActive(true);
 

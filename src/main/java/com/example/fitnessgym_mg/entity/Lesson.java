@@ -1,5 +1,6 @@
 package com.example.fitnessgym_mg.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -87,7 +88,8 @@ public class Lesson {
 	/**
 	 * 体重（numeric型に対応）
 	 */
-	private Double weight;
+	@Column(precision = 5, scale = 2)
+	private BigDecimal weight;
 
 	/**
 	 * 食事内容

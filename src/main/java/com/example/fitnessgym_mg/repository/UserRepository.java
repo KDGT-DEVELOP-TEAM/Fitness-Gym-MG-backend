@@ -29,7 +29,7 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
 	/**
 	 * メールアドレスでアクティブなユーザーを検索（認証用）
 	 */
-	Optional<User> findByEmailAndIsActiveTrue(String email);
+	Optional<User> findByEmailAndActiveTrue(String email);
 
 	/**
 	 * メールアドレスでユーザーを検索し、storesをJOIN FETCHで取得
