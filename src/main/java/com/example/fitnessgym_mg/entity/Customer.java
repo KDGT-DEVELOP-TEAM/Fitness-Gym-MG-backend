@@ -19,8 +19,6 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import org.hibernate.annotations.DynamicUpdate;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -62,7 +60,7 @@ public class Customer {
 	/**
 	 * 性別
 	 */
-	@JdbcTypeCode(SqlTypes.NAMED_ENUM)
+	@jakarta.persistence.Convert(converter = com.example.fitnessgym_mg.entity.converter.GenderConverter.class)
 	@Column(nullable = false, columnDefinition = "customer_gender")
 	private com.example.fitnessgym_mg.entity.enums.Gender gender;
 

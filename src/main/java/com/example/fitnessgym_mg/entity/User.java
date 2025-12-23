@@ -17,8 +17,6 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import org.hibernate.annotations.DynamicUpdate;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -66,20 +64,20 @@ public class User {
 	/**
 	 * パスワード（ハッシュ化済み）
 	 */
-	@Column(nullable = false, length = 255)
+	@Column(name = "pass", nullable = false, length = 255)
 	private String password;
 
 	/**
 	 * ユーザーロール（ADMIN, MANAGER, TRAINER）
 	 */
-	@JdbcTypeCode(SqlTypes.NAMED_ENUM)
+	@jakarta.persistence.Convert(converter = com.example.fitnessgym_mg.entity.converter.UserRoleConverter.class)
 	@Column(nullable = false, columnDefinition = "user_role")
 	private com.example.fitnessgym_mg.entity.enums.UserRole role;
 
 	/**
 	 * 有効/無効フラグ
 	 */
-	@Column(nullable = false)
+	@Column(name = "is_active", nullable = false)
 	private boolean active = true;
 
 	/**

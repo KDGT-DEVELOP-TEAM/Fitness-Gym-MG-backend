@@ -23,6 +23,7 @@ public class LoginRedirectService {
 			"/",
 			"/dashboard",
 			"/admin",
+			"/trainer/customers",
 			"/user/home");
 
 	/**
@@ -83,7 +84,7 @@ public class LoginRedirectService {
 
 		// ROLE_TRAINER を持つ場合
 		if (hasRole(authentication, ROLE_TRAINER)) {
-			return "/dashboard";
+			return "/trainer/customers";
 		}
 
 		// それ以外（一般ユーザー）

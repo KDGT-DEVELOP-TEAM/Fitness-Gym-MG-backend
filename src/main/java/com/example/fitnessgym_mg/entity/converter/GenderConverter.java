@@ -9,7 +9,7 @@ public class GenderConverter implements AttributeConverter<Gender, String> {
 
     @Override
     public String convertToDatabaseColumn(Gender attribute) {
-        return attribute != null ? attribute.name().toLowerCase() : null;
+        return attribute != null ? attribute.getLabel() : null;
     }
 
     @Override
@@ -17,7 +17,13 @@ public class GenderConverter implements AttributeConverter<Gender, String> {
         if (dbData == null) {
             return null;
         }
-        return Gender.fromCode(dbData);
+        // データベースの値（「男」「女」）からEnumを取得
+        for (Gender gender : Gender.values()) {
+            if (gender.getLabel().equals(dbData)) {
+                return gender;
+            }
+        }
+        return null;
     }
 }
 
