@@ -11,8 +11,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.XXssProtectionHeaderWriter;
 
-import com.example.fitnessgym_mg.config.security.handler.CustomAuthenticationSuccessHandler;
-
 import lombok.RequiredArgsConstructor;
 
 @Configuration
@@ -37,8 +35,6 @@ public class SecurityConfig {
 			"img-src 'self' data: https:; " +
 			"font-src 'self' data:";
 
-	private final CustomAuthenticationSuccessHandler successHandler;
-
 	@Bean
 	PasswordEncoder passwordEncoder() {
 		return new BCryptPasswordEncoder(BCRYPT_STRENGTH);
@@ -52,28 +48,22 @@ public class SecurityConfig {
 	@Bean
 	SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 		http
-				// 認可設定
+				// 認可設定（REST APIのみ）
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers("/login", "/error", "/css/**", "/js/**", "/images/**").permitAll()
 						.requestMatchers("/api/auth/**").permitAll() // ログイン・認証系のみ公開
 						.requestMatchers("/api/admin/**").hasRole("ADMIN") // 管理者専用API
 						.requestMatchers("/api/**").authenticated() // それ以外の API は認証必須
-						.anyRequest().authenticated())
+						.anyRequest().denyAll()) // APIエンドポイント以外は拒否
 
-				// ログイン設定
+				// ログイン設定（REST APIのみ使用）
 				.formLogin(form -> form
-						.loginPage("/login")
-						.usernameParameter("email")
-						.passwordParameter("password")
-						.successHandler(successHandler)
-						.failureUrl("/login?error=true"))
+						.disable()) // フォームログインを無効化（APIログインのみ）
 
-				// ログアウト設定
-				.logout(logout -> logout
-						.logoutUrl("/logout")
-						.logoutSuccessUrl("/login?logout=true")
-						.invalidateHttpSession(true)
-						.deleteCookies("JSESSIONID"))
+			// ログアウト設定（REST API用）
+			.logout(logout -> logout
+					.logoutUrl("/api/auth/logout")
+					.invalidateHttpSession(true)
+					.deleteCookies("JSESSIONID"))
 
 				// セッション管理設定
 				.sessionManagement(session -> session
