@@ -1,8 +1,10 @@
 package com.example.fitnessgym_mg.config.security;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 
+import org.springframework.http.MediaType;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -11,7 +13,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.example.fitnessgym_mg.exception.ErrorResponse;
 import com.example.fitnessgym_mg.util.JwtTokenUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -23,8 +31,10 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * JWT認証フィルター
  * 
- * リクエストヘッダーからJWTトークンを抽出し、検証して認証情報を設定します。
- * Authorization: Bearer <token> 形式のヘッダーを期待します。
+ * - JWTの検証
+ * - 認証情報の SecurityContext への設定
+ *
+ * ※ レスポンス生成は将来的に AuthenticationEntryPoint へ分離可能
  */
 @Slf4j
 @Component
@@ -35,27 +45,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenUtil jwtTokenUtil;
+    private final ObjectMapper objectMapper;
 
     @Override
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
-            @NonNull FilterChain filterChain) throws ServletException, IOException {
+            @NonNull FilterChain filterChain
+    ) throws ServletException, IOException {
 
-        try {
-            // Authorizationヘッダーからトークンを抽出
             String token = extractToken(request);
 
-            // トークンが存在し、有効な場合
-            if (StringUtils.hasText(token) && jwtTokenUtil.validateToken(token)) {
-                // トークンから情報を取得
-                String email = jwtTokenUtil.getEmailFromToken(token);
-                String role = jwtTokenUtil.getRoleFromToken(token);
+        // JWT未送信の場合は何もしない（未認証アクセスとして扱う）
+        if (!StringUtils.hasText(token)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-                // Spring Security用の権限を作成（ROLE_プレフィックスを付与）
-                SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
+        try {
+            // トークンを1回だけパースして検証し、Claimsを取得
+            Claims claims = jwtTokenUtil.parseAndValidate(token);
 
-                // 認証トークンを作成
+            // 取得したClaimsから情報を取得
+            String email = claims.get("email", String.class);
+            String role = claims.get("role", String.class);
+
+            if (!StringUtils.hasText(role)) {
+                sendUnauthorized(response, "JWT_MISSING_ROLE", "JWTトークンにroleが含まれていません");
+                return;
+            }
+
+            SimpleGrantedAuthority authority =
+                    new SimpleGrantedAuthority("ROLE_" + role);
+
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
                                 email,
@@ -63,44 +85,63 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                 Collections.singletonList(authority)
                         );
 
-                // SecurityContextに認証情報を設定
                 SecurityContextHolder.getContext().setAuthentication(authentication);
 
                 log.debug("JWT認証成功: email={}, role={}", email, role);
-            }
-        } catch (Exception e) {
-            log.error("JWT認証処理でエラーが発生しました: {}", e.getMessage());
-            // エラーが発生しても、次のフィルターに進む（認証されていない状態として処理される）
-        }
 
-        // 次のフィルターに進む
-        filterChain.doFilter(request, response);
+            filterChain.doFilter(request, response);
+
+        } catch (ExpiredJwtException e) {
+            log.warn("JWT期限切れ: {}", e.getMessage());
+            sendUnauthorized(response, "JWT_EXPIRED", "JWTトークンの有効期限が切れています");
+        } catch (JwtException | IllegalArgumentException e) {
+            // 署名不正・形式不正・改ざん・サポート外など
+            log.error("JWT無効: {}", e.getMessage(), e);
+            sendUnauthorized(response, "JWT_INVALID", "JWTトークンが無効です");
+        }
     }
 
     /**
-     * リクエストヘッダーからJWTトークンを抽出
-     * 
-     * @param request HTTPリクエスト
-     * @return JWTトークン（Bearerプレフィックスなし）、存在しない場合はnull
+     * AuthorizationヘッダーからJWTを取得
      */
     private String extractToken(HttpServletRequest request) {
-        String bearerToken = request.getHeader(AUTHORIZATION_HEADER);
+        String header = request.getHeader(AUTHORIZATION_HEADER);
 
-        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith(BEARER_PREFIX)) {
-            return bearerToken.substring(BEARER_PREFIX.length());
+        if (StringUtils.hasText(header) && header.startsWith(BEARER_PREFIX)) {
+            return header.substring(BEARER_PREFIX.length());
         }
-
         return null;
     }
 
     /**
-     * 認証が不要なパスかどうかを判定
-     * /api/auth/** は認証不要
+     * 認証不要パス判定
+     *
+     * ※ permitAll() 設定と必ず同期させること
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        // ログインエンドポイントはフィルタリングしない（認証不要）
-        return path.startsWith("/api/auth/login");
+        return request.getRequestURI().startsWith("/api/auth/");
+    }
+
+    /**
+     * 401 エラーレスポンスを返す
+     *
+     * ※ 将来的に AuthenticationEntryPoint へ移行可能
+     */
+    private void sendUnauthorized(
+            HttpServletResponse response,
+            String errorCode,
+            String message
+    ) throws IOException {
+
+        SecurityContextHolder.clearContext();
+
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+
+        ErrorResponse errorResponse = new ErrorResponse(errorCode, message);
+        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+        response.getWriter().flush();
     }
 }

@@ -112,7 +112,6 @@ project-root/
 │   │   │       │       └── ControllerPathUtils.java # コントローラー用パスユーティリティ
 │   │   │       │
 │   │   │       ├── config/                      # 設定クラス群
-│   │   │       │   ├── AppConfig.java          # アプリケーション設定
 │   │   │       │   ├── WebConfig.java          # Web設定（MVC設定など）
 │   │   │       │   ├── SupabaseStorageProperties.java # Supabaseストレージ設定プロパティ
 │   │   │       │   ├── JsonUtilsControllerAdvice.java # JSON変換用ControllerAdvice

@@ -2,11 +2,14 @@ package com.example.fitnessgym_mg.util;
 
 import java.util.Optional;
 
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import com.example.fitnessgym_mg.entity.User;
+import com.example.fitnessgym_mg.entity.enums.UserRole;
 import com.example.fitnessgym_mg.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -32,12 +35,18 @@ public class SecurityUtil {
     public Optional<User> getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         
-        if (authentication == null || !authentication.isAuthenticated() || 
-            authentication.getPrincipal().equals("anonymousUser")) {
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
             return Optional.empty();
         }
         
-        String email = authentication.getName();
+        // principal から email を取得
+        String email = extractEmailFromPrincipal(authentication.getPrincipal());
+        if (email == null) {
+            return Optional.empty();
+        }
+        
         return userRepository.findByEmail(email);
     }
 
@@ -46,13 +55,16 @@ public class SecurityUtil {
      * 
      * 処理の流れ：
      * 1. Spring Securityのセキュリティコンテキストから認証情報を取得
-     * 2. 認証情報から権限のリストを取得
-     * 3. 指定されたロールが権限リストに含まれているか確認
+     * 2. 認証されていない、または匿名ユーザーの場合は false を返す
+     * 3. 認証情報から権限のリストを取得
+     * 4. 指定されたロールが権限リストに含まれているか確認
      */
     public boolean hasRole(String role) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         
-        if (authentication == null) {
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
             return false;
         }
         
@@ -61,24 +73,34 @@ public class SecurityUtil {
     }
 
     /**
+     * 現在のユーザーが指定されたロールを持っているか確認（enum版）
+     * 
+     * @param role 確認するロール（UserRole enum）
+     * @return ロールを持っている場合 true
+     */
+    public boolean hasRole(UserRole role) {
+        return hasRole("ROLE_" + role.name());
+    }
+
+    /**
      * 現在のユーザーがADMINロールを持っているか確認
      */
     public boolean isAdmin() {
-        return hasRole("ROLE_ADMIN");
+        return hasRole(UserRole.ADMIN);
     }
 
     /**
      * 現在のユーザーがMANAGERロールを持っているか確認
      */
     public boolean isManager() {
-        return hasRole("ROLE_MANAGER");
+        return hasRole(UserRole.MANAGER);
     }
 
     /**
      * 現在のユーザーがTRAINERロールを持っているか確認
      */
     public boolean isTrainer() {
-        return hasRole("ROLE_TRAINER");
+        return hasRole(UserRole.TRAINER);
     }
 
     /**
@@ -87,11 +109,13 @@ public class SecurityUtil {
     public String getCurrentUsername() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         
-        if (authentication == null || !authentication.isAuthenticated()) {
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
             return null;
         }
         
-        return authentication.getName();
+        return extractEmailFromPrincipal(authentication.getPrincipal());
     }
 
     /**
@@ -103,6 +127,31 @@ public class SecurityUtil {
     public User getCurrentUserOrThrow() {
         return getCurrentUser()
                 .orElseThrow(() -> new com.example.fitnessgym_mg.exception.AuthenticationException("ログインユーザーが見つかりません"));
+    }
+
+    /**
+     * Authentication の principal からメールアドレスを取得
+     * 
+     * <p>設計仕様:</p>
+     * <ul>
+     *   <li>JWT認証の場合: principal は String (email) を格納する設計</li>
+     *   <li>フォーム認証の場合: principal は UserDetails (username = email)</li>
+     * </ul>
+     * 
+     * <p>JWT認証時の principal は {@link com.example.fitnessgym_mg.config.security.JwtAuthenticationFilter}
+     * で email として設定されるため、String の場合は email として扱う。</p>
+     * 
+     * @param principal Authentication の principal
+     * @return メールアドレス、取得できない場合は null
+     */
+    private String extractEmailFromPrincipal(Object principal) {
+        if (principal instanceof UserDetails userDetails) {
+            return userDetails.getUsername();
+        } else if (principal instanceof String) {
+            // JWT認証時は principal に email (String) を格納する設計
+            return (String) principal;
+        }
+        return null;
     }
 }
 

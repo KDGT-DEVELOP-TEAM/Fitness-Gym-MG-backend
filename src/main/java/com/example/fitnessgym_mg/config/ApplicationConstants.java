@@ -35,15 +35,15 @@ public final class ApplicationConstants {
     // ===== ファイルアップロード関連 =====
     
     /**
-     * 最大ファイルサイズ（バイト）
-     * 10MB = 10 * 1024 * 1024
-     */
-    public static final long MAX_FILE_SIZE_BYTES = 10L * 1024 * 1024;
-    
-    /**
      * 最大ファイルサイズ（MB）
      */
     public static final int MAX_FILE_SIZE_MB = 10;
+    
+    /**
+     * 最大ファイルサイズ（バイト）
+     * MAX_FILE_SIZE_MB から自動計算される
+     */
+    public static final long MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024L * 1024L;
 
     // ===== 署名付きURL関連 =====
     

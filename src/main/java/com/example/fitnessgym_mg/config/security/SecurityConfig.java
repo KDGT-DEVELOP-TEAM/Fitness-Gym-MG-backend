@@ -11,7 +11,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.header.writers.XXssProtectionHeaderWriter;
 
 import lombok.RequiredArgsConstructor;
 
@@ -26,72 +25,82 @@ public class SecurityConfig {
 
 	private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-	/**
-	 * BCryptパスワードエンコーダーのストレングス
-	 * デフォルトは10だが、セキュリティ強化のため12に設定
-	 */
+	/* =========================
+	 * 定数定義（将来分離しやすい）
+	 * ========================= */
 	private static final int BCRYPT_STRENGTH = 12;
 
-	/**
-	 * Content Security Policy (CSP)
-	 * XSS攻撃を防ぐためのセキュリティヘッダー
-	 */
+	private static final String[] PUBLIC_API = {
+			"/api/auth/**"
+	};
+
+	private static final String[] ADMIN_API = {
+			"/api/admin/**"
+	};
+
 	private static final String CSP_POLICY = 
 			"default-src 'self'; " +
-			"script-src 'self' 'unsafe-inline'; " +
-			"style-src 'self' 'unsafe-inline'; " +
+			"script-src 'self'; " +
+			"style-src 'self'; " +
 			"img-src 'self' data: https:; " +
 			"font-src 'self' data:";
 
+	/* =========================
+	 * Bean定義
+	 * ========================= */
 	@Bean
 	PasswordEncoder passwordEncoder() {
 		return new BCryptPasswordEncoder(BCRYPT_STRENGTH);
 	}
 
 	@Bean
-	AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+	AuthenticationManager authenticationManager(
+			AuthenticationConfiguration configuration) throws Exception {
 		return configuration.getAuthenticationManager();
 	}
 
+	/* =========================
+	 * Security Filter
+	 * ========================= */
 	@Bean
-	SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+	SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+
 		http
-				// 認可設定（REST APIのみ）
+			// REST API前提：CORS有効
+			.cors(cors -> {})
+
+			// CSRF無効（JWT前提）
+			.csrf(csrf -> csrf.disable())
+
+			// セッションは使わない
+			.sessionManagement(session ->
+					session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+			// 認可設定
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers("/api/auth/**").permitAll() // ログイン・認証系のみ公開
-						.requestMatchers("/api/admin/**").hasRole("ADMIN") // 管理者専用API
-						.requestMatchers("/api/**").authenticated() // それ以外の API は認証必須
-						.anyRequest().denyAll()) // APIエンドポイント以外は拒否
+					.requestMatchers(PUBLIC_API).permitAll()
+					.requestMatchers(ADMIN_API).hasRole("ADMIN")
+					.requestMatchers("/api/**").authenticated()
+					.anyRequest().denyAll()
+			)
 
-				// フォームログインを無効化（JWT認証のみ使用）
+			// フォームログイン・ログアウト無効
 				.formLogin(form -> form.disable())
+			.logout(logout -> logout.disable())
 
-				// ログアウト設定（JWT認証ではサーバー側での処理は最小限）
-				.logout(logout -> logout
-						.logoutUrl("/api/auth/logout")
-						.logoutSuccessHandler((request, response, authentication) -> {
-							// JWTはステートレスなので、サーバー側では特に処理しない
-							// クライアント側でトークンを削除する
-							response.setStatus(200);
-						}))
-
-				// セッション管理設定（JWT認証のためステートレスに設定）
-				.sessionManagement(session -> session
-						.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-
-				// セキュリティヘッダー設定
+			// セキュリティヘッダー
 				.headers(headers -> headers
-						.contentSecurityPolicy(csp -> csp.policyDirectives(CSP_POLICY))
-						.frameOptions(frame -> frame.deny()) // Clickjacking対策
-						.xssProtection(xss -> xss.headerValue(XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK)) // XSS対策
-						.contentTypeOptions(options -> options.disable()) // MIME sniffing対策（デフォルトで有効）
+					.contentSecurityPolicy(csp ->
+							csp.policyDirectives(CSP_POLICY))
+					.frameOptions(frame -> frame.deny())
+					.contentTypeOptions(contentType -> {}) // X-Content-Type-Options: nosniff
 				)
 
-				// CSRF無効化（JWT認証ではCSRFトークンは不要）
-				.csrf(csrf -> csrf.disable())
-
-				// JWT認証フィルターを追加
-				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+			// JWTフィルター
+			.addFilterBefore(
+					jwtAuthenticationFilter,
+					UsernamePasswordAuthenticationFilter.class
+			);
 
 		return http.build();
 	}

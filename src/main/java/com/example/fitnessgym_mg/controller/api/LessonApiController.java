@@ -1,7 +1,8 @@
 package com.example.fitnessgym_mg.controller.api;
 
-import java.util.List;
 import java.util.UUID;
+
+import jakarta.validation.Valid;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -15,8 +16,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import jakarta.validation.Valid;
 
 import com.example.fitnessgym_mg.service.LessonService;
 
@@ -43,13 +42,14 @@ public class LessonApiController {
 	public ResponseEntity<com.example.fitnessgym_mg.dto.response.LessonResponse> createLesson(
 			@PathVariable("customer_id") UUID customerId,
 			@Valid @RequestBody com.example.fitnessgym_mg.dto.request.LessonRequest request) {
-		
+
 		// customerIdをリクエストに設定
 		request.setCustomerId(customerId);
-		
+
 		com.example.fitnessgym_mg.entity.Lesson savedLesson = lessonService.createLesson(request);
-		com.example.fitnessgym_mg.dto.response.LessonResponse response = lessonService.getLessonDetail(savedLesson.getId());
-		
+		com.example.fitnessgym_mg.dto.response.LessonResponse response = lessonService
+				.getLessonDetail(savedLesson.getId());
+
 		return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
 	}
 
@@ -60,18 +60,13 @@ public class LessonApiController {
 	@GetMapping("/customers/{customer_id}/lessons")
 	public ResponseEntity<org.springframework.data.domain.Page<com.example.fitnessgym_mg.dto.response.LessonResponse>> getCustomerLessons(
 			@PathVariable("customer_id") UUID customerId,
-			@RequestParam(defaultValue = "0") 
-			@jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") 
-			int page,
-			@RequestParam(defaultValue = "10") 
-			@jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") 
-			@jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") 
-			int size) {
-		
+			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
+			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
+
 		Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
-		org.springframework.data.domain.Page<com.example.fitnessgym_mg.dto.response.LessonResponse> lessonPage = 
-				lessonService.getLessonsByCustomerId(customerId, pageable);
-		
+		org.springframework.data.domain.Page<com.example.fitnessgym_mg.dto.response.LessonResponse> lessonPage = lessonService
+				.getLessonsByCustomerId(customerId, pageable);
+
 		return ResponseEntity.ok(lessonPage);
 	}
 
@@ -82,7 +77,7 @@ public class LessonApiController {
 	@GetMapping("/lessons/{lesson_id}")
 	public ResponseEntity<com.example.fitnessgym_mg.dto.response.LessonResponse> getLesson(
 			@PathVariable("lesson_id") UUID lessonId) {
-		
+
 		com.example.fitnessgym_mg.dto.response.LessonResponse lesson = lessonService.getLessonDetail(lessonId);
 		return ResponseEntity.ok(lesson);
 	}
@@ -95,7 +90,7 @@ public class LessonApiController {
 	public ResponseEntity<com.example.fitnessgym_mg.dto.response.LessonResponse> updateLesson(
 			@PathVariable("lesson_id") UUID lessonId,
 			@Valid @RequestBody com.example.fitnessgym_mg.dto.request.LessonRequest request) {
-		
+
 		com.example.fitnessgym_mg.dto.response.LessonResponse response = lessonService.updateLesson(lessonId, request);
 		return ResponseEntity.ok(response);
 	}
