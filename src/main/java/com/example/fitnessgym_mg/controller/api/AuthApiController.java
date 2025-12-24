@@ -18,10 +18,9 @@ import com.example.fitnessgym_mg.dto.request.LoginRequest;
 import com.example.fitnessgym_mg.dto.response.LoginResponse;
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.repository.UserRepository;
+import com.example.fitnessgym_mg.util.JwtTokenUtil;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +28,8 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 認証・認可REST APIコントローラー
  * Reactフロントエンドとの連携用
+ * 
+ * JWT（JSON Web Token）認証を使用
  */
 @Slf4j
 @RestController
@@ -40,11 +41,12 @@ public class AuthApiController {
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
     private final SecurityUtil securityUtil;
+    private final JwtTokenUtil jwtTokenUtil;
 
     /**
      * GET /api/auth/login
-     * ログイン画面表示（React側で実装される想定）
-     * このエンドポイントは主にReact側で使用されるため、認証状態を確認する程度
+     * 認証状態の確認
+     * 既に認証されている場合はユーザー情報を返す
      */
     @GetMapping("/login")
     public ResponseEntity<?> getLogin() {
@@ -56,13 +58,13 @@ public class AuthApiController {
 
     /**
      * POST /api/auth/login
-     * 認証情報送信、JWTトークン取得（またはセッショントークン）
-     * 現在はセッションベース認証を使用
+     * ログイン処理、JWTトークンを発行
+     * 
+     * フロントエンドは取得したトークンをlocalStorageに保存し、
+     * 以降のリクエストでAuthorization: Bearer <token>ヘッダーを付与する
      */
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(
-            @Valid @RequestBody LoginRequest request,
-            HttpServletRequest httpRequest) {
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         
         try {
             // 認証処理
@@ -77,35 +79,28 @@ public class AuthApiController {
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             // ユーザー情報を取得
-            // セキュリティ: ユーザーが見つからない場合も認証失敗として扱う（情報漏洩防止）
             User user = userRepository.findByEmail(request.getEmail())
                     .orElse(null);
             
             if (user == null) {
                 // ユーザーが存在しない場合も、認証失敗として扱う（情報漏洩防止）
-                log.warn("ログイン失敗: 認証エラー");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(null);
+                log.warn("ログイン失敗: ユーザーが見つかりません");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
             }
 
-            // セッションIDを取得（将来JWTに移行する場合はここでトークンを生成）
-            // 認証成功後はセッションが作成されているはずなので、getSession(true)で取得
-            HttpSession session = httpRequest.getSession(true);
-            String token = session.getId();
+            // JWTトークンを生成
+            String token = jwtTokenUtil.generateToken(user);
 
             // レスポンス作成
             LoginResponse response = createLoginResponse(user, token);
             
-            // セキュリティ: ログにはメールアドレスではなくユーザーIDを出力
             log.debug("ログイン成功: ユーザーID={}, 権限={}", user.getId(), user.getRole());
             
             return ResponseEntity.ok(response);
 
         } catch (BadCredentialsException e) {
-            // セキュリティ: エラーメッセージを汎用的に（情報漏洩防止）
             log.warn("ログイン失敗: 認証エラー");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(null);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
         } catch (Exception e) {
             log.error("ログイン処理でエラーが発生しました: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -114,27 +109,18 @@ public class AuthApiController {
 
     /**
      * POST /api/auth/logout
-     * サーバー側セッション破棄/クライアント側トークン削除
+     * ログアウト処理
+     * 
+     * JWTはステートレスなので、サーバー側では特に処理しない
+     * クライアント側でトークンを削除することでログアウトが完了する
      */
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(HttpServletRequest request) {
-        try {
-            // セッションを無効化
-            HttpSession session = request.getSession(false);
-            if (session != null) {
-                session.invalidate();
-            }
-
-            // セキュリティコンテキストをクリア
-            SecurityContextHolder.clearContext();
-
-            log.debug("ログアウト成功");
-            return ResponseEntity.ok().build();
-
-        } catch (Exception e) {
-            log.error("ログアウト処理でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+    public ResponseEntity<Void> logout() {
+        // セキュリティコンテキストをクリア
+        SecurityContextHolder.clearContext();
+        
+        log.debug("ログアウト成功");
+        return ResponseEntity.ok().build();
     }
 
     /**
@@ -150,4 +136,3 @@ public class AuthApiController {
                 .build();
     }
 }
-

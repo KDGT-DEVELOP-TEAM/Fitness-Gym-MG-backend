@@ -6,17 +6,25 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.header.writers.XXssProtectionHeaderWriter;
 
 import lombok.RequiredArgsConstructor;
 
+/**
+ * Spring Security設定クラス
+ * JWT認証を使用したステートレスなREST API用セキュリティ設定
+ */
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
+
+	private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
 	/**
 	 * BCryptパスワードエンコーダーのストレングス
@@ -55,22 +63,21 @@ public class SecurityConfig {
 						.requestMatchers("/api/**").authenticated() // それ以外の API は認証必須
 						.anyRequest().denyAll()) // APIエンドポイント以外は拒否
 
-				// ログイン設定（REST APIのみ使用）
-				.formLogin(form -> form
-						.disable()) // フォームログインを無効化（APIログインのみ）
+				// フォームログインを無効化（JWT認証のみ使用）
+				.formLogin(form -> form.disable())
 
-			// ログアウト設定（REST API用）
-			.logout(logout -> logout
-					.logoutUrl("/api/auth/logout")
-					.invalidateHttpSession(true)
-					.deleteCookies("JSESSIONID"))
+				// ログアウト設定（JWT認証ではサーバー側での処理は最小限）
+				.logout(logout -> logout
+						.logoutUrl("/api/auth/logout")
+						.logoutSuccessHandler((request, response, authentication) -> {
+							// JWTはステートレスなので、サーバー側では特に処理しない
+							// クライアント側でトークンを削除する
+							response.setStatus(200);
+						}))
 
-				// セッション管理設定
+				// セッション管理設定（JWT認証のためステートレスに設定）
 				.sessionManagement(session -> session
-						.sessionFixation().migrateSession() // セッション固定攻撃対策
-						.maximumSessions(1) // 同時セッション数制限
-						.maxSessionsPreventsLogin(false) // 新しいセッションを優先
-				)
+						.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
 				// セキュリティヘッダー設定
 				.headers(headers -> headers
@@ -80,10 +87,11 @@ public class SecurityConfig {
 						.contentTypeOptions(options -> options.disable()) // MIME sniffing対策（デフォルトで有効）
 				)
 
-				// CSRF 設定 — HTML 画面系は CSRF 有効のまま
-				.csrf(csrf -> csrf
-						.ignoringRequestMatchers("/api/**") // API のみ CSRF 無効
-				);
+				// CSRF無効化（JWT認証ではCSRFトークンは不要）
+				.csrf(csrf -> csrf.disable())
+
+				// JWT認証フィルターを追加
+				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();
 	}
