@@ -268,4 +268,14 @@ public class JwtTokenUtil {
             return true;
         }
     }
+
+    /**
+     * JWTトークンの有効期限（ミリ秒）を取得
+     * CookieのMaxAge設定などに使用
+     * 
+     * @return 有効期限（ミリ秒）
+     */
+    public long getExpirationTimeMs() {
+        return expirationTimeMs;
+    }
 }

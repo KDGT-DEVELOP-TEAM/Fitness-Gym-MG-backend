@@ -123,6 +123,13 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	java.util.Optional<Lesson> findByIdWithRelations(@Param("lessonId") UUID lessonId);
 
 	/**
+	 * レッスンIDから顧客IDを取得
+	 * 認可チェック用の軽量なクエリ
+	 */
+	@Query("SELECT l.customer.id FROM Lesson l WHERE l.id = :lessonId")
+	java.util.Optional<UUID> findCustomerIdByLessonId(@Param("lessonId") UUID lessonId);
+
+	/**
 	 * 顧客IDで最新のレッスンを1件のみ取得（体重取得用）
 	 */
 	@Query("""

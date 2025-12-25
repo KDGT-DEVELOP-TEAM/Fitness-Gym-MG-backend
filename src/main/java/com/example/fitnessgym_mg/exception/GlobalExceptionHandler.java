@@ -1,8 +1,12 @@
 package com.example.fitnessgym_mg.exception;
 
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -14,6 +18,52 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /**
+     * @RequestParam のバリデーションエラーのハンドリング
+     * @Validated を使用した場合に発生する ConstraintViolationException を処理
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException e) {
+        log.warn("Validation error: {}", e.getMessage());
+        // 最初のバリデーションエラーメッセージを取得
+        String message = e.getConstraintViolations().stream()
+                .map(ConstraintViolation::getMessage)
+                .findFirst()
+                .orElse("Validation failed");
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse("VALIDATION_ERROR", message));
+    }
+
+    /**
+     * @RequestBody のバリデーションエラーのハンドリング
+     * @Valid を使用した場合に発生する MethodArgumentNotValidException を処理
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(MethodArgumentNotValidException e) {
+        log.warn("Validation error: {}", e.getMessage());
+        // 最初のバリデーションエラーメッセージを取得
+        String message = e.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getDefaultMessage())
+                .findFirst()
+                .orElse("Validation failed");
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse("VALIDATION_ERROR", message));
+    }
+
+    /**
+     * 不正なリクエストエラーのハンドリング
+     * Controller層で意図的にthrowされたInvalidRequestExceptionを処理
+     */
+    @ExceptionHandler(InvalidRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRequest(InvalidRequestException e) {
+        log.warn("Invalid request: {}", e.getMessage());
+        return ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse("INVALID_REQUEST", e.getMessage()));
+    }
 
     /**
      * バリデーションエラーのハンドリング
@@ -28,10 +78,33 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 認証失敗エラーのハンドリング（BadCredentialsException）
+     * 情報漏洩を防ぐため、詳細情報はログに記録し、クライアントには汎用的なメッセージを返す
+     * メールアドレスが存在するかどうかを判別できないようにする
+     */
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException e) {
+        log.warn("ログイン失敗: 認証に失敗しました");
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse("AUTHENTICATION_ERROR", "メールアドレスまたはパスワードが正しくありません"));
+    }
+
+    /**
      * ビジネスロジックエラーのハンドリング
+     * 認証関連のIllegalStateExceptionは別途処理する
      */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException e) {
+        // 認証関連のIllegalStateExceptionかどうかを判定
+        if (e.getMessage() != null && e.getMessage().contains("ユーザー情報の取得に失敗しました")) {
+            log.error("ログイン処理で不整合が発生しました: {}", e.getMessage(), e);
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body(new ErrorResponse("AUTHENTICATION_ERROR", "認証に失敗しました"));
+        }
+        
+        // その他のIllegalStateExceptionはビジネスロジックエラーとして処理
         log.warn("Business logic error: {}", e.getMessage());
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
@@ -62,6 +135,31 @@ public class GlobalExceptionHandler {
         return ResponseEntity
             .status(HttpStatus.UNAUTHORIZED)
             .body(new ErrorResponse("AUTHENTICATION_ERROR", "認証に失敗しました"));
+    }
+
+    /**
+     * 認可エラーのハンドリング
+     * 認証済みユーザーがリソースにアクセスする権限がない場合に使用
+     * HTTPステータスコード403 Forbiddenを返す
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
+        log.warn("Access denied: {}", e.getMessage());
+        // 情報漏洩を防ぐため、詳細情報はログに記録し、クライアントには汎用的なメッセージを返す
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse("ACCESS_DENIED", "このリソースにアクセスする権限がありません"));
+    }
+
+    /**
+     * リソース競合エラーのハンドリング
+     */
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ErrorResponse> handleConflict(ConflictException e) {
+        log.warn("Resource conflict: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse("CONFLICT", e.getMessage()));
     }
 
     /**

@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -11,6 +12,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import com.example.fitnessgym_mg.filter.LoginAttemptFilter;
 
 import lombok.RequiredArgsConstructor;
 
@@ -20,10 +23,13 @@ import lombok.RequiredArgsConstructor;
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity(prePostEnabled = true)
 @RequiredArgsConstructor
 public class SecurityConfig {
 
 	private final JwtAuthenticationFilter jwtAuthenticationFilter;
+	private final LoginRateLimitFilter loginRateLimitFilter;
+	private final LoginAttemptFilter loginAttemptFilter;
 
 	/* =========================
 	 * 定数定義（将来分離しやすい）
@@ -95,6 +101,18 @@ public class SecurityConfig {
 					.frameOptions(frame -> frame.deny())
 					.contentTypeOptions(contentType -> {}) // X-Content-Type-Options: nosniff
 				)
+
+			// LoginAttemptFilter（UsernamePasswordAuthenticationFilterより前に配置）
+			.addFilterBefore(
+					loginAttemptFilter,
+					UsernamePasswordAuthenticationFilter.class
+			)
+
+			// レートリミットフィルター（JWTフィルターより前に配置）
+			.addFilterBefore(
+					loginRateLimitFilter,
+					JwtAuthenticationFilter.class
+			)
 
 			// JWTフィルター
 			.addFilterBefore(

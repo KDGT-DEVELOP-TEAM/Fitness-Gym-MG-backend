@@ -21,9 +21,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class LessonRequest {
     
-    @NotNull(message = "顧客IDは必須です")
-    private UUID customerId;
-    
     @NotNull(message = "店舗IDは必須です")
     private UUID storeId;
     

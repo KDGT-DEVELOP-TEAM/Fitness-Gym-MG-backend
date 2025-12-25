@@ -46,5 +46,21 @@ public interface PostureGroupRepository extends JpaRepository<PostureGroup, UUID
      * - findByCustomerIdOrderByCapturedAtDesc(): シンプルな検索（関連データは遅延読み込み）
      */
     List<PostureGroup> findByCustomerIdOrderByCapturedAtDesc(UUID customerId);
+    
+    /**
+     * レッスンIDに紐づく姿勢画像グループが存在するか確認
+     * 冪等性チェック用
+     */
+    boolean existsByLessonId(UUID lessonId);
+    
+    /**
+     * PostureGroupIDからLessonIDを取得
+     * 認可チェック用の軽量なクエリ
+     * 
+     * @param postureGroupId PostureGroupID
+     * @return LessonID（存在する場合）
+     */
+    @Query("SELECT pg.lesson.id FROM PostureGroup pg WHERE pg.id = :postureGroupId")
+    Optional<UUID> findLessonIdByPostureGroupId(@Param("postureGroupId") UUID postureGroupId);
 }
 

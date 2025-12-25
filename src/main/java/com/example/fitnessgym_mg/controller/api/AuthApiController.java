@@ -7,7 +7,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,6 +24,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Map;
+
 /**
  * 認証・認可REST APIコントローラー
  * Reactフロントエンドとの連携用
@@ -35,7 +36,6 @@ import lombok.extern.slf4j.Slf4j;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Validated
 public class AuthApiController {
 
     private final AuthenticationManager authenticationManager;
@@ -60,12 +60,22 @@ public class AuthApiController {
      * POST /api/auth/login
      * ログイン処理、JWTトークンを発行
      * 
-     * フロントエンドは取得したトークンをlocalStorageに保存し、
-     * 以降のリクエストでAuthorization: Bearer <token>ヘッダーを付与する
+     * <p>トークンの保存方法:</p>
+     * <ul>
+     *   <li>フロントエンドは取得したトークンをlocalStorageに保存し、
+     *   以降のリクエストでAuthorization: Bearer &lt;token&gt; ヘッダーを付与する</li>
+     *   <li>UXを優先し、タブを閉じてもログイン状態が保持される</li>
+     * </ul>
+     * 
+     * <p>セキュリティ注意事項:</p>
+     * <ul>
+     *   <li>localStorageはJavaScriptからアクセス可能なため、XSS攻撃でトークンが漏洩するリスクがある</li>
+     *   <li>フロントエンド側でXSS対策（入力値のサニタイズ、CSP設定など）を徹底すること</li>
+     *   <li>本番環境では、可能な限りHttpOnly Cookieの使用を検討すること</li>
+     * </ul>
      */
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
         try {
             // 認証処理
             Authentication authentication = authenticationManager.authenticate(
@@ -78,32 +88,35 @@ public class AuthApiController {
             // セキュリティコンテキストに認証情報を設定
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            // ユーザー情報を取得
+            // ユーザー情報を取得（認証成功後なので必ず存在するはず）
             User user = userRepository.findByEmail(request.getEmail())
-                    .orElse(null);
-            
-            if (user == null) {
-                // ユーザーが存在しない場合も、認証失敗として扱う（情報漏洩防止）
-                log.warn("ログイン失敗: ユーザーが見つかりません");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
-            }
+                .orElseThrow(() -> {
+                    log.error("認証成功後にユーザーが見つからない異常事態を検出");
+                    return new IllegalStateException("ユーザー情報の取得に失敗しました");
+                });
 
             // JWTトークンを生成
             String token = jwtTokenUtil.generateToken(user);
 
-            // レスポンス作成
-            LoginResponse response = createLoginResponse(user, token);
+            // レスポンス作成（トークンを含める）
+            LoginResponse responseBody = createLoginResponse(user, token);
             
-            log.debug("ログイン成功: ユーザーID={}, 権限={}", user.getId(), user.getRole());
+            // ログ出力（権限情報は機密性が高いため除外）
+            log.info("ログイン成功: ユーザーID={}", user.getId());
             
-            return ResponseEntity.ok(response);
-
+            return ResponseEntity.ok(responseBody);
         } catch (BadCredentialsException e) {
-            log.warn("ログイン失敗: 認証エラー");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+            // 認証失敗: メールアドレスまたはパスワードが正しくない
+            log.warn("ログイン失敗試行を検出");
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "メールアドレスまたはパスワードが正しくありません"));
         } catch (Exception e) {
-            log.error("ログイン処理でエラーが発生しました: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            // その他の予期しないエラー
+            log.error("認証処理中にエラーが発生: {}", e.getMessage(), e);
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "認証処理中にエラーが発生しました"));
         }
     }
 
@@ -112,7 +125,7 @@ public class AuthApiController {
      * ログアウト処理
      * 
      * JWTはステートレスなので、サーバー側では特に処理しない
-     * クライアント側でトークンを削除することでログアウトが完了する
+     * クライアント側でlocalStorageからトークンを削除することでログアウトが完了する
      */
     @PostMapping("/logout")
     public ResponseEntity<Void> logout() {

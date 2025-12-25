@@ -31,6 +31,19 @@ public final class ApplicationConstants {
      * 最小ページサイズ
      */
     public static final int MIN_PAGE_SIZE = 1;
+    
+    /**
+     * 最大ページ番号
+     * 巨大なOFFSETクエリを防ぐため、1000ページまでに制限
+     */
+    public static final int MAX_PAGE_NUMBER = 1000;
+    
+    /**
+     * 最大オフセット値
+     * page × size がこの値を超える場合、IllegalArgumentExceptionをスロー
+     * 巨大なOFFSETクエリによるDB負荷を防ぐため、10000件までに制限
+     */
+    public static final int MAX_OFFSET = 10000;
 
     // ===== ファイルアップロード関連 =====
     

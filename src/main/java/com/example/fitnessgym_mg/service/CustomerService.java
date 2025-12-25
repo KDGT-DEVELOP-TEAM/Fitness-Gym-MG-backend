@@ -152,6 +152,23 @@ public class CustomerService {
 		return findCustomerById(id, storeId);
 	}
 
+	/**
+	 * 顧客エンティティを取得（権限チェックなし、内部使用専用）
+	 * 認可チェックが必要な場合は、CustomerAuthorizationServiceを使用すること
+	 * 
+	 * @param customerId 顧客ID
+	 * @return 顧客エンティティ
+	 * @throws EntityNotFoundException 顧客が見つからない場合
+	 */
+	@Transactional(readOnly = true)
+	public Customer findEntityByIdInternal(UUID customerId) {
+		return customerRepository.findByIdWithStores(customerId)
+			.orElseThrow(() -> {
+				log.warn("顧客が見つかりません: customerId={}", customerId);
+				return new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません: " + customerId);
+			});
+	}
+
 	// --- トレーナー用顧客取得 ---
 	/**
 	 * トレーナーIDでそのトレーナーが担当している顧客リストを取得
@@ -162,6 +179,20 @@ public class CustomerService {
 		return userCustomerRepository.findByUserIdWithCustomer(trainerId).stream()
 				.map(uc -> CustomerResponse.fromEntity(uc.getCustomer()))
 				.collect(Collectors.toList());
+	}
+
+	/**
+	 * トレーナーが顧客に割り当てられているか確認（存在確認専用）
+	 * 
+	 * @param trainerId トレーナーID
+	 * @param customerId 顧客ID
+	 * @return 割り当てられている場合 true
+	 */
+	@Transactional(readOnly = true)
+	public boolean isTrainerAssignedToCustomer(UUID trainerId, UUID customerId) {
+		return userCustomerRepository.existsById(
+			new com.example.fitnessgym_mg.entity.UserCustomer.UserCustomerId(trainerId, customerId)
+		);
 	}
 
 	// --- 顧客IDで顧客詳細を取得（CustomerResponse形式） ---

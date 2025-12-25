@@ -20,6 +20,7 @@ import com.example.fitnessgym_mg.dto.response.PostureImageUploadResponse;
 import com.example.fitnessgym_mg.dto.response.SignedUrlResponse;
 import com.example.fitnessgym_mg.entity.PostureGroup;
 import com.example.fitnessgym_mg.entity.PostureImage;
+import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.PostureImagePosition;
 import com.example.fitnessgym_mg.repository.PostureImageRepository;
 import com.example.fitnessgym_mg.repository.PostureGroupRepository;
@@ -39,8 +40,19 @@ public class PostureImageService {
     private final PostureImageRepository postureImageRepository;
     private final PostureGroupRepository postureGroupRepository;
     private final SupabaseStorageService storageService;
+    private final CustomerAuthorizationService customerAuthorizationService;
     
-    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("image/jpeg", "image/jpg");
+    // 許可するContent-Type
+    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
+        "image/jpeg", 
+        "image/jpg", 
+        "image/png", 
+        "image/webp"
+    );
+    
+    // 許可する拡張子
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp");
+    
     private static final long MAX_FILE_SIZE = com.example.fitnessgym_mg.config.ApplicationConstants.MAX_FILE_SIZE_BYTES;
 
     /**
@@ -70,7 +82,9 @@ public class PostureImageService {
      * @param file アップロードするファイル
      * @param request アップロードリクエスト
      * @return アップロード結果
+     * @deprecated 内部使用専用。Controllerからは{@link #uploadImageWithAuth(User, MultipartFile, PostureImageUploadRequest)}を使用してください。
      */
+    @Deprecated
     @Transactional
     public PostureImageUploadResponse uploadImage(MultipartFile file, PostureImageUploadRequest request) {
         // 1. ファイルバリデーション
@@ -143,11 +157,42 @@ public class PostureImageService {
     }
     
     /**
+     * 画像をアップロード（認可チェック込み）
+     * 
+     * <p>Controller層から呼び出されるメソッド。
+     * 認可チェックとDTO変換をService層で実施し、ControllerはHTTPレスポンスの生成のみに集中する。</p>
+     * 
+     * @param currentUser 現在のユーザー（認可チェック用）
+     * @param file アップロードするファイル
+     * @param request アップロードリクエスト
+     * @return アップロード結果
+     * @throws AccessDeniedException アクセス権限がない場合（HTTP 403 Forbidden）
+     */
+    @Transactional
+    public PostureImageUploadResponse uploadImageWithAuth(
+        User currentUser, 
+        MultipartFile file, 
+        PostureImageUploadRequest request
+    ) {
+        // 認可チェック: PostureGroupへのアクセス権限を確認
+        PostureGroup group = postureGroupRepository.findById(request.getPostureGroupId())
+            .orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("PostureGroup not found: " + request.getPostureGroupId()));
+        
+        UUID customerId = group.getCustomer().getId();
+        customerAuthorizationService.checkCanAccessCustomerOrThrow(currentUser, customerId);
+        
+        // 既存のuploadImageロジックを実行
+        return uploadImage(file, request);
+    }
+    
+    /**
      * 署名付きURLを生成
      * @param imageId 画像ID
      * @param expiresIn 有効期限（秒）
      * @return 署名付きURL
+     * @deprecated 内部使用専用。Controllerからは{@link #generateSignedUrlWithAuth(User, UUID, int)}を使用してください。
      */
+    @Deprecated
     public SignedUrlResponse generateSignedUrl(UUID imageId, int expiresIn) {
         PostureImage image = postureImageRepository.findById(imageId)
             .orElseThrow(() -> new IllegalArgumentException("PostureImage not found: " + imageId));
@@ -159,11 +204,30 @@ public class PostureImageService {
     }
     
     /**
+     * 署名付きURLを生成（認可チェック込み）
+     * 
+     * @param currentUser 現在のユーザー（認可チェック用）
+     * @param imageId 画像ID
+     * @param expiresIn 有効期限（秒）
+     * @return 署名付きURL
+     * @throws AccessDeniedException アクセス権限がない場合（HTTP 403 Forbidden）
+     */
+    public SignedUrlResponse generateSignedUrlWithAuth(User currentUser, UUID imageId, int expiresIn) {
+        // 認可チェック: 画像へのアクセス権限を確認
+        customerAuthorizationService.checkCanAccessPostureImageOrThrow(currentUser, imageId);
+        
+        // 既存のgenerateSignedUrlロジックを実行
+        return generateSignedUrl(imageId, expiresIn);
+    }
+    
+    /**
      * バッチで署名付きURLを生成
      * @param imageIds 画像IDリスト
      * @param expiresIn 有効期限（秒）
      * @return バッチ署名付きURLレスポンス
+     * @deprecated 内部使用専用。Controllerからは{@link #generateBatchSignedUrlsWithAuth(User, List, int)}を使用してください。
      */
+    @Deprecated
     public BatchSignedUrlResponse generateBatchSignedUrls(List<UUID> imageIds, int expiresIn) {
         List<PostureImage> images = postureImageRepository.findAllByIdIn(imageIds);
         OffsetDateTime expiresAt = OffsetDateTime.now().plusSeconds(expiresIn);
@@ -185,9 +249,34 @@ public class PostureImageService {
     }
     
     /**
+     * バッチ署名付きURLを生成（認可チェック込み）
+     * 
+     * @param currentUser 現在のユーザー（認可チェック用）
+     * @param imageIds 画像IDリスト
+     * @param expiresIn 有効期限（秒）
+     * @return バッチ署名付きURL
+     * @throws AccessDeniedException アクセス権限がない場合（HTTP 403 Forbidden）
+     */
+    public BatchSignedUrlResponse generateBatchSignedUrlsWithAuth(
+        User currentUser, 
+        List<UUID> imageIds, 
+        int expiresIn
+    ) {
+        // 各画像へのアクセス権限を確認
+        for (UUID imageId : imageIds) {
+            customerAuthorizationService.checkCanAccessPostureImageOrThrow(currentUser, imageId);
+        }
+        
+        // 既存のgenerateBatchSignedUrlsロジックを実行
+        return generateBatchSignedUrls(imageIds, expiresIn);
+    }
+    
+    /**
      * 画像をStorageとDBから削除
      * @param imageId 画像ID
+     * @deprecated 内部使用専用。Controllerからは{@link #deleteImageWithStorageWithAuth(User, UUID)}を使用してください。
      */
+    @Deprecated
     @Transactional
     public void deleteImageWithStorage(UUID imageId) {
         PostureImage image = postureImageRepository.findById(imageId)
@@ -203,12 +292,30 @@ public class PostureImageService {
             imageId, image.getStorageKey());
     }
     
+    /**
+     * 画像をStorageとDBから削除（認可チェック込み）
+     * 
+     * @param currentUser 現在のユーザー（認可チェック用）
+     * @param imageId 画像ID
+     * @throws AccessDeniedException アクセス権限がない場合（HTTP 403 Forbidden）
+     */
+    @Transactional
+    public void deleteImageWithStorageWithAuth(User currentUser, UUID imageId) {
+        // 認可チェック: 画像へのアクセス権限を確認
+        customerAuthorizationService.checkCanAccessPostureImageOrThrow(currentUser, imageId);
+        
+        // 既存のdeleteImageWithStorageロジックを実行
+        deleteImageWithStorage(imageId);
+    }
+    
     // ===== ヘルパーメソッド =====
     
     /**
      * ファイルバリデーション
+     * ファイルサイズ、Content-Type、拡張子をチェック
      */
     private void validateImageFile(MultipartFile file) {
+        // 空ファイルチェック
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File is required");
         }
@@ -221,11 +328,31 @@ public class PostureImageService {
             );
         }
         
-        // ファイル形式チェック
+        // Content-Typeチェック
         String contentType = file.getContentType();
         if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
-            throw new IllegalArgumentException("Only JPEG images are allowed");
+            throw new IllegalArgumentException("Only JPEG, PNG, and WebP images are allowed");
         }
+        
+        // 拡張子チェック
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename != null) {
+            String extension = getFileExtension(originalFilename).toLowerCase();
+            if (!ALLOWED_EXTENSIONS.contains(extension)) {
+                throw new IllegalArgumentException("File extension must be jpg, jpeg, png, or webp");
+            }
+        }
+    }
+    
+    /**
+     * ファイル名から拡張子を取得
+     */
+    private String getFileExtension(String filename) {
+        int lastDotIndex = filename.lastIndexOf('.');
+        if (lastDotIndex == -1 || lastDotIndex == filename.length() - 1) {
+            return "";
+        }
+        return filename.substring(lastDotIndex + 1);
     }
     
     /**

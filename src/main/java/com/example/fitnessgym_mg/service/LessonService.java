@@ -3,7 +3,7 @@ package com.example.fitnessgym_mg.service;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +32,10 @@ import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.PostureGroupRepository;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.repository.UserRepository;
+import com.example.fitnessgym_mg.util.DateTimeUtil;
 import com.example.fitnessgym_mg.util.SecurityUtil;
+import com.example.fitnessgym_mg.config.ApplicationConstants;
+import com.example.fitnessgym_mg.service.CustomerAuthorizationService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -46,11 +50,17 @@ public class LessonService {
 	private final StoreRepository storeRepository;
 	private final UserRepository userRepository;
 	private final SecurityUtil securityUtil;
+	private final CustomerAuthorizationService customerAuthorizationService;
 
 	// --- レッスン一覧の検索と絞り込み (Pageable対応に修正) ---
 	// ★ Pageable を引数に追加し、戻り値を Page に変更 ★
 	@Transactional(readOnly = true)
 	public Page<LessonResponse> searchLessons(UUID storeId, String keyword, Pageable pageable) {
+		// offset検証: page × size がMAX_OFFSETを超える場合は例外をスロー
+		int offset = pageable.getPageNumber() * pageable.getPageSize();
+		if (offset > ApplicationConstants.MAX_OFFSET) {
+			throw new IllegalArgumentException("Offset too large. Maximum offset is " + ApplicationConstants.MAX_OFFSET);
+		}
 
 		Page<Lesson> lessonPage;
 		LocalDateTime now = LocalDateTime.now();
@@ -72,6 +82,7 @@ public class LessonService {
 	}
 
 	// --- レッスン回数グラフデータの作成 ---
+	@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
 	@Transactional(readOnly = true)
 	public LessonChartData getLessonChartData(UUID storeId, String type) {
 		LocalDateTime now = LocalDateTime.now();
@@ -95,9 +106,9 @@ public class LessonService {
 
 	// --- 新規レッスン作成 ---
 	@Transactional
-	public Lesson createLesson(LessonRequest request) {
+	public Lesson createLesson(UUID customerId, LessonRequest request) {
 		// エンティティの取得
-		LessonEntities entities = prepareLessonEntities(request);
+		LessonEntities entities = prepareLessonEntities(customerId, request);
 		
 		// レッスンエンティティの作成
 		Lesson lesson = new Lesson();
@@ -130,6 +141,11 @@ public class LessonService {
 		if (lesson.getStore() == null) {
 			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("レッスンに店舗情報が紐づいていません");
 		}
+		
+		// 認可チェック: Service層での最終防衛ライン（Controller層での早期リターンとは別）
+		User currentUser = securityUtil.getCurrentUserOrThrow();
+		UUID customerId = lesson.getCustomer().getId();
+		customerAuthorizationService.checkCanAccessCustomerOrThrow(currentUser, customerId);
 		
 		// トレーニング取得
 		List<TrainingResponse> trainings = trainingService.getTrainingsByLessonId(lessonId);
@@ -175,6 +191,10 @@ public class LessonService {
 	 */
 	@Transactional(readOnly = true)
 	public Page<LessonResponse> getLessonsByCustomerId(UUID customerId, Pageable pageable) {
+		// 認可チェック: Service層での最終防衛ライン（Controller層での早期リターンとは別）
+		User currentUser = securityUtil.getCurrentUserOrThrow();
+		customerAuthorizationService.checkCanAccessCustomerOrThrow(currentUser, customerId);
+		
 		Page<Lesson> lessonPage = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId, pageable);
 		return lessonPage.map(LessonResponse::fromEntity);
 	}
@@ -214,12 +234,14 @@ public class LessonService {
 			LocalDateTime periodStartAt;
 			Object periodObj = row[0];
 			if (periodObj instanceof java.sql.Timestamp) {
+				// UTC固定で変換（設計方針: APIはすべてUTCで返す）
 				periodStartAt = ((java.sql.Timestamp) periodObj).toInstant()
-						.atZone(ZoneId.systemDefault())
+						.atOffset(ZoneOffset.UTC)
 						.toLocalDateTime();
 			} else if (periodObj instanceof java.time.Instant) {
+				// UTC固定で変換（設計方針: APIはすべてUTCで返す）
 				periodStartAt = ((java.time.Instant) periodObj)
-						.atZone(ZoneId.systemDefault())
+						.atOffset(ZoneOffset.UTC)
 						.toLocalDateTime();
 			} else if (periodObj instanceof java.time.OffsetDateTime) {
 				periodStartAt = ((java.time.OffsetDateTime) periodObj)
@@ -293,6 +315,11 @@ public class LessonService {
 	 */
 	@Transactional(readOnly = true)
 	public List<com.example.fitnessgym_mg.dto.response.VitalsHistoryResponse.VitalsData> getVitalsHistoryByCustomerId(UUID customerId) {
+		// 顧客の存在確認
+		if (!customerRepository.existsById(customerId)) {
+			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません");
+		}
+		
 		List<Lesson> lessons = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId);
 		
 		return lessons.stream()
@@ -313,14 +340,42 @@ public class LessonService {
 	 */
 	@Transactional
 	public LessonResponse updateLesson(UUID lessonId, LessonRequest request) {
-		Lesson lesson = lessonRepository.findById(lessonId)
+		// レッスンを取得（customer情報も含む）
+		Lesson lesson = lessonRepository.findByIdWithRelations(lessonId)
 				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("レッスンが見つかりません"));
-
-		// エンティティの取得
-		LessonEntities entities = prepareLessonEntities(request);
 		
-		// レッスン情報を更新
-		applyLessonRequestToEntity(lesson, request, entities);
+		// レッスンに紐づく顧客IDを取得
+		if (lesson.getCustomer() == null) {
+			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("レッスンに顧客情報が紐づいていません");
+		}
+		UUID customerId = lesson.getCustomer().getId();
+		
+		// 現在のユーザーを取得
+		User currentUser = securityUtil.getCurrentUserOrThrow();
+		
+		// 認可チェック: Service層での最終防衛ライン（Controller層での早期リターンとは別）
+		customerAuthorizationService.checkCanAccessCustomerOrThrow(currentUser, customerId);
+
+		// 既存のレッスンのstoreIdとtrainerIdを使用（リクエストから取得しない）
+		// 次回店舗・トレーナーのエンティティ取得（任意）
+		Store nextStore = request.getNextStoreId() != null 
+			? storeRepository.findById(request.getNextStoreId()).orElse(null) 
+			: null;
+		User nextTrainer = request.getNextTrainerId() != null 
+			? userRepository.findById(request.getNextTrainerId()).orElse(null) 
+			: null;
+		
+		// レッスン情報を更新（storeIdとtrainerIdは既存の値を保持）
+		lesson.setCondition(request.getCondition());
+		lesson.setWeight(request.getWeight());
+		lesson.setMeal(request.getMeal());
+		lesson.setMemo(request.getMemo());
+		lesson.setStartDate(request.getStartDate());
+		lesson.setEndDate(request.getEndDate());
+		lesson.setNextDate(request.getNextDate());
+		lesson.setNextStore(nextStore);
+		lesson.setNextUser(nextTrainer);
+		// 注意: lesson.setCustomer(), lesson.setStore(), lesson.setTrainer()は呼び出さない
 		
 		// レッスン保存
 		Lesson savedLesson = lessonRepository.save(lesson);
@@ -340,8 +395,8 @@ public class LessonService {
 	/**
 	 * レッスンリクエストから必要なエンティティを取得する共通メソッド
 	 */
-	private LessonEntities prepareLessonEntities(LessonRequest request) {
-		Customer customer = customerRepository.findById(request.getCustomerId())
+	private LessonEntities prepareLessonEntities(UUID customerId, LessonRequest request) {
+		Customer customer = customerRepository.findById(customerId)
 			.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません"));
 		Store store = storeRepository.findById(request.getStoreId())
 			.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("店舗が見つかりません"));

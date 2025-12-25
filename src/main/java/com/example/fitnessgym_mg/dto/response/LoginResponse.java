@@ -8,7 +8,10 @@ import lombok.NoArgsConstructor;
 
 /**
  * ログインレスポンスDTO
- * 認証成功時に返されるユーザー情報とトークンを含む
+ * 認証成功時に返されるユーザー情報とJWTトークンを含む
+ * 
+ * <p>注意: フロントエンドは取得したトークンをlocalStorageに保存し、
+ * 以降のリクエストでAuthorization: Bearer &lt;token&gt; ヘッダーを付与してください。</p>
  */
 @Data
 @Builder
@@ -37,7 +40,8 @@ public class LoginResponse {
     private String role;
     
     /**
-     * セッションIDまたはJWTトークン（将来の拡張用）
+     * JWTトークン
+     * フロントエンドはこのトークンをlocalStorageに保存する
      */
     private String token;
 }

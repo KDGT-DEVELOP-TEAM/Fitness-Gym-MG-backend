@@ -21,9 +21,11 @@ import com.example.fitnessgym_mg.dto.response.UserResponse;
 import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.UserRole;
+import com.example.fitnessgym_mg.entity.enums.UserSortType;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.repository.UserRepository;
+import com.example.fitnessgym_mg.service.CustomerAuthorizationService;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
@@ -38,13 +40,14 @@ public class AccountService {
 	private final PasswordEncoder passwordEncoder;
 	private final LessonRepository lessonRepository;
 	private final SecurityUtil securityUtil;
+	private final CustomerAuthorizationService customerAuthorizationService;
 
 	// --- ユーザー検索 ---
 	@Transactional(readOnly = true)
 	public Page<UserResponse> searchUsers(
 			String keyword,
-			String role,
-			String sort,
+			UserRole role,
+			UserSortType sort,
 			UUID storeId, // 検索条件のstoreIdは単一でOK
 			Pageable pageable) {
 
@@ -64,12 +67,8 @@ public class AccountService {
 		}
 
 		// --- 1-3. ロールによる絞り込み ---
-		if (role != null && !role.isEmpty()) {
-			try {
-				UserRole roleEnum = UserRole.valueOf(role.toUpperCase());
-				spec = spec.and((root, query, cb) -> cb.equal(root.get("role"), roleEnum));
-			} catch (IllegalArgumentException ignored) {
-			}
+		if (role != null) {
+			spec = spec.and((root, query, cb) -> cb.equal(root.get("role"), role));
 		}
 
 		// 2. ソートオブジェクトの生成 (グルーピングソート対応)
@@ -85,6 +84,29 @@ public class AccountService {
 
 	// ユーザー作成
 	public void create(UserRequest req, Set<UUID> storeIds) {
+		create(req, storeIds, null);
+	}
+
+	// ユーザー作成（Manager用エンドポイント用）
+	public void create(UserRequest req, Set<UUID> storeIds, UUID pathStoreId) {
+		// pathStoreIdが指定されている場合（Manager用エンドポイント）、整合性チェック
+		if (pathStoreId != null) {
+			User currentUser = securityUtil.getCurrentUserOrThrow();
+			
+			// ログインユーザーがそのstoreにアクセス可能か確認
+			if (!customerAuthorizationService.canAccessStore(currentUser, pathStoreId)) {
+				throw new com.example.fitnessgym_mg.exception.AccessDeniedException("この店舗にアクセスする権限がありません");
+			}
+			
+			// storeIdを強制追加（request.getStoreIds()にpathStoreIdを含める）
+			if (storeIds == null) {
+				storeIds = new java.util.HashSet<>();
+			}
+			storeIds.add(pathStoreId);
+		}
+
+		// role変更の制約を検証
+		validateRoleChange(null, req.getRole());
 
 		// マネージャーの権限チェック: マネージャーはトレーナーのみ作成可能
 		validateManagerPermission(req.getRole());
@@ -120,7 +142,17 @@ public class AccountService {
 
 	// 更新
 	public void update(UUID id, UserRequest req, Set<UUID> storeIds) {
-		User user = findUserById(id, null);
+		update(id, req, storeIds, null);
+	}
+
+	// 更新（Manager用エンドポイント用）
+	public void update(UUID id, UserRequest req, Set<UUID> storeIds, UUID pathStoreId) {
+		// pathStoreIdが指定されている場合（Manager用エンドポイント）、整合性チェック
+		// findUserByIdでstoreIdチェックが実施される
+		User user = findUserById(id, pathStoreId);
+
+		// role変更の制約を検証（自分自身のrole変更禁止）
+		validateRoleChange(id, req.getRole());
 
 		// マネージャーの権限チェック: マネージャーはトレーナーのみ編集可能
 		validateManagerPermission(user.getRole(), req.getRole());
@@ -220,35 +252,40 @@ public class AccountService {
 					return new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + id);
 				});
 
-		// 店長の場合 (storeId != null)、操作対象のユーザーが自分の店舗に属するかチェック
+		// 店長の場合 (storeId != null)、ログインユーザーがそのstoreに属しているかチェック
 		if (storeId != null) {
-			// ユーザーが自分の店舗に属さない場合は拒否
+			User currentUser = securityUtil.getCurrentUserOrThrow();
+			
+			// ログインユーザーがそのstoreにアクセス可能か確認
+			if (!customerAuthorizationService.canAccessStore(currentUser, storeId)) {
+				throw new com.example.fitnessgym_mg.exception.AccessDeniedException("この店舗にアクセスする権限がありません");
+			}
+			
+			// 操作対象のユーザーがそのstoreに属するかチェック
 			if (user.getStores() == null || user.getStores().isEmpty()) {
-				// ビジネスロジックエラー（権限エラー）なのでlog.warnを使用
-				throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found (or access denied) with id: " + id);
+				throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + id);
 			}
 			
 			boolean isAssignedToStore = user.getStores().stream()
 					.anyMatch(store -> store.getId().equals(storeId));
 
 			if (!isAssignedToStore) {
-				// ビジネスロジックエラー（権限エラー）なのでlog.warnを使用
-				throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found (or access denied) with id: " + id);
+				throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + id);
 			}
 		}
 		return user;
 	}
 
-	private Sort createSort(String sort) {
+	private Sort createSort(UserSortType sort) {
 		// 1. ロールによる昇順ソート（roleOrderプロパティは存在しないため、roleでソート）
 		Sort primarySort = Sort.by("role").ascending();
 
 		// 2. 登録日時降順ソート、またはカナ昇順ソート
 		Sort secondarySort;
-		if ("kana".equals(sort)) {
+		if (sort == UserSortType.KANA) {
 			secondarySort = Sort.by("kana").ascending();
 		} else {
-			// デフォルトおよび "created" の場合、登録日時降順
+			// デフォルトおよびCREATEDの場合、登録日時降順
 			secondarySort = Sort.by("createdAt").descending();
 		}
 
@@ -317,5 +354,33 @@ public class AccountService {
 	private void validateManagerPermission(UserRole currentRole, UserRole newRole) {
 		validateManagerPermission(currentRole);
 		validateManagerPermission(newRole);
+	}
+
+	/**
+	 * role変更の制約を検証
+	 * 
+	 * <p>以下の制約を保証:</p>
+	 * <ul>
+	 *   <li>自分自身のrole変更を禁止</li>
+	 *   <li>ADMIN以外がADMINを作れない（create用）</li>
+	 * </ul>
+	 * 
+	 * @param targetUserId 変更対象のユーザーID（update用、createの場合はnull）
+	 * @param newRole 新しいロール
+	 * @throws IllegalArgumentException 自分自身のrole変更を試みた場合
+	 * @throws AccessDeniedException ADMIN以外がADMINを作成しようとした場合
+	 */
+	private void validateRoleChange(UUID targetUserId, UserRole newRole) {
+		User currentUser = securityUtil.getCurrentUserOrThrow();
+		
+		// 自分自身のrole変更を禁止（update用）
+		if (targetUserId != null && currentUser.getId().equals(targetUserId)) {
+			throw new IllegalArgumentException("自分自身のロールを変更することはできません");
+		}
+		
+		// ADMIN以外がADMINを作れない（create用）
+		if (newRole == UserRole.ADMIN && currentUser.getRole() != UserRole.ADMIN) {
+			throw new com.example.fitnessgym_mg.exception.AccessDeniedException("ADMINロールを作成できるのはADMINのみです");
+		}
 	}
 }

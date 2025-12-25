@@ -33,5 +33,14 @@ public interface UserCustomerRepository extends JpaRepository<UserCustomer, User
      */
     @Query("SELECT uc FROM UserCustomer uc JOIN FETCH uc.customer WHERE uc.id.userId = :userId ORDER BY uc.customer.kana")
     List<UserCustomer> findByUserIdWithCustomer(@Param("userId") UUID userId);
+    
+    /**
+     * トレーナーと顧客の関連が存在するか確認
+     * JpaRepositoryから継承されたメソッドを明示的にドキュメント化
+     * 
+     * @param id 複合主キー（UserCustomerId）
+     * @return 関連が存在する場合 true
+     */
+    boolean existsById(UserCustomer.UserCustomerId id);
 }
 

@@ -11,6 +11,28 @@
 - RestApi
 - React + TS 
 
+## 認証・認可設計
+
+### 設計方針
+
+カスタムJWT実装を使用し、Supabase Row Level Security (RLS) は使用しません。
+
+**理由:**
+- Supabase RLSを利用するにはSupabaseが発行したJWTが必要
+- カスタムJWT実装を維持することで、Spring Securityとの統合が容易
+- セキュリティ制御をSpringアプリケーション層に集約
+
+**実装:**
+- JWT発行: Spring Security + カスタム実装（`JwtTokenUtil`）
+- データベース接続: 管理者権限（`postgres`ユーザー）
+- セキュリティ制御: Spring Securityの認証・認可機能
+- Supabase RLS: 無効化（すべてのテーブルでRLSを無効化することを推奨）
+
+**注意事項:**
+- SupabaseダッシュボードでRLSが有効化されている場合、データベースアクセスが失敗する可能性がある
+- 本番環境では、SupabaseダッシュボードでRLSを無効化するか、RLSポリシーを適切に設定する必要がある
+- 将来的にSupabase Authに移行する場合は、パターンA（Supabase発行JWT + RLS）への移行を検討する
+
 ## ディレクトリ構成
 ```text
 project-root/

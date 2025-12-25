@@ -45,5 +45,15 @@ public interface PostureImageRepository extends JpaRepository<PostureImage, UUID
 	 * @return 姿勢画像のリスト
 	 */
     List<PostureImage> findAllByIdIn(List<UUID> ids);
+    
+    /**
+     * 画像IDからPostureGroupIDを取得
+     * 認可チェック用の軽量なクエリ
+     * 
+     * @param imageId 画像ID
+     * @return PostureGroupID（存在する場合）
+     */
+    @Query("SELECT pi.postureGroup.id FROM PostureImage pi WHERE pi.id = :imageId")
+    Optional<UUID> findPostureGroupIdByImageId(@Param("imageId") UUID imageId);
 }
 

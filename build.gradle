@@ -36,6 +36,12 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.5'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.5'
 	
+	// レートリミット用
+	implementation 'com.bucket4j:bucket4j-core:8.7.0'
+	
+	// Guava (LoginAttemptFilter用)
+	implementation 'com.google.guava:guava:33.3.1-jre'
+	
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	runtimeOnly 'org.postgresql:postgresql'

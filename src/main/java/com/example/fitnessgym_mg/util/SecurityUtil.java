@@ -130,6 +130,16 @@ public class SecurityUtil {
     }
 
     /**
+     * 現在ログイン中のユーザーIDを取得（認証されていない場合は例外をスロー）
+     * 
+     * @return 現在ログイン中のユーザーID
+     * @throws AuthenticationException 認証されていない場合
+     */
+    public UUID getCurrentUserId() {
+        return getCurrentUserOrThrow().getId();
+    }
+
+    /**
      * Authentication の principal からメールアドレスを取得
      * 
      * <p>設計仕様:</p>
