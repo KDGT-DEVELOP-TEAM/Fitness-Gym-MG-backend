@@ -1,92 +1,194 @@
 package com.example.fitnessgym_mg.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Set;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
+
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.SQLRestriction;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
+/**
+ * 顧客エンティティ
+ * ジムの顧客情報を表す
+ */
 @Entity
 @Table(name = "customers")
+@DynamicUpdate
+@SQLRestriction("deleted_at IS NULL")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(exclude = { "stores" })
 public class Customer {
 
+	@EqualsAndHashCode.Include
 	@Id
-	@GeneratedValue(strategy = GenerationType.UUID)
-	private UUID id;
+	private UUID id = UUID.randomUUID();
 
-	@Column(nullable = false)
+	/**
+	 * フリガナ
+	 */
+	@Column(nullable = false, length = 100)
 	private String kana;
 
-	@Column(nullable = false)
+	/**
+	 * 顧客名
+	 */
+	@Column(nullable = false, length = 100)
 	private String name;
 
-	@Enumerated(EnumType.STRING)
-	@Column(nullable = false)
-	private CustomerGender gender;
+	/**
+	 * 性別
+	 */
+	@jakarta.persistence.Convert(converter = com.example.fitnessgym_mg.entity.converter.GenderConverter.class)
+	@Column(nullable = false, columnDefinition = "customer_gender")
+	private com.example.fitnessgym_mg.entity.enums.Gender gender;
 
+	/**
+	 * 生年月日
+	 */
 	@Column(nullable = false)
 	private LocalDate birthday;
 
-	@Column(nullable = false)
-	private Double height; // numeric型に対応
+	/**
+	 * 身長（cm）
+	 */
+	@Column(nullable = false, precision = 5, scale = 2)
+	private BigDecimal height;
 
-	@Column(unique = true, nullable = false)
+	/**
+	 * メールアドレス（ユニーク制約あり）
+	 */
+	@Column(unique = true, nullable = false, length = 255)
 	private String email;
 
+	/**
+	 * 電話番号
+	 */
 	@Column(nullable = false, length = 12)
 	private String phone;
 
-	@Column(nullable = false)
+	/**
+	 * 住所
+	 */
+	@Column(nullable = false, length = 500)
 	private String address;
 
-	@Column
-	private String medical; // 任意
+	/**
+	 * 医療・既往歴（任意）
+	 */
+	@Column(length = 500)
+	private String medical;
 
-	@Column
-	private String taboo; // 任意
+	/**
+	 * 禁忌事項（任意）
+	 */
+	@Column(length = 500)
+	private String taboo;
 
-	// 初回姿勢画像ID (外部キーであり、新規作成時は任意)
+	/**
+	 * 初回姿勢画像ID（外部キー、新規作成時は任意）
+	 */
 	@Column(name = "first_posture_group_id")
 	private UUID firstPostureGroupId;
 
-	@Column
-	private String memo; // 任意
+	/**
+	 * メモ（任意）
+	 */
+	@Column(length = 1000)
+	private String memo;
 
-	// 備考: 作成日時は、DB側でデフォルト値が設定されるため、Java側では変更不可 (updatable=false) とする
+	/**
+	 * 作成日時（DB登録時に自動設定、更新不可）
+	 */
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
+	/**
+	 * 有効/無効フラグ
+	 */
 	@Column(name = "is_active", nullable = false)
 	private boolean active = true;
 
-	public enum CustomerGender {
-		男, 女;
+	/**
+	 * 楽観ロック用バージョンフィールド
+	 */
+	@Version
+	@Column(name = "version")
+	private Long version;
+
+	/**
+	 * 論理削除日時（nullの場合は削除されていない）
+	 */
+	@Column(name = "deleted_at")
+	private OffsetDateTime deletedAt;
+
+	@PrePersist
+	public void onPrePersist() {
+		this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
 	}
 
 	@ManyToMany
 	@JoinTable(name = "store_customers", // 中間テーブル名
 			joinColumns = @JoinColumn(name = "customer_id", nullable = false), // Customer側のFK
 			inverseJoinColumns = @JoinColumn(name = "store_id", nullable = false), // Store側のFK
-			uniqueConstraints = @UniqueConstraint(columnNames = { "customer_id", "user_id" }) //複合ユニーク制約
+			uniqueConstraints = @UniqueConstraint(columnNames = { "customer_id", "store_id" }) //複合ユニーク制約
 	)
 	private Set<Store> stores; // 顧客が所属する店舗リスト
+
+	/**
+	 * 論理削除されているかどうかを判定
+	 * 
+	 * @return 論理削除されている場合 true
+	 */
+	public boolean isDeleted() {
+		return deletedAt != null;
+	}
+
+	/**
+	 * 店舗との関連を追加
+	 * 
+	 * @param store 追加する店舗
+	 */
+	public void addStore(Store store) {
+		if (this.stores == null) {
+			this.stores = new java.util.HashSet<>();
+		}
+		this.stores.add(store);
+	}
+
+	/**
+	 * 削除可能かどうかを検証
+	 * 
+	 * <p>有効（active=true）の顧客は削除できない。</p>
+	 * 
+	 * @throws InvalidRequestException 削除不可の場合
+	 */
+	public void validateDeletable() {
+		if (this.isActive()) {
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("有効な顧客は削除できません");
+		}
+	}
 }

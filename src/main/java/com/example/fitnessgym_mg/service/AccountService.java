@@ -20,7 +20,8 @@ import com.example.fitnessgym_mg.dto.request.UserRequest;
 import com.example.fitnessgym_mg.dto.response.UserResponse;
 import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.entity.User;
-import com.example.fitnessgym_mg.entity.User.UserRole;
+import com.example.fitnessgym_mg.entity.enums.UserRole;
+import com.example.fitnessgym_mg.entity.enums.UserSortType;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.repository.UserRepository;
@@ -29,7 +30,6 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class AccountService {
 
 	private final UserRepository userRepository;
@@ -41,8 +41,8 @@ public class AccountService {
 	@Transactional(readOnly = true)
 	public Page<UserResponse> searchUsers(
 			String keyword,
-			String role,
-			String sort,
+			UserRole role,
+			UserSortType sort,
 			UUID storeId, // 検索条件のstoreIdは単一でOK
 			Pageable pageable) {
 
@@ -55,19 +55,18 @@ public class AccountService {
 
 		// --- 1-2. キーワードによる絞り込み ---
 		if (keyword != null && !keyword.isEmpty()) {
-			String lowerKeyword = keyword.toLowerCase();
-			spec = spec.and((root, query, cb) -> cb.or(
-					cb.like(cb.lower(root.get("name")), "%" + lowerKeyword + "%"),
-					cb.like(cb.lower(root.get("kana")), "%" + lowerKeyword + "%")));
+			// 全文検索を使用（高速）
+			// ソートオブジェクトの生成 (グルーピングソート対応)
+			Sort sortObj = createSort(sort);
+			Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sortObj);
+			
+			return userRepository.searchByFullText(keyword, role, sortedPageable)
+				.map(UserResponse::fromEntity);
 		}
 
 		// --- 1-3. ロールによる絞り込み ---
-		if (role != null && !role.isEmpty()) {
-			try {
-				UserRole roleEnum = UserRole.valueOf(role.toUpperCase());
-				spec = spec.and((root, query, cb) -> cb.equal(root.get("role"), roleEnum));
-			} catch (IllegalArgumentException ignored) {
-			}
+		if (role != null) {
+			spec = spec.and((root, query, cb) -> cb.equal(root.get("role"), role));
 		}
 
 		// 2. ソートオブジェクトの生成 (グルーピングソート対応)
@@ -75,109 +74,132 @@ public class AccountService {
 
 		Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sortObj);
 
-		// 3. 検索の実行
+		// 3. 検索の実行（キーワードがない場合は従来通りSpecificationを使用）
 		Page<User> users = userRepository.findAll(spec, sortedPageable);
 
 		return users.map(UserResponse::fromEntity);
 	}
 
-	// ユーザー作成
-	public void create(UserRequest req, Set<UUID> storeIds) {
-
-		// 1. 店長ロールのバリデーション (単一の店舗必須)
-		if (req.getRole() == UserRole.manager) {
-			// 店長の場合、店舗IDが1つだけ存在することを確認
-			if (storeIds == null || storeIds.size() != 1) { // 必須チェックをサイズチェックに変更
-				throw new IllegalArgumentException("店長ユーザーには、割り当てる店舗を一つだけ選択する必要があります。");
-			}
-		} else if (req.getRole() == UserRole.trainer) {
-			// トレーナーの場合、店舗は0個以上でOK。ただし、Setがnullの場合は空Setとして扱う
-			if (storeIds == null) {
-				storeIds = Collections.emptySet();
-			}
+	// --- Admin用: ユーザー作成 ---
+	@Transactional
+	public void createByAdmin(UserRequest req, Set<UUID> storeIds) {
+		// 店舗IDの正規化
+		if (storeIds == null) {
+			storeIds = Collections.emptySet();
+		}
+		
+		if (req.getRole() == UserRole.TRAINER) {
+			// トレーナーの場合、店舗は0個以上でOK
+			// storeIdsはそのまま使用
+		} else if (req.getRole() == UserRole.MANAGER) {
+			// 店長ロールのバリデーション (単一の店舗必須)
+			validateManagerRole(req.getRole(), storeIds);
 		} else {
 			// ADMINの場合、店舗は不要
 			storeIds = Collections.emptySet();
 		}
 
-		// パスワードの必須チェック (UserRequestで@NotBlankを外したため、ここで補完)
+		// 共通の作成ロジック
+		validateAndCreateUser(req, storeIds);
+	}
+
+	// --- Manager用: ユーザー作成 ---
+	@Transactional
+	public void createByManager(UserRequest req, UUID storeId) {
+		// storeIdを強制追加
+		Set<UUID> storeIds = new java.util.HashSet<>();
+		storeIds.add(storeId);
+
+		// Manager APIではTRAINERのみ作成可能なので、店舗IDの正規化は不要
+		// storeIdsは既に1つのstoreIdが設定されている
+
+		// 共通の作成ロジック
+		validateAndCreateUser(req, storeIds);
+	}
+
+	// --- ユーザー作成の共通ロジック ---
+	private void validateAndCreateUser(UserRequest req, Set<UUID> storeIds) {
+		// DTO層で@Validによりバリデーション済みだが、Service層でも最終チェック
+		// パスワードの必須チェック（新規作成時のみ）
 		if (req.getPass() == null || req.getPass().trim().isEmpty()) {
-			throw new IllegalArgumentException("パスワードは必須です。");
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("パスワードは必須です。");
 		}
 
-		// 2. ユーザーの基本情報設定
+		// メールアドレスの重複チェック（DB制約の前にチェック）
+		if (userRepository.findByEmail(req.getEmail()).isPresent()) {
+			throw new com.example.fitnessgym_mg.exception.ConflictException("このメールアドレスは既に登録されています");
+		}
+
+		// ユーザーの基本情報設定
 		User user = new User();
-		user.setEmail(req.getEmail());
-		user.setName(req.getName());
-		user.setKana(req.getKana());
-		user.setRole(req.getRole());
-		user.setActive(req.isActive());
-		user.setPass(passwordEncoder.encode(req.getPass()));
+		setUserBasicFields(user, req);
+		// パスワードはハッシュ化してから設定（エンティティのsetPasswordはハッシュを受け取る）
+		user.setPassword(passwordEncoder.encode(req.getPass()));
 
-		// 3. 店舗の紐づけ
-		Set<Store> storesToAssign = Collections.emptySet();
-
-		if (storeIds != null && !storeIds.isEmpty()) {
-			storesToAssign = storeRepository.findAllById(storeIds).stream().collect(Collectors.toSet());
-
-			// 全てのIDが見つかったかチェック
-			if (storesToAssign.size() != storeIds.size()) {
-				throw new RuntimeException("指定された店舗IDの一部が見つかりません。");
-			}
-		}
-
+		// 店舗の紐づけ
+		Set<Store> storesToAssign = validateAndGetStores(storeIds);
 		user.setStores(storesToAssign);
 		userRepository.save(user);
 	}
 
-	// 更新
-	public void update(UUID id, UserRequest req, Set<UUID> storeIds) {
-		User user = findUserById(id, null);
+	// --- Admin用: ユーザー更新 ---
+	@Transactional
+	public void updateByAdmin(UUID id, UserRequest req, Set<UUID> storeIds) {
+		// ユーザー取得（Admin用なので、storeIdチェック不要）
+		User user = findUserOrThrow(id);
 
-		// StoreIdsのnullチェック (フロントから空配列[]が来る想定だが念のため)
+		// StoreIdsのnullチェック
 		if (storeIds == null) {
 			storeIds = Collections.emptySet();
 		}
 
-		// 1. 店長ロールのバリデーション (単一の店舗必須)
-		if (req.getRole() == UserRole.manager) {
-			// 店長の場合、店舗IDが1つだけ存在することを確認
-			if (storeIds.size() != 1) {
-				throw new IllegalArgumentException("店長ユーザーには、割り当てる店舗を一つだけ選択する必要があります。");
-			}
-		}
+		// 店長ロールのバリデーション (単一の店舗必須)
+		validateManagerRole(req.getRole(), storeIds);
 
+		// 共通の更新ロジック
+		validateAndUpdateUser(user, req, storeIds);
+	}
+
+	// --- Manager用: ユーザー更新 ---
+	@Transactional
+	public void updateByManager(UUID id, UserRequest req, UUID storeId) {
+		// ユーザー取得
+		User user = findUserOrThrow(id);
+		// store所属チェック
+		assertUserAssignedToStore(user, storeId);
+
+		// Manager APIではstoreIdを強制追加
+		Set<UUID> storeIds = new java.util.HashSet<>();
+		storeIds.add(storeId);
+
+		// 店長ロールのバリデーション (単一の店舗必須)
+		validateManagerRole(req.getRole(), storeIds);
+
+		// 共通の更新ロジック
+		validateAndUpdateUser(user, req, storeIds);
+	}
+
+	// --- ユーザー更新の共通ロジック ---
+	private void validateAndUpdateUser(User user, UserRequest req, Set<UUID> storeIds) {
 		// 既存の更新ロジック
-		user.setEmail(req.getEmail());
-		user.setName(req.getName());
-		user.setKana(req.getKana());
-		user.setRole(req.getRole());
-		user.setActive(req.isActive());
+		setUserBasicFields(user, req);
 
 		if (req.getPass() != null && !req.getPass().isEmpty()) {
-			user.setPass(passwordEncoder.encode(req.getPass()));
+			user.setPassword(passwordEncoder.encode(req.getPass()));
 		}
 
-		// 2. 店舗の紐づけ情報の上書き (findAllByIdで一括取得)
-		Set<Store> storesToAssign = Collections.emptySet();
-
-		if (!storeIds.isEmpty()) {
-			// findAllByIdはIterable<Store>を返すため、Setに変換
-			storesToAssign = storeRepository.findAllById(storeIds).stream().collect(Collectors.toSet());
-
-			// 全てのIDが見つかったかチェック
-			if (storesToAssign.size() != storeIds.size()) {
-				throw new RuntimeException("指定された店舗IDの一部が見つかりません。");
-			}
-		}
-
+		// 店舗の紐づけ情報の上書き
+		Set<Store> storesToAssign = validateAndGetStores(storeIds);
 		user.setStores(storesToAssign);
 		userRepository.save(user);
 	}
 
 	// --- ユーザーを有効化 ---
+	@Transactional
 	public void enableActive(UUID id, UUID storeId) {
-		User user = findUserById(id, storeId);
+		User user = findUserOrThrow(id);
+		assertUserAssignedToStore(user, storeId);
+		
 		if (user.isActive()) {
 			return;
 		}
@@ -186,8 +208,11 @@ public class AccountService {
 	}
 
 	// --- ユーザーを無効化 ---
+	@Transactional
 	public void disableActive(UUID id, UUID storeId) {
-		User user = findUserById(id, storeId);
+		User user = findUserOrThrow(id);
+		assertUserAssignedToStore(user, storeId);
+		
 		if (!user.isActive()) {
 			return;
 		}
@@ -196,8 +221,10 @@ public class AccountService {
 	}
 
 	// 削除
+	@Transactional
 	public void delete(UUID id, UUID storeId) {
-		User user = findUserById(id, storeId);
+		User user = findUserOrThrow(id);
+		assertUserAssignedToStore(user, storeId);
 
 		if (user.isActive()) {
 			throw new IllegalStateException("有効ユーザーは削除できません");
@@ -213,39 +240,87 @@ public class AccountService {
 	// idでアカウント情報を取得
 	@Transactional(readOnly = true)
 	public UserResponse findById(UUID id, UUID storeId) {
-		User user = findUserById(id, storeId);
+		User user = findUserOrThrow(id);
+		if (storeId != null) {
+			assertUserAssignedToStore(user, storeId);
+		}
 		return UserResponse.fromEntity(user);
+	}
+
+	// idでユーザーエンティティを取得（認可チェック用）
+	@Transactional(readOnly = true)
+	public User findUserEntityById(UUID id, UUID storeId) {
+		User user = findUserOrThrow(id);
+		if (storeId != null) {
+			assertUserAssignedToStore(user, storeId);
+		}
+		return user;
 	}
 
 	// --- ヘルパーメソッド ---
 
-	private User findUserById(UUID id, UUID storeId) {
-		User user = userRepository.findById(id)
-				.orElseThrow(() -> new RuntimeException("User not found with id: " + id));
-
-		//		// 店長の場合 (storeId != null)、操作対象のユーザーが自分の店舗に属するかチェック
-		//		if (storeId != null) {
-		//			// ユーザーが自分の店舗に属さない場合は拒否
-		//			boolean isAssignedToStore = user.getStores().stream()
-		//					.anyMatch(store -> store.getId().equals(storeId));
-		//
-		//			if (!isAssignedToStore) {
-		//				throw new RuntimeException("User not found (or access denied) with id: " + id);
-		//			}
-		//		}
-		return user;
+	/**
+	 * ユーザーの基本情報フィールドを設定（共通ロジック）
+	 * 
+	 * @param user ユーザーエンティティ
+	 * @param req ユーザーリクエストDTO
+	 */
+	private void setUserBasicFields(User user, UserRequest req) {
+		user.setEmail(req.getEmail());
+		user.setName(req.getName());
+		user.setKana(req.getKana());
+		user.setRole(req.getRole());
+		user.setActive(req.isActive());
 	}
 
-	private Sort createSort(String sort) {
-		// 1. ロール順序による昇順ソート
-		Sort primarySort = Sort.by("roleOrder").ascending();
+	/**
+	 * ユーザーIDでユーザーを取得
+	 * 
+	 * <p>純粋にUserを取得するメソッド。store所属チェックは行わない。</p>
+	 * 
+	 * @param id ユーザーID
+	 * @return ユーザーエンティティ
+	 * @throws EntityNotFoundException ユーザーが見つからない場合
+	 */
+	private User findUserOrThrow(UUID id) {
+		return userRepository.findById(id)
+				.orElseThrow(() -> {
+					return new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + id);
+				});
+	}
+
+	/**
+	 * ユーザーが指定されたstoreに属しているかチェック
+	 * 
+	 * <p>ビジネスロジック: Manager APIでは、操作対象のユーザーが指定されたstoreに属している必要がある。</p>
+	 * 
+	 * @param user ユーザーエンティティ
+	 * @param storeId 店舗ID
+	 * @throws EntityNotFoundException ユーザーが指定されたstoreに属していない場合
+	 */
+	private void assertUserAssignedToStore(User user, UUID storeId) {
+			if (user.getStores() == null || user.getStores().isEmpty()) {
+			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + user.getId());
+			}
+			
+			boolean isAssignedToStore = user.getStores().stream()
+					.anyMatch(store -> store.getId().equals(storeId));
+
+			if (!isAssignedToStore) {
+			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + user.getId());
+		}
+	}
+
+	private Sort createSort(UserSortType sort) {
+		// 1. ロールによる昇順ソート（roleOrderプロパティは存在しないため、roleでソート）
+		Sort primarySort = Sort.by("role").ascending();
 
 		// 2. 登録日時降順ソート、またはカナ昇順ソート
 		Sort secondarySort;
-		if ("kana".equals(sort)) {
+		if (sort == UserSortType.KANA) {
 			secondarySort = Sort.by("kana").ascending();
 		} else {
-			// デフォルトおよび "created" の場合、登録日時降順
+			// デフォルトおよびCREATEDの場合、登録日時降順
 			secondarySort = Sort.by("createdAt").descending();
 		}
 
@@ -253,6 +328,43 @@ public class AccountService {
 	}
 
 	private boolean hasRelatedData(UUID userId) {
-		return lessonRepository.countByUserId(userId) > 0;
+		return lessonRepository.countByTrainerId(userId) > 0;
 	}
+
+	/**
+	 * 店舗IDの検証と取得（共通ロジック）
+	 * 
+	 * @param storeIds 店舗IDのセット
+	 * @return 検証済みの店舗エンティティのセット
+	 */
+	private Set<Store> validateAndGetStores(Set<UUID> storeIds) {
+		if (storeIds == null || storeIds.isEmpty()) {
+			return Collections.emptySet();
+		}
+		
+		Set<Store> stores = storeRepository.findAllById(storeIds).stream()
+				.collect(Collectors.toSet());
+		
+		if (stores.size() != storeIds.size()) {
+			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("指定された店舗IDの一部が見つかりません。");
+		}
+		
+		return stores;
+	}
+
+	/**
+	 * 店長ロールのバリデーション（共通ロジック）
+	 * 
+	 * @param role ユーザーロール
+	 * @param storeIds 店舗IDのセット
+	 */
+	private void validateManagerRole(UserRole role, Set<UUID> storeIds) {
+		if (role == UserRole.MANAGER) {
+			// 店長の場合、店舗IDが1つだけ存在することを確認
+			if (storeIds == null || storeIds.size() != 1) {
+				throw new com.example.fitnessgym_mg.exception.BusinessRuleViolationException("店長ユーザーには、割り当てる店舗を一つだけ選択する必要があります。");
+			}
+		}
+	}
+
 }

@@ -1,18 +1,53 @@
 package com.example.fitnessgym_mg.entity.enums;
 
+/**
+ * 性別Enum
+ * 顧客の性別を表す
+ */
 public enum Gender {
-    MALE,
-    FEMALE;
+    MALE("男"),
+    FEMALE("女");
 
+    private final String label;
+
+    Gender(String label) {
+        this.label = label;
+    }
+
+    /**
+     * 表示用ラベルを取得
+     * 
+     * @return ラベル（"男"または"女"）
+     */
+    public String getLabel() {
+        return label;
+    }
+
+    /**
+     * コード値を取得
+     * 
+     * @return コード値（"male"または"female"）
+     */
     public String getCode() {
         return this.name().toLowerCase();
     }
 
+    /**
+     * コード値からEnumを取得
+     * 
+     * @param value コード値
+     * @return Gender Enum
+     * @throws IllegalArgumentException valueがnull、または有効なコード値でない場合
+     */
     public static Gender fromCode(String value) {
         if (value == null) {
-            return null;
+            throw new IllegalArgumentException("Gender code cannot be null");
         }
-        return Gender.valueOf(value.toUpperCase());
+        try {
+            return Gender.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid Gender code: " + value, e);
+        }
     }
 }
 

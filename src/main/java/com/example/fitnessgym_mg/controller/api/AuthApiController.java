@@ -1,149 +1,152 @@
-package com.example.fitnessgym_mg.controller;
+package com.example.fitnessgym_mg.controller.api;
 
-import java.util.UUID;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.example.fitnessgym_mg.dto.request.LoginRequest;
+import com.example.fitnessgym_mg.dto.response.LoginResponse;
+import com.example.fitnessgym_mg.entity.User;
+import com.example.fitnessgym_mg.exception.AuthenticationStateException;
+import com.example.fitnessgym_mg.repository.UserRepository;
+import com.example.fitnessgym_mg.util.JwtTokenUtil;
+import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import jakarta.validation.Valid;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
-
-import com.example.fitnessgym_mg.dto.request.CustomerRequest;
-import com.example.fitnessgym_mg.dto.response.CustomerResponse;
-import com.example.fitnessgym_mg.entity.Customer;
-import com.example.fitnessgym_mg.entity.Customer.CustomerGender;
-import com.example.fitnessgym_mg.service.CustomerService;
-
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
-@Controller
+import java.util.Map;
+
+/**
+ * 認証・認可REST APIコントローラー
+ * Reactフロントエンドとの連携用
+ * 
+ * JWT（JSON Web Token）認証を使用
+ */
+@Slf4j
+@RestController
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
-public class CustomerController {
+public class AuthApiController {
 
-	private final CustomerService service;
+    private final AuthenticationManager authenticationManager;
+    private final UserRepository userRepository;
+    private final SecurityUtil securityUtil;
+    private final JwtTokenUtil jwtTokenUtil;
 
-	// --- カスタマー一覧（検索・並び替え対応） ---
-	@GetMapping({ "/admin/customers", "/manager/{storeId}/customers" })
-	public String list(
-			@PathVariable(required = false) UUID storeId, // 店長アクセス時のみ取得
-			@RequestParam(required = false) String keyword,
-			@RequestParam(defaultValue = "created") String sort,
-			@RequestParam(defaultValue = "0") int page,
-			@RequestParam(defaultValue = "10") int size,
-			Model model) {
+    /**
+     * GET /api/auth/login
+     * 認証状態の確認
+     * 既に認証されている場合はユーザー情報を返す
+     */
+    @GetMapping("/login")
+    public ResponseEntity<?> getLogin() {
+        // 既に認証されている場合はユーザー情報を返す
+        return securityUtil.getCurrentUser()
+                .map(user -> ResponseEntity.ok(createLoginResponse(user, null)))
+                .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+    }
 
-		Pageable pageable = PageRequest.of(page, size);
+    /**
+     * POST /api/auth/login
+     * ログイン処理、JWTトークンを発行
+     * 
+     * <p>トークンの保存方法:</p>
+     * <ul>
+     *   <li>フロントエンドは取得したトークンをlocalStorageに保存し、
+     *   以降のリクエストでAuthorization: Bearer &lt;token&gt; ヘッダーを付与する</li>
+     *   <li>UXを優先し、タブを閉じてもログイン状態が保持される</li>
+     * </ul>
+     * 
+     * <p>セキュリティ注意事項:</p>
+     * <ul>
+     *   <li>localStorageはJavaScriptからアクセス可能なため、XSS攻撃でトークンが漏洩するリスクがある</li>
+     *   <li>フロントエンド側でXSS対策（入力値のサニタイズ、CSP設定など）を徹底すること</li>
+     *   <li>本番環境では、可能な限りHttpOnly Cookieの使用を検討すること</li>
+     * </ul>
+     */
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
+        try {
+            // 認証処理
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getEmail(),
+                            request.getPassword()
+                    )
+            );
 
-		Page<CustomerResponse> customerPage = service.searchCustomers(keyword, sort, storeId, pageable);
+            // セキュリティコンテキストに認証情報を設定
+            SecurityContextHolder.getContext().setAuthentication(authentication);
 
-		model.addAttribute("customerPage", customerPage); // PageオブジェクトをViewに渡す
-		model.addAttribute("count", customerPage.getTotalElements()); // 総件数
-		model.addAttribute("currentPage", page); // ★ 現在のページ番号
+            // ユーザー情報を取得（認証成功後なので必ず存在するはず、active条件を適用）
+            User user = userRepository.findByEmailAndActiveTrue(request.getEmail())
+                .orElseThrow(() -> {
+                    log.error("認証成功後にユーザーが見つからない異常事態を検出");
+                    return new AuthenticationStateException("ユーザー情報の取得に失敗しました");
+                });
 
-		model.addAttribute("keyword", keyword);
-		model.addAttribute("sort", sort);
-		model.addAttribute("genders", CustomerGender.values());
-		model.addAttribute("storeId", storeId);
+            // JWTトークンを生成
+            String token = jwtTokenUtil.generateToken(user);
 
-		return "customers/list";
-	}
+            // レスポンス作成（トークンを含める）
+            LoginResponse responseBody = createLoginResponse(user, token);
+            
+            // ログ出力（権限情報は機密性が高いため除外）
+            log.info("ログイン成功: ユーザーID={}", user.getId());
+            
+            return ResponseEntity.ok(responseBody);
+        } catch (BadCredentialsException e) {
+            // 認証失敗: メールアドレスまたはパスワードが正しくない
+            log.warn("ログイン失敗試行を検出");
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "メールアドレスまたはパスワードが正しくありません"));
+        } catch (Exception e) {
+            // その他の予期しないエラー
+            log.error("認証処理中にエラーが発生: {}", e.getMessage(), e);
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "認証処理中にエラーが発生しました"));
+        }
+    }
 
-	// --- 作成 ---
-	@PostMapping({ "/admin/customers/create", "/manager/{storeId}/customers/create" })
-	@ResponseBody
-	public ResponseEntity<Void> create(
-			@Valid @RequestBody CustomerRequest req) {
+    /**
+     * POST /api/auth/logout
+     * ログアウト処理
+     * 
+     * JWTはステートレスなので、サーバー側では特に処理しない
+     * クライアント側でlocalStorageからトークンを削除することでログアウトが完了する
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout() {
+        // セキュリティコンテキストをクリア
+        SecurityContextHolder.clearContext();
+        
+        log.debug("ログアウト成功");
+        return ResponseEntity.ok().build();
+    }
 
-		service.create(req);
-		return ResponseEntity.ok().build();
-	}
-
-	// --- 編集モーダル表示用にデータ取得 ---
-	@GetMapping({ "/admin/customers/{id}/detail", "/manager/{storeId}/customers/{id}/detail" })
-	@ResponseBody
-	public ResponseEntity<Customer> getCustomer(
-			@PathVariable(required = false) UUID storeId,
-			@PathVariable UUID id) {
-
-		Customer customer = service.findById(id, storeId);
-		return ResponseEntity.ok(customer);
-	}
-
-	// --- 更新 ---
-	@PutMapping({ "/admin/customers/{id}/edit", "/manager/{storeId}/customers/{id}/edit" })
-	@ResponseBody
-	public ResponseEntity<Void> update(
-			@PathVariable UUID id,
-			@PathVariable(required = false) UUID storeId,
-			@Valid @RequestBody CustomerRequest req) {
-
-		service.update(id, req, storeId);
-		return ResponseEntity.ok().build();
-	}
-
-	// 無効化 (Disable)
-	@PatchMapping({ "/admin/customers/{id}/disable", "/manager/{storeId}/customers/{id}/disable" })
-	@ResponseBody
-	public ResponseEntity<Void> disableCustomer(
-			@PathVariable(required = false) UUID storeId,
-			@PathVariable UUID id) {
-
-		service.disableActive(id, storeId);
-		return ResponseEntity.ok().build();
-	}
-
-	// 有効化 (Enable)
-	@PatchMapping({ "/admin/customers/{id}/enable", "/manager/{storeId}/customers/{id}/enable" })
-	@ResponseBody
-	public ResponseEntity<Void> enableCustomer(
-			@PathVariable(required = false) UUID storeId,
-			@PathVariable UUID id) {
-
-		service.enableActive(id, storeId);
-		return ResponseEntity.ok().build();
-	}
-
-	// --- 削除 ---
-	@DeleteMapping({ "/admin/customers/{id}/delete", "/manager/{storeId}/customers/{id}/delete" })
-	@ResponseBody
-	public ResponseEntity<Void> delete(
-			@PathVariable(required = false) UUID storeId,
-			@PathVariable UUID id) {
-
-		service.delete(id, storeId);
-		return ResponseEntity.ok().build();
-	}
-
-	// --- 顧客レッスン履歴画面 ---
-	// パスは admin と manager の両方を受け付け、View名は一つに統一
-	@GetMapping({ "/admin/customers/{id}/lessons", "/manager/{storeId}/customers/{id}/lessons" })
-	public String showCustomerLessons(
-			@PathVariable(required = false) UUID storeId, // storeIdはURLに含まれるため取得
-			@PathVariable UUID id,
-			Model model) {
-
-		// TODO: LessonServiceなどを使用して、この顧客ID (id) に紐づくレッスン履歴を取得する処理を実装
-
-		// ここで storeId が null かどうかで、誰がアクセスしているかを識別
-		model.addAttribute("customerId", id);
-		model.addAttribute("storeId", storeId); // nullの場合もある
-
-		// View内で戻るボタンなどのリンクを構築しやすくするためにBASE_PATHを渡す
-		model.addAttribute("BASE_PATH", (storeId != null ? "/manager/" + storeId : "/admin") + "/customers");
-
-		// 遷移先のビュー名は一つに統一
-		return "customers/lessons";
-	}
+    /**
+     * LoginResponseを作成
+     */
+    private LoginResponse createLoginResponse(User user, String token) {
+        return LoginResponse.builder()
+                .userId(user.getId())
+                .email(user.getEmail())
+                .name(user.getName())
+                .role(user.getRole())
+                .token(token)
+                .build();
+    }
 }

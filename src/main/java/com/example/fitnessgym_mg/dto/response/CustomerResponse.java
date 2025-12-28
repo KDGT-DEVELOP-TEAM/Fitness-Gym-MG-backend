@@ -1,15 +1,26 @@
 package com.example.fitnessgym_mg.dto.response;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.UUID;
 
 import com.example.fitnessgym_mg.entity.Customer;
+import com.example.fitnessgym_mg.entity.enums.Gender;
 
 import lombok.Data;
+import lombok.ToString;
 
+/**
+ * 顧客レスポンスDTO
+ * 顧客情報をAPIレスポンスとして返す際に使用
+ * 年齢は自動計算される
+ * 
+ * <p>セキュリティ: 個人情報（email、phone）はログ出力から除外します。</p>
+ */
 @Data
+@ToString(exclude = {"email", "phone"}) // セキュリティ: 個人情報をログに出力しない
 public class CustomerResponse {
 
 	private UUID id;
@@ -17,18 +28,48 @@ public class CustomerResponse {
 	private String kana;
 	private boolean active;
 	private String email;
+	private String phone;
 	private int age; // 年齢
 	private LocalDateTime createdAt;
-
-	// 編集モーダル用にエンティティの全フィールドを含めることもできますが、
-	// ユーザー一覧に倣い、必要最小限のデータ転送とします。
+	
+	// プロフィール画面用の追加フィールド
+	private Gender gender;
+	/**
+	 * 生年月日
+	 * 
+	 * <p>Entity（{@link com.example.fitnessgym_mg.entity.Customer#birthday}）の`birthday`フィールドに対応します。</p>
+	 * <p>命名の不一致について: HTMLフォームとの互換性のため、DTOでは`birthdate`という名前を使用しています。</p>
+	 * <p>意味は同じですが、フロントエンドの実装都合により異なる名前を使用しています。</p>
+	 * <p>将来的には統一を検討する余地がありますが、現状はコメントで明確化されているため問題ありません。</p>
+	 */
+	private LocalDate birthdate;
+	private String address;
+	private BigDecimal height;
+	/**
+	 * 最新レッスンの体重（BMI計算用）
+	 * 
+	 * <p>注意: このフィールドは`fromEntity()`では設定されません。</p>
+	 * <p>nullの可能性があります。フロントエンド側でnullチェックを実施してください。</p>
+	 * <p>設定される場合: {@link com.example.fitnessgym_mg.service.CustomerService#getCustomerById(UUID)}で取得する場合のみ設定されます。</p>
+	 * <p>設定されない場合: {@link com.example.fitnessgym_mg.service.CustomerService#searchCustomers(String, CustomerSort, UUID, Pageable)}や
+	 * {@link com.example.fitnessgym_mg.service.CustomerService#getMyCustomers()}で取得する場合はnullのままです。</p>
+	 */
+	private BigDecimal latestWeight;
+	private UUID firstPostureGroupId; // 初回姿勢画像ID
 
 	/**
 	 * Customer エンティティから CustomerResponse DTO に変換する
 	 */
 	public static CustomerResponse fromEntity(Customer c) {
-		// 年齢計算
-		int age = Period.between(c.getBirthday(), LocalDate.now()).getYears();
+		if (c == null) {
+			return null;
+		}
+		
+		// 年齢計算（nullチェック追加）
+		int age = 0;
+		if (c.getBirthday() != null) {
+			age = Period.between(c.getBirthday(), LocalDate.now()).getYears();
+		}
 
 		CustomerResponse r = new CustomerResponse();
 		r.setId(c.getId());
@@ -36,8 +77,15 @@ public class CustomerResponse {
 		r.setKana(c.getKana());
 		r.setActive(c.isActive());
 		r.setEmail(c.getEmail());
+		r.setPhone(c.getPhone());
 		r.setAge(age);
 		r.setCreatedAt(c.getCreatedAt());
+		r.setGender(c.getGender());
+		r.setBirthdate(c.getBirthday()); // birthdayをbirthdateとして設定
+		r.setAddress(c.getAddress());
+		r.setHeight(c.getHeight());
+		r.setFirstPostureGroupId(c.getFirstPostureGroupId());
+		// latestWeightは別途設定が必要（レッスンから取得）
 		return r;
 	}
 }

@@ -1,14 +1,19 @@
 package com.example.fitnessgym_mg.dto.request;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-import com.example.fitnessgym_mg.entity.Customer.CustomerGender;
+import com.example.fitnessgym_mg.entity.enums.Gender;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -28,21 +33,41 @@ public class CustomerRequest {
 	private String name;
 
 	@NotNull(message = "性別は必須です")
-	private CustomerGender gender;
+	private Gender gender;
 
+	/**
+	 * 生年月日
+	 * 
+	 * <p>過去の日付のみ有効です。未来の日付は指定できません。</p>
+	 */
 	@NotNull(message = "生年月日は必須です")
+	@Past(message = "生年月日は過去の日付である必要があります")
 	private LocalDate birthday;
 
+	/**
+	 * 身長（cm）
+	 * 
+	 * <p>有効範囲: 50.0cm以上、300.0cm以下</p>
+	 */
 	@NotNull(message = "身長は必須です")
-	private Double height;
+	@DecimalMin(value = "50.0", inclusive = true, message = "身長は50cm以上である必要があります")
+	@DecimalMax(value = "300.0", inclusive = true, message = "身長は300cm以下である必要があります")
+	private BigDecimal height;
 
 	@NotBlank(message = "メールアドレスは必須です")
 	@Email(message = "有効なメールアドレスを入力してください")
 	@Size(max = 255)
 	private String email;
 
+	/**
+	 * 電話番号
+	 * 
+	 * <p>数字とハイフンのみで入力してください。</p>
+	 * <p>日本の一般的な形式（例: 090-1234-5678）に対応するため、最大13文字まで許可します。</p>
+	 */
 	@NotBlank(message = "電話番号は必須です")
-	@Size(max = 12)
+	@Pattern(regexp = "^[0-9-]+$", message = "電話番号は数字とハイフンのみで入力してください")
+	@Size(max = 13, message = "電話番号は最大13文字まで入力できます")
 	private String phone;
 
 	@NotBlank(message = "住所は必須です")
@@ -65,4 +90,8 @@ public class CustomerRequest {
 
 	// 有効/無効（新規作成時は必ず true で送信）
 	private boolean active = true;
+
+	// 店舗ID（ADMINの場合は必須、MANAGERの場合はパス変数から取得）
+	@NotNull(message = "店舗IDは必須です")
+	private UUID storeId;
 }

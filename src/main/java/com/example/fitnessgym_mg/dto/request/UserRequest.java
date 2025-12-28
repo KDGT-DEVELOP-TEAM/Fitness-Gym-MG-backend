@@ -6,13 +6,16 @@ import java.util.UUID;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-import com.example.fitnessgym_mg.entity.User.UserRole;
+import com.example.fitnessgym_mg.entity.enums.UserRole;
 
 import lombok.Data;
+import lombok.ToString;
 
 @Data
+@ToString(exclude = "pass") // セキュリティ: パスワードをログに出力しない
 public class UserRequest {
 
 	@Email(message = "有効なメールアドレスを入力してください")
@@ -28,9 +31,19 @@ public class UserRequest {
 	@Size(min = 2, max = 50)
 	private String kana;
 
-	// @NotBlank は削除 (編集時の null/空文字を許可するため)
-	@Size(min = 8, max = 16, message = "パスワードは8文字以上16文字以内で設定してください")
-	private String pass; // 編集時は null の可能性あり
+	/**
+	 * パスワード
+	 * 
+	 * <p>新規作成時は必須です。編集時は任意です。</p>
+	 * <p>仕様:</p>
+	 * <ul>
+	 *   <li>nullまたは空文字の場合: パスワードを変更しない（既存のパスワードを維持）</li>
+	 *   <li>値が指定された場合: 8文字以上16文字以内である必要があります</li>
+	 * </ul>
+	 * <p>Service層では、nullまたは空文字の場合はパスワード更新処理をスキップします。</p>
+	 */
+	@Pattern(regexp = "^$|.{8,16}", message = "パスワードは8文字以上16文字以内で設定してください。空文字の場合は変更されません。")
+	private String pass;
 
 	@NotNull(message = "ロール選択は必須です")
 	private UserRole role;
