@@ -23,7 +23,7 @@ public class GenderConverter implements AttributeConverter<Gender, String> {
                 return gender;
             }
         }
-        return null;
+        throw new IllegalArgumentException("Invalid gender value: " + dbData);
     }
 }
 

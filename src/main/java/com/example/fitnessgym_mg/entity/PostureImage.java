@@ -1,14 +1,13 @@
 package com.example.fitnessgym_mg.entity;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -20,6 +19,7 @@ import com.example.fitnessgym_mg.entity.enums.PostureImagePosition;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Builder.Default;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
@@ -41,8 +41,8 @@ public class PostureImage {
 
 	@EqualsAndHashCode.Include
 	@Id
-	@GeneratedValue(strategy = GenerationType.UUID)
-	private UUID id;
+	@Default
+	private UUID id = UUID.randomUUID();
 
 	/**
 	 * 姿勢グループ（必須リレーション）
@@ -85,7 +85,7 @@ public class PostureImage {
 	@PrePersist
 	public void onPrePersist() {
 		if (createdAt == null) {
-			createdAt = OffsetDateTime.now();
+			createdAt = OffsetDateTime.now(ZoneOffset.UTC);
 		}
 	}
 }

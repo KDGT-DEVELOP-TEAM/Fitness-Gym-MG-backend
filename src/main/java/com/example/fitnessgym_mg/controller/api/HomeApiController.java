@@ -3,10 +3,12 @@ package com.example.fitnessgym_mg.controller.api;
 import java.util.List;
 import java.util.UUID;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -20,13 +22,11 @@ import com.example.fitnessgym_mg.config.ApplicationConstants;
 import com.example.fitnessgym_mg.dto.response.HomeResponse;
 import com.example.fitnessgym_mg.dto.response.LessonResponse;
 import com.example.fitnessgym_mg.entity.User;
-import com.example.fitnessgym_mg.service.CustomerAuthorizationService;
+import com.example.fitnessgym_mg.entity.enums.ChartPeriod;
+import com.example.fitnessgym_mg.exception.InvalidRequestException;
+import com.example.fitnessgym_mg.service.AuthorizationFacade;
 import com.example.fitnessgym_mg.service.LessonService;
 import com.example.fitnessgym_mg.util.SecurityUtil;
-
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.Pattern;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +44,7 @@ public class HomeApiController {
 
 	private final LessonService lessonService;
 	private final SecurityUtil securityUtil;
-	private final CustomerAuthorizationService customerAuthorizationService;
+	private final AuthorizationFacade authorizationFacade;
 
 	/**
 	 * GET /api/trainers/home
@@ -61,6 +61,7 @@ public class HomeApiController {
 
 		HomeResponse response = HomeResponse.builder()
 				.upcomingLessons(upcomingLessons)
+				.totalLessonCount(0L) // Trainer用: 統計情報は表示しないため0を設定
 				.build();
 
 		return ResponseEntity.ok(response);
@@ -73,25 +74,18 @@ public class HomeApiController {
 	@PreAuthorize("hasRole('ADMIN')")
 	@GetMapping("/admin/home")
 	public ResponseEntity<HomeResponse> getAdminHome(
-			@RequestParam(defaultValue = "month") 
-			@Pattern(regexp = "^(month|week)$", message = "chartType must be 'month' or 'week'")
-			String chartType,
-			@RequestParam(defaultValue = "0") 
-			@Min(value = 0, message = "Page must be 0 or greater") 
-			@Max(value = ApplicationConstants.MAX_PAGE_NUMBER, message = "Page is too large")
-			int page,
-			@RequestParam(defaultValue = "10") 
-			@Min(value = ApplicationConstants.MIN_PAGE_SIZE, message = "Size must be at least 1") 
-			@Max(value = ApplicationConstants.MAX_PAGE_SIZE, message = "Size must not exceed 100") 
-			int size) {
+			@RequestParam(defaultValue = "month") String chartType,
+			@RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be 0 or greater") @Max(value = ApplicationConstants.MAX_PAGE_NUMBER, message = "Page is too large") int page,
+			@RequestParam(defaultValue = "10") @Min(value = ApplicationConstants.MIN_PAGE_SIZE, message = "Size must be at least 1") @Max(value = ApplicationConstants.MAX_PAGE_SIZE, message = "Size must not exceed 100") int size) {
 
 		// レッスン履歴一覧（最新の数件）
 		Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
-		var lessonPage = lessonService.searchLessons(null, null, pageable);
+		var lessonPage = lessonService.searchLessons(null, pageable);
 		List<LessonResponse> recentLessons = lessonPage.getContent();
 
-		// グラフデータ
-		var chartData = lessonService.getLessonChartData(null, chartType);
+		// グラフデータ（StringからChartPeriodに変換）
+		ChartPeriod period = convertToChartPeriod(chartType);
+		var chartData = lessonService.getLessonChartData(null, period);
 
 		// 総レッスン数（簡易版：ページネーションの総件数を使用）
 		long totalLessonCount = lessonPage.getTotalElements();
@@ -113,33 +107,24 @@ public class HomeApiController {
 	@GetMapping("/stores/{store_id}/manager/home")
 	public ResponseEntity<HomeResponse> getManagerHome(
 			@PathVariable("store_id") UUID storeId,
-			@RequestParam(defaultValue = "month") 
-			@Pattern(regexp = "^(month|week)$", message = "chartType must be 'month' or 'week'")
-			String chartType,
-			@RequestParam(defaultValue = "0") 
-			@Min(value = 0, message = "Page must be 0 or greater") 
-			@Max(value = ApplicationConstants.MAX_PAGE_NUMBER, message = "Page is too large")
-			int page,
-			@RequestParam(defaultValue = "10") 
-			@Min(value = ApplicationConstants.MIN_PAGE_SIZE, message = "Size must be at least 1") 
-			@Max(value = ApplicationConstants.MAX_PAGE_SIZE, message = "Size must not exceed 100") 
-			int size) {
+			@RequestParam(defaultValue = "month") String chartType,
+			@RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be 0 or greater") @Max(value = ApplicationConstants.MAX_PAGE_NUMBER, message = "Page is too large") int page,
+			@RequestParam(defaultValue = "10") @Min(value = ApplicationConstants.MIN_PAGE_SIZE, message = "Size must be at least 1") @Max(value = ApplicationConstants.MAX_PAGE_SIZE, message = "Size must not exceed 100") int size) {
 
 		// 現在のユーザーを取得
 		User currentUser = securityUtil.getCurrentUserOrThrow();
-		
+
 		// リソース単位の制御: マネージャーが自分の店舗のみアクセス可能か確認
-		if (!customerAuthorizationService.canAccessStore(currentUser, storeId)) {
-			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-		}
+		authorizationFacade.checkCanAccessStoreOrThrow(currentUser, storeId);
 
 		// レッスン履歴一覧（最新の数件）
 		Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
-		var lessonPage = lessonService.searchLessons(storeId, null, pageable);
+		var lessonPage = lessonService.searchLessons(storeId, pageable);
 		List<LessonResponse> recentLessons = lessonPage.getContent();
 
-		// グラフデータ
-		var chartData = lessonService.getLessonChartData(storeId, chartType);
+		// グラフデータ（StringからChartPeriodに変換）
+		ChartPeriod period = convertToChartPeriod(chartType);
+		var chartData = lessonService.getLessonChartData(storeId, period);
 
 		// 総レッスン数（簡易版：ページネーションの総件数を使用）
 		long totalLessonCount = lessonPage.getTotalElements();
@@ -151,5 +136,27 @@ public class HomeApiController {
 				.build();
 
 		return ResponseEntity.ok(response);
+	}
+
+	/**
+	 * String型のchartTypeをChartPeriod enumに変換
+	 * 
+	 * @param chartType チャートタイプ（"week" or "month"）
+	 * @return ChartPeriod enum
+	 * @throws InvalidRequestException 不正な値の場合
+	 */
+	private ChartPeriod convertToChartPeriod(String chartType) {
+		if (chartType == null) {
+			return ChartPeriod.MONTH; // デフォルト値
+		}
+
+		switch (chartType.toLowerCase()) {
+		case "week":
+			return ChartPeriod.WEEK;
+		case "month":
+			return ChartPeriod.MONTH;
+		default:
+			throw new InvalidRequestException("chartType must be 'week' or 'month'");
+		}
 	}
 }

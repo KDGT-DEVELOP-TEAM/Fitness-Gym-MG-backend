@@ -36,13 +36,18 @@ public enum Gender {
      * コード値からEnumを取得
      * 
      * @param value コード値
-     * @return Gender Enum、見つからない場合はnull
+     * @return Gender Enum
+     * @throws IllegalArgumentException valueがnull、または有効なコード値でない場合
      */
     public static Gender fromCode(String value) {
         if (value == null) {
-            return null;
+            throw new IllegalArgumentException("Gender code cannot be null");
         }
-        return Gender.valueOf(value.toUpperCase());
+        try {
+            return Gender.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid Gender code: " + value, e);
+        }
     }
 }
 

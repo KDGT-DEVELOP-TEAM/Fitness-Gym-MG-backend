@@ -17,6 +17,8 @@ import com.example.fitnessgym_mg.filter.LoginAttemptFilter;
 
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.web.cors.CorsConfigurationSource;
+
 /**
  * Spring Security設定クラス
  * JWT認証を使用したステートレスなREST API用セキュリティ設定
@@ -30,6 +32,7 @@ public class SecurityConfig {
 	private final JwtAuthenticationFilter jwtAuthenticationFilter;
 	private final LoginRateLimitFilter loginRateLimitFilter;
 	private final LoginAttemptFilter loginAttemptFilter;
+	private final CorsConfigurationSource corsConfigurationSource;
 
 	/* =========================
 	 * 定数定義（将来分離しやすい）
@@ -73,7 +76,7 @@ public class SecurityConfig {
 
 		http
 			// REST API前提：CORS有効
-			.cors(cors -> {})
+			.cors(cors -> cors.configurationSource(corsConfigurationSource))
 
 			// CSRF無効（JWT前提）
 			.csrf(csrf -> csrf.disable())
@@ -106,7 +109,7 @@ public class SecurityConfig {
 			.addFilterBefore(
 					loginAttemptFilter,
 					UsernamePasswordAuthenticationFilter.class
-			)
+				)
 
 			// レートリミットフィルター（JWTフィルターより前に配置）
 			.addFilterBefore(

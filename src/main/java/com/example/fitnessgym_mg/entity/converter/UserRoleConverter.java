@@ -9,15 +9,18 @@ public class UserRoleConverter implements AttributeConverter<UserRole, String> {
 
     @Override
     public String convertToDatabaseColumn(UserRole attribute) {
-        return attribute != null ? attribute.name().toLowerCase() : null;
+        if (attribute == null) {
+            throw new IllegalArgumentException("UserRole cannot be null");
+        }
+        return attribute.getCode();
     }
 
     @Override
     public UserRole convertToEntityAttribute(String dbData) {
         if (dbData == null) {
-            return null;
+            return null;  // DBのnullは許容
         }
-        return UserRole.fromCode(dbData);
+        return UserRole.fromCode(dbData);  // nullチェック不要（fromCodeが例外を投げる）
     }
 }
 

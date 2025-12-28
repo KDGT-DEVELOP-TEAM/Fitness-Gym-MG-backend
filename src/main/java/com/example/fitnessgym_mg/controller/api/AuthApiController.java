@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.fitnessgym_mg.dto.request.LoginRequest;
 import com.example.fitnessgym_mg.dto.response.LoginResponse;
 import com.example.fitnessgym_mg.entity.User;
+import com.example.fitnessgym_mg.exception.AuthenticationStateException;
 import com.example.fitnessgym_mg.repository.UserRepository;
 import com.example.fitnessgym_mg.util.JwtTokenUtil;
 import com.example.fitnessgym_mg.util.SecurityUtil;
@@ -88,11 +89,11 @@ public class AuthApiController {
             // セキュリティコンテキストに認証情報を設定
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            // ユーザー情報を取得（認証成功後なので必ず存在するはず）
-            User user = userRepository.findByEmail(request.getEmail())
+            // ユーザー情報を取得（認証成功後なので必ず存在するはず、active条件を適用）
+            User user = userRepository.findByEmailAndActiveTrue(request.getEmail())
                 .orElseThrow(() -> {
                     log.error("認証成功後にユーザーが見つからない異常事態を検出");
-                    return new IllegalStateException("ユーザー情報の取得に失敗しました");
+                    return new AuthenticationStateException("ユーザー情報の取得に失敗しました");
                 });
 
             // JWTトークンを生成
@@ -144,7 +145,7 @@ public class AuthApiController {
                 .userId(user.getId())
                 .email(user.getEmail())
                 .name(user.getName())
-                .role(user.getRole().name())
+                .role(user.getRole())
                 .token(token)
                 .build();
     }

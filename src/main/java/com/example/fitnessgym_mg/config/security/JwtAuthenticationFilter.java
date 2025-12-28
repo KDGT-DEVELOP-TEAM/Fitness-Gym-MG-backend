@@ -3,6 +3,7 @@ package com.example.fitnessgym_mg.config.security;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.UUID;
 
 import org.springframework.http.MediaType;
 import org.springframework.lang.NonNull;
@@ -13,7 +14,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.exception.ErrorResponse;
+import com.example.fitnessgym_mg.repository.UserRepository;
 import com.example.fitnessgym_mg.util.JwtTokenUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -46,6 +49,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenUtil jwtTokenUtil;
     private final ObjectMapper objectMapper;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(
@@ -66,8 +70,36 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // トークンを1回だけパースして検証し、Claimsを取得
             Claims claims = jwtTokenUtil.parseAndValidate(token);
 
-            // 取得したClaimsから情報を取得
-            String email = claims.get("email", String.class);
+            // subject（userId）からユーザーIDを取得
+            String subject = claims.getSubject();
+            if (!StringUtils.hasText(subject)) {
+                log.warn("JWTトークンにsubjectが含まれていません");
+                sendUnauthorized(response, "JWT_INVALID", "JWTトークンが無効です");
+                return;
+            }
+
+            UUID userId;
+            try {
+                userId = UUID.fromString(subject);
+            } catch (IllegalArgumentException e) {
+                log.warn("JWTトークンのsubjectが無効なUUID形式です: {}", subject);
+                sendUnauthorized(response, "JWT_INVALID", "JWTトークンが無効です");
+                return;
+            }
+
+            // ユーザーIDからUserエンティティを取得
+            // セキュリティ改善: emailをJWTから削除し、DBから取得することで個人情報漏洩リスクを低減
+            User user = userRepository.findById(userId)
+                    .orElse(null);
+
+            // ユーザーが存在しない、または無効化されている場合はエラー
+            if (user == null || !user.isActive()) {
+                log.warn("JWT認証失敗: ユーザーが無効化されているか存在しません. userId={}", userId);
+                sendUnauthorized(response, "JWT_USER_INACTIVE", "ユーザーアカウントが無効化されています");
+                return;
+            }
+
+            // Claimsからロールを取得（DBの値と整合性チェックは行わない）
             String role = claims.get("role", String.class);
 
             if (!StringUtils.hasText(role)) {
@@ -80,14 +112,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
-                                email,
+                                user.getEmail(),
                                 null,
                                 Collections.singletonList(authority)
                         );
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
 
-                log.debug("JWT認証成功: email={}, role={}", email, role);
+                log.debug("JWT認証成功: email={}, role={}", user.getEmail(), role);
 
             filterChain.doFilter(request, response);
 

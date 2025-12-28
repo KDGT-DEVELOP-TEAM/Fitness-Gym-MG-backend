@@ -1,5 +1,8 @@
 package com.example.fitnessgym_mg.exception;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
+
 /**
  * 不正なリクエストを表す例外
  * HTTPステータスコード400 Bad Requestに対応
@@ -7,6 +10,7 @@ package com.example.fitnessgym_mg.exception;
  * <p>Controller層で使用することを想定した例外。
  * クライアントの入力ミスや不正なパラメータ指定を表す。</p>
  */
+@ResponseStatus(HttpStatus.BAD_REQUEST)
 public class InvalidRequestException extends RuntimeException {
     public InvalidRequestException(String message) {
         super(message);

@@ -88,7 +88,7 @@ public class PostureGroupResponse {
                 .id(entity.getId())
                 .lessonId(entity.getLesson() != null ? entity.getLesson().getId() : null)
                 .lessonStartDate(entity.getLesson() != null && entity.getLesson().getStartDate() != null
-                        ? DateTimeUtil.toUtcOffset(entity.getLesson().getStartDate())
+                        ? DateTimeUtil.toUtcOffsetAssumingUtc(entity.getLesson().getStartDate())
                         : null)
                 .capturedAt(entity.getCapturedAt())
                 .images(sortedImages)

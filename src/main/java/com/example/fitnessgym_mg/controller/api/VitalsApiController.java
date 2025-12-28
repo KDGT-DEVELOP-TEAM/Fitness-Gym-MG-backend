@@ -32,7 +32,7 @@ public class VitalsApiController {
      * GET /api/customers/{customer_id}/vitals/history
      * 体重・BMIデータ履歴の時系列データ取得
      */
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER') and @customerAuthorizationService.canAccessCustomer(authentication, #customerId)")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER') and @authorizationFacade.canAccessCustomer(authentication, #customerId)")
     @GetMapping("/history")
     public ResponseEntity<VitalsHistoryResponse> getVitalsHistory(@PathVariable("customer_id") UUID customerId) {
         List<VitalsHistoryResponse.VitalsData> data = lessonService.getVitalsHistoryByCustomerId(customerId);

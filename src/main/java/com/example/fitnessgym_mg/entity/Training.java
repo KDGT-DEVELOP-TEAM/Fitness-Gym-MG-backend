@@ -11,6 +11,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,7 +26,8 @@ import lombok.ToString;
  * 複合主キー（lesson_id + order_no）を使用
  */
 @Entity
-@Table(name = "trainings")
+@Table(name = "trainings",
+       uniqueConstraints = @UniqueConstraint(columnNames = { "lesson_id", "order_no" }))
 @Data
 @Builder
 @NoArgsConstructor
@@ -59,6 +61,18 @@ public class Training {
 	 */
 	@Column(nullable = false)
 	private Integer reps;
+
+	/**
+	 * 順序番号を取得（表現用アクセサ）
+	 * 
+	 * <p>このメソッドはDTO層など、エンティティの内部構造（複合主キー）に依存したくない層から使用されます。</p>
+	 * <p>複合主キー（{@link TrainingId}）の`orderNo`を返します。</p>
+	 * 
+	 * @return 順序番号。idがnullの場合はnull
+	 */
+	public Integer getOrderNo() {
+		return id != null ? id.getOrderNo() : null;
+	}
 
 	/**
 	 * 複合主キークラス

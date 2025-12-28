@@ -2,7 +2,10 @@ package com.example.fitnessgym_mg.exception;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import java.util.List;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -26,14 +29,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException e) {
         log.warn("Validation error: {}", e.getMessage());
-        // 最初のバリデーションエラーメッセージを取得
-        String message = e.getConstraintViolations().stream()
+        // すべてのバリデーションエラーメッセージを取得
+        List<String> errorMessages = e.getConstraintViolations().stream()
                 .map(ConstraintViolation::getMessage)
-                .findFirst()
-                .orElse("Validation failed");
+                .collect(Collectors.toList());
+        // 最初のエラーメッセージをmessageフィールドに設定（後方互換性のため）
+        String firstMessage = errorMessages.isEmpty() ? "Validation failed" : errorMessages.get(0);
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse("VALIDATION_ERROR", message));
+                .body(new ErrorResponse("VALIDATION_ERROR", firstMessage, errorMessages));
     }
 
     /**
@@ -43,14 +47,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(MethodArgumentNotValidException e) {
         log.warn("Validation error: {}", e.getMessage());
-        // 最初のバリデーションエラーメッセージを取得
-        String message = e.getBindingResult().getFieldErrors().stream()
-                .map(error -> error.getDefaultMessage())
-                .findFirst()
-                .orElse("Validation failed");
+        // すべてのバリデーションエラーメッセージを取得
+        List<String> errorMessages = e.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getDefaultMessage() != null ? error.getDefaultMessage() : "Validation failed")
+                .collect(Collectors.toList());
+        // 最初のエラーメッセージをmessageフィールドに設定（後方互換性のため）
+        String firstMessage = errorMessages.isEmpty() ? "Validation failed" : errorMessages.get(0);
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse("VALIDATION_ERROR", message));
+                .body(new ErrorResponse("VALIDATION_ERROR", firstMessage, errorMessages));
     }
 
     /**
@@ -63,6 +68,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
             .body(new ErrorResponse("INVALID_REQUEST", e.getMessage()));
+    }
+
+    /**
+     * ビジネスルール違反エラーのハンドリング
+     * Service層で意図的にthrowされたBusinessRuleViolationExceptionを処理
+     */
+    @ExceptionHandler(BusinessRuleViolationException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessRuleViolation(BusinessRuleViolationException e) {
+        log.warn("Business rule violation: {}", e.getMessage());
+        return ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse("BUSINESS_RULE_VIOLATION", e.getMessage()));
     }
 
     /**
@@ -91,20 +108,22 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 認証状態不整合エラーのハンドリング
+     * 認証処理中に状態不整合が発生した場合に使用
+     */
+    @ExceptionHandler(AuthenticationStateException.class)
+    public ResponseEntity<ErrorResponse> handleAuthenticationStateException(AuthenticationStateException e) {
+        log.error("ログイン処理で不整合が発生しました: {}", e.getMessage(), e);
+        return ResponseEntity
+            .status(HttpStatus.UNAUTHORIZED)
+            .body(new ErrorResponse("AUTHENTICATION_ERROR", "認証に失敗しました"));
+    }
+
+    /**
      * ビジネスロジックエラーのハンドリング
-     * 認証関連のIllegalStateExceptionは別途処理する
      */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException e) {
-        // 認証関連のIllegalStateExceptionかどうかを判定
-        if (e.getMessage() != null && e.getMessage().contains("ユーザー情報の取得に失敗しました")) {
-            log.error("ログイン処理で不整合が発生しました: {}", e.getMessage(), e);
-            return ResponseEntity
-                    .status(HttpStatus.UNAUTHORIZED)
-                    .body(new ErrorResponse("AUTHENTICATION_ERROR", "認証に失敗しました"));
-        }
-        
-        // その他のIllegalStateExceptionはビジネスロジックエラーとして処理
         log.warn("Business logic error: {}", e.getMessage());
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
@@ -117,7 +136,14 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(EntityNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleEntityNotFound(EntityNotFoundException e) {
-        log.warn("Entity not found: {}", e.getMessage());
+        // 構造化された情報を活用してログ出力
+        if (e.getEntityType() != null || e.getEntityId() != null) {
+            log.warn("Entity not found: entityType={}, entityId={}", 
+                e.getEntityType() != null ? e.getEntityType() : "unknown",
+                e.getEntityId() != null ? e.getEntityId() : "unknown");
+        } else {
+            log.warn("Entity not found: {}", e.getMessage());
+        }
         // 情報漏洩を防ぐため、詳細情報はログに記録し、クライアントには汎用的なメッセージを返す
         return ResponseEntity
             .status(HttpStatus.NOT_FOUND)
@@ -130,7 +156,14 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ErrorResponse> handleAuthenticationException(AuthenticationException e) {
-        log.warn("Authentication error: {}", e.getMessage());
+        // 構造化された情報を活用し、機密情報をマスク
+        if (e.getEmail() != null || e.getRequestInfo() != null) {
+            log.warn("Authentication error: email={}, requestInfo={}", 
+                e.getEmail() != null ? maskEmail(e.getEmail()) : "unknown",
+                e.getRequestInfo() != null ? e.getRequestInfo() : "unknown");
+        } else {
+            log.warn("Authentication error: {}", e.getMessage());
+        }
         // 情報漏洩を防ぐため、詳細情報はログに記録し、クライアントには汎用的なメッセージを返す
         return ResponseEntity
             .status(HttpStatus.UNAUTHORIZED)
@@ -144,11 +177,67 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
-        log.warn("Access denied: {}", e.getMessage());
+        // 構造化された情報を活用してログ出力
+        if (e.getUserId() != null || e.getResource() != null) {
+            log.warn("Access denied: userId={}, resource={}", 
+                e.getUserId() != null ? e.getUserId() : "unknown",
+                e.getResource() != null ? e.getResource() : "unknown");
+        } else {
+            log.warn("Access denied: {}", e.getMessage());
+        }
         // 情報漏洩を防ぐため、詳細情報はログに記録し、クライアントには汎用的なメッセージを返す
         return ResponseEntity
                 .status(HttpStatus.FORBIDDEN)
                 .body(new ErrorResponse("ACCESS_DENIED", "このリソースにアクセスする権限がありません"));
+    }
+
+    /**
+     * データベース整合性違反エラーのハンドリング
+     * UNIQUE制約違反の場合はConflictExceptionに変換
+     * その他のDB制約違反（NOT NULL、FK制約など）は適切な例外に変換
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException e) {
+        log.warn("Data integrity violation: {}", e.getMessage());
+        
+        // HibernateのConstraintViolationExceptionを取得
+        Throwable rootCause = e.getRootCause();
+        if (rootCause instanceof org.hibernate.exception.ConstraintViolationException) {
+            org.hibernate.exception.ConstraintViolationException cve = 
+                (org.hibernate.exception.ConstraintViolationException) rootCause;
+            String constraintName = cve.getConstraintName();
+            
+            // UNIQUE制約違反の場合はCONFLICTとして扱う
+            if (constraintName != null && constraintName.toUpperCase().contains("UNIQUE")) {
+                return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(new ErrorResponse("CONFLICT", "リソースが既に存在します"));
+            }
+        }
+        
+        // SQLExceptionのエラーコードを確認（PostgreSQL: 23505 = UNIQUE制約違反）
+        if (rootCause instanceof java.sql.SQLException) {
+            java.sql.SQLException sqlEx = (java.sql.SQLException) rootCause;
+            if ("23505".equals(sqlEx.getSQLState())) { // PostgreSQL UNIQUE制約違反
+                return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(new ErrorResponse("CONFLICT", "リソースが既に存在します"));
+            }
+        }
+        
+        // フォールバック: メッセージ文字列で判定（後方互換性のため）
+        String message = e.getMessage();
+        if (message != null && (message.contains("UNIQUE") || message.contains("unique") || 
+            message.contains("duplicate") || message.contains("Duplicate"))) {
+            return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse("CONFLICT", "リソースが既に存在します"));
+        }
+        
+        // その他のDB制約違反（NOT NULL、FK制約など）はBAD_REQUESTとして扱う
+        return ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse("DATA_INTEGRITY_ERROR", "データ整合性エラーが発生しました"));
     }
 
     /**
@@ -175,18 +264,44 @@ public class GlobalExceptionHandler {
 
     /**
      * ストレージ関連エラーのハンドリング
+     */
+    @ExceptionHandler(StorageException.class)
+    public ResponseEntity<ErrorResponse> handleStorageException(StorageException e) {
+        log.error("Storage error: {}", e.getMessage(), e);
+        return ResponseEntity
+            .status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(new ErrorResponse("STORAGE_ERROR", "Storage operation failed"));
+    }
+
+    /**
+     * 予期しないRuntimeExceptionのハンドリング
      * 注意: より具体的な例外ハンドラーの後に配置する必要がある
      */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException e) {
         log.error("Runtime error: {}", e.getMessage(), e);
-        if (e.getMessage() != null && e.getMessage().contains("Storage")) {
-            return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse("STORAGE_ERROR", "Storage operation failed"));
-        }
         return ResponseEntity
             .status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(new ErrorResponse("INTERNAL_ERROR", "An internal error occurred"));
+    }
+    
+    /**
+     * メールアドレスの機密情報をマスク
+     * 
+     * @param email マスクするメールアドレス
+     * @return マスクされたメールアドレス（例: "ab***@example.com"）
+     */
+    private String maskEmail(String email) {
+        if (email == null || !email.contains("@")) {
+            return email;
+        }
+        String[] parts = email.split("@");
+        if (parts.length != 2) {
+            return email;
+        }
+        if (parts[0].length() <= 2) {
+            return "***@" + parts[1];
+        }
+        return parts[0].substring(0, 2) + "***@" + parts[1];
     }
 }

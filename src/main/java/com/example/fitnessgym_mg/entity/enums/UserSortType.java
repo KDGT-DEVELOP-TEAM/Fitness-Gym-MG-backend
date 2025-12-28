@@ -28,18 +28,19 @@ public enum UserSortType {
      * コードからUserSortTypeを取得
      * 
      * @param code ソートタイプのコード
-     * @return UserSortType（存在しない場合はCREATEDを返す）
+     * @return UserSortType
+     * @throws IllegalArgumentException codeがnull、空文字列、または有効なコード値でない場合
      */
     public static UserSortType fromCode(String code) {
         if (code == null || code.isEmpty()) {
-            return CREATED;
+            throw new IllegalArgumentException("UserSortType code cannot be null or empty");
         }
         for (UserSortType type : values()) {
             if (type.code.equalsIgnoreCase(code)) {
                 return type;
             }
         }
-        return CREATED; // デフォルト値
+        throw new IllegalArgumentException("Invalid UserSortType code: " + code);
     }
 }
 

@@ -2,13 +2,12 @@ package com.example.fitnessgym_mg.entity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -36,19 +35,18 @@ public class Lesson {
 
 	@EqualsAndHashCode.Include
 	@Id
-	@GeneratedValue(strategy = GenerationType.UUID)
-	private UUID id;
+	private UUID id = UUID.randomUUID();
 
 	/**
-	 * レッスン開始日時
+	 * レッスン開始日時（必須）
 	 */
-	@Column(name = "start_date", nullable = true)
+	@Column(name = "start_date", nullable = false)
 	private LocalDateTime startDate;
 
 	/**
-	 * レッスン終了日時
+	 * レッスン終了日時（必須）
 	 */
-	@Column(name = "end_date", nullable = true)
+	@Column(name = "end_date", nullable = false)
 	private LocalDateTime endDate;
 
 	/**
@@ -92,6 +90,20 @@ public class Lesson {
 	private BigDecimal weight;
 
 	/**
+	 * 体重を設定（30~300kgの範囲で検証）
+	 * 
+	 * @param weight 体重（kg）
+	 * @throws IllegalArgumentException 範囲外の値の場合
+	 */
+	public void setWeight(BigDecimal weight) {
+		if (weight != null && (weight.compareTo(BigDecimal.valueOf(30)) < 0
+				|| weight.compareTo(BigDecimal.valueOf(300)) > 0)) {
+			throw new IllegalArgumentException("体重は30~300kgの範囲で入力してください");
+		}
+		this.weight = weight;
+	}
+
+	/**
 	 * 食事内容
 	 */
 	@Column(length = 500)
@@ -131,6 +143,6 @@ public class Lesson {
 
 	@PrePersist
 	public void onPrePersist() {
-		this.createdAt = LocalDateTime.now();
+		this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
 	}
 }

@@ -14,7 +14,14 @@ public class PostureImagePositionConverter implements AttributeConverter<Posture
 
     @Override
     public PostureImagePosition convertToEntityAttribute(String dbData) {
-        return dbData != null ? PostureImagePosition.fromCode(dbData) : null;
+        if (dbData == null) {
+            return null;
+        }
+        PostureImagePosition position = PostureImagePosition.fromCode(dbData);
+        if (position == null) {
+            throw new IllegalArgumentException("Invalid PostureImagePosition code: " + dbData);
+        }
+        return position;
     }
 }
 

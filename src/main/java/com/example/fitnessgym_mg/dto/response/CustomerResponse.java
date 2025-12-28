@@ -10,13 +10,17 @@ import com.example.fitnessgym_mg.entity.Customer;
 import com.example.fitnessgym_mg.entity.enums.Gender;
 
 import lombok.Data;
+import lombok.ToString;
 
 /**
  * 顧客レスポンスDTO
  * 顧客情報をAPIレスポンスとして返す際に使用
  * 年齢は自動計算される
+ * 
+ * <p>セキュリティ: 個人情報（email、phone）はログ出力から除外します。</p>
  */
 @Data
+@ToString(exclude = {"email", "phone"}) // セキュリティ: 個人情報をログに出力しない
 public class CustomerResponse {
 
 	private UUID id;
@@ -30,10 +34,27 @@ public class CustomerResponse {
 	
 	// プロフィール画面用の追加フィールド
 	private Gender gender;
-	private LocalDate birthdate; // birthdayの別名（HTMLフォームとの互換性のため）
+	/**
+	 * 生年月日
+	 * 
+	 * <p>Entity（{@link com.example.fitnessgym_mg.entity.Customer#birthday}）の`birthday`フィールドに対応します。</p>
+	 * <p>命名の不一致について: HTMLフォームとの互換性のため、DTOでは`birthdate`という名前を使用しています。</p>
+	 * <p>意味は同じですが、フロントエンドの実装都合により異なる名前を使用しています。</p>
+	 * <p>将来的には統一を検討する余地がありますが、現状はコメントで明確化されているため問題ありません。</p>
+	 */
+	private LocalDate birthdate;
 	private String address;
 	private BigDecimal height;
-	private BigDecimal latestWeight; // 最新レッスンの体重（BMI計算用）
+	/**
+	 * 最新レッスンの体重（BMI計算用）
+	 * 
+	 * <p>注意: このフィールドは`fromEntity()`では設定されません。</p>
+	 * <p>nullの可能性があります。フロントエンド側でnullチェックを実施してください。</p>
+	 * <p>設定される場合: {@link com.example.fitnessgym_mg.service.CustomerService#getCustomerById(UUID)}で取得する場合のみ設定されます。</p>
+	 * <p>設定されない場合: {@link com.example.fitnessgym_mg.service.CustomerService#searchCustomers(String, CustomerSort, UUID, Pageable)}や
+	 * {@link com.example.fitnessgym_mg.service.CustomerService#getMyCustomers()}で取得する場合はnullのままです。</p>
+	 */
+	private BigDecimal latestWeight;
 	private UUID firstPostureGroupId; // 初回姿勢画像ID
 
 	/**

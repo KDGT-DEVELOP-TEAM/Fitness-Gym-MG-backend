@@ -33,10 +33,13 @@ public final class DateTimeUtil {
      * <p>APIレスポンス用の変換メソッド。
      * DBに保存されているLocalDateTimeをUTCとして扱い、OffsetDateTimeに変換します。</p>
      * 
-     * @param localDateTime 変換元のLocalDateTime（nullの場合はnullを返す）
+     * <p><b>重要:</b> このメソッドは、引数のLocalDateTimeがUTCとして記録されていることを前提とします。
+     * メソッド名に「AssumingUtc」を含めることで、UTC前提であることを明示しています。</p>
+     * 
+     * @param localDateTime 変換元のLocalDateTime（UTCとして記録されていることを前提、nullの場合はnullを返す）
      * @return UTC固定のOffsetDateTime、localDateTimeがnullの場合はnull
      */
-    public static OffsetDateTime toUtcOffset(LocalDateTime localDateTime) {
+    public static OffsetDateTime toUtcOffsetAssumingUtc(LocalDateTime localDateTime) {
         if (localDateTime == null) {
             return null;
         }

@@ -9,10 +9,12 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 監査ログレスポンスDTO
  */
+@Slf4j
 @Data
 @Builder
 @NoArgsConstructor
@@ -46,14 +48,17 @@ public class AuditLogResponse {
             }
         } catch (IllegalArgumentException e) {
             // UUID形式でない場合はnullのまま
+            // データ不整合の兆候を検知するため、ログに記録
+            log.warn("Invalid targetId format in AuditLog. id={}, targetId={}", 
+                     entity.getId(), entity.getTargetId());
         }
         
         return AuditLogResponse.builder()
                 .id(entity.getId())
                 .userId(entity.getUser() != null ? entity.getUser().getId() : null)
                 .userName(entity.getUser() != null ? entity.getUser().getName() : null)
-                .action(entity.getAction())
-                .targetTable(entity.getTargetTable())
+                .action(entity.getAction() != null ? entity.getAction().name() : null)
+                .targetTable(entity.getTargetTable() != null ? entity.getTargetTable().getTableName() : null)
                 .targetId(targetIdUuid)
                 .createdAt(entity.getCreatedAt() != null 
                         ? entity.getCreatedAt().toLocalDateTime() 

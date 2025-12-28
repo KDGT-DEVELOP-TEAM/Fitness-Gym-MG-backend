@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.HttpStatus;
 
 import com.example.fitnessgym_mg.entity.User;
-import com.example.fitnessgym_mg.service.CustomerAuthorizationService;
+import com.example.fitnessgym_mg.service.AuthorizationFacade;
 import com.example.fitnessgym_mg.service.LessonService;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
@@ -36,7 +36,7 @@ public class LessonApiController {
 
 	private final LessonService lessonService;
 	private final SecurityUtil securityUtil;
-	private final CustomerAuthorizationService customerAuthorizationService;
+	private final AuthorizationFacade authorizationFacade;
 
 	// ========== REST API エンドポイント ==========
 
@@ -53,7 +53,7 @@ public class LessonApiController {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		
 		// 認可チェック: 操作者がその顧客に対して権限を持つか確認
-		if (!customerAuthorizationService.canAccessCustomer(currentUser, customerId)) {
+		if (!authorizationFacade.canAccessCustomer(currentUser, customerId)) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 		}
 
@@ -79,7 +79,7 @@ public class LessonApiController {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		
 		// 認可チェック: 操作者がその顧客に対して権限を持つか確認
-		if (!customerAuthorizationService.canAccessCustomer(currentUser, customerId)) {
+		if (!authorizationFacade.canAccessCustomer(currentUser, customerId)) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 		}
 
@@ -102,7 +102,7 @@ public class LessonApiController {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		
 		// 認可チェック: 操作者がそのレッスンにアクセス可能か確認
-		if (!customerAuthorizationService.canAccessLesson(currentUser, lessonId)) {
+		if (!authorizationFacade.canAccessLesson(currentUser, lessonId)) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 		}
 
@@ -124,7 +124,7 @@ public class LessonApiController {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		
 		// 認可チェック: 操作者がそのレッスンにアクセス可能か確認
-		if (!customerAuthorizationService.canAccessLesson(currentUser, lessonId)) {
+		if (!authorizationFacade.canAccessLesson(currentUser, lessonId)) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 		}
 

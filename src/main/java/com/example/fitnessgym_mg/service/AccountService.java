@@ -25,22 +25,17 @@ import com.example.fitnessgym_mg.entity.enums.UserSortType;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.repository.UserRepository;
-import com.example.fitnessgym_mg.service.CustomerAuthorizationService;
-import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class AccountService {
 
 	private final UserRepository userRepository;
 	private final StoreRepository storeRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final LessonRepository lessonRepository;
-	private final SecurityUtil securityUtil;
-	private final CustomerAuthorizationService customerAuthorizationService;
 
 	// --- ユーザー検索 ---
 	@Transactional(readOnly = true)
@@ -60,10 +55,13 @@ public class AccountService {
 
 		// --- 1-2. キーワードによる絞り込み ---
 		if (keyword != null && !keyword.isEmpty()) {
-			String lowerKeyword = keyword.toLowerCase();
-			spec = spec.and((root, query, cb) -> cb.or(
-					cb.like(cb.lower(root.get("name")), "%" + lowerKeyword + "%"),
-					cb.like(cb.lower(root.get("kana")), "%" + lowerKeyword + "%")));
+			// 全文検索を使用（高速）
+			// ソートオブジェクトの生成 (グルーピングソート対応)
+			Sort sortObj = createSort(sort);
+			Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sortObj);
+			
+			return userRepository.searchByFullText(keyword, role, sortedPageable)
+				.map(UserResponse::fromEntity);
 		}
 
 		// --- 1-3. ロールによる絞り込み ---
@@ -76,95 +74,113 @@ public class AccountService {
 
 		Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sortObj);
 
-		// 3. 検索の実行
+		// 3. 検索の実行（キーワードがない場合は従来通りSpecificationを使用）
 		Page<User> users = userRepository.findAll(spec, sortedPageable);
 
 		return users.map(UserResponse::fromEntity);
 	}
 
-	// ユーザー作成
-	public void create(UserRequest req, Set<UUID> storeIds) {
-		create(req, storeIds, null);
-	}
-
-	// ユーザー作成（Manager用エンドポイント用）
-	public void create(UserRequest req, Set<UUID> storeIds, UUID pathStoreId) {
-		// pathStoreIdが指定されている場合（Manager用エンドポイント）、整合性チェック
-		if (pathStoreId != null) {
-			User currentUser = securityUtil.getCurrentUserOrThrow();
-			
-			// ログインユーザーがそのstoreにアクセス可能か確認
-			if (!customerAuthorizationService.canAccessStore(currentUser, pathStoreId)) {
-				throw new com.example.fitnessgym_mg.exception.AccessDeniedException("この店舗にアクセスする権限がありません");
-			}
-			
-			// storeIdを強制追加（request.getStoreIds()にpathStoreIdを含める）
-			if (storeIds == null) {
-				storeIds = new java.util.HashSet<>();
-			}
-			storeIds.add(pathStoreId);
+	// --- Admin用: ユーザー作成 ---
+	@Transactional
+	public void createByAdmin(UserRequest req, Set<UUID> storeIds) {
+		// 店舗IDの正規化
+		if (storeIds == null) {
+			storeIds = Collections.emptySet();
 		}
-
-		// role変更の制約を検証
-		validateRoleChange(null, req.getRole());
-
-		// マネージャーの権限チェック: マネージャーはトレーナーのみ作成可能
-		validateManagerPermission(req.getRole());
-
-		// 1. 店長ロールのバリデーション (単一の店舗必須)
-		validateManagerRole(req.getRole(), storeIds);
 		
 		if (req.getRole() == UserRole.TRAINER) {
-			// トレーナーの場合、店舗は0個以上でOK。ただし、Setがnullの場合は空Setとして扱う
-			if (storeIds == null) {
-				storeIds = Collections.emptySet();
-			}
+			// トレーナーの場合、店舗は0個以上でOK
+			// storeIdsはそのまま使用
+		} else if (req.getRole() == UserRole.MANAGER) {
+			// 店長ロールのバリデーション (単一の店舗必須)
+			validateManagerRole(req.getRole(), storeIds);
 		} else {
 			// ADMINの場合、店舗は不要
 			storeIds = Collections.emptySet();
 		}
 
-		// パスワードの必須チェック (UserRequestで@NotBlankを外したため、ここで補完)
+		// 共通の作成ロジック
+		validateAndCreateUser(req, storeIds);
+	}
+
+	// --- Manager用: ユーザー作成 ---
+	@Transactional
+	public void createByManager(UserRequest req, UUID storeId) {
+		// storeIdを強制追加
+		Set<UUID> storeIds = new java.util.HashSet<>();
+		storeIds.add(storeId);
+
+		// Manager APIではTRAINERのみ作成可能なので、店舗IDの正規化は不要
+		// storeIdsは既に1つのstoreIdが設定されている
+
+		// 共通の作成ロジック
+		validateAndCreateUser(req, storeIds);
+	}
+
+	// --- ユーザー作成の共通ロジック ---
+	private void validateAndCreateUser(UserRequest req, Set<UUID> storeIds) {
+		// DTO層で@Validによりバリデーション済みだが、Service層でも最終チェック
+		// パスワードの必須チェック（新規作成時のみ）
 		if (req.getPass() == null || req.getPass().trim().isEmpty()) {
-			throw new IllegalArgumentException("パスワードは必須です。");
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("パスワードは必須です。");
 		}
 
-		// 2. ユーザーの基本情報設定
+		// メールアドレスの重複チェック（DB制約の前にチェック）
+		if (userRepository.findByEmail(req.getEmail()).isPresent()) {
+			throw new com.example.fitnessgym_mg.exception.ConflictException("このメールアドレスは既に登録されています");
+		}
+
+		// ユーザーの基本情報設定
 		User user = new User();
 		setUserBasicFields(user, req);
+		// パスワードはハッシュ化してから設定（エンティティのsetPasswordはハッシュを受け取る）
 		user.setPassword(passwordEncoder.encode(req.getPass()));
 
-		// 3. 店舗の紐づけ
+		// 店舗の紐づけ
 		Set<Store> storesToAssign = validateAndGetStores(storeIds);
 		user.setStores(storesToAssign);
 		userRepository.save(user);
 	}
 
-	// 更新
-	public void update(UUID id, UserRequest req, Set<UUID> storeIds) {
-		update(id, req, storeIds, null);
-	}
+	// --- Admin用: ユーザー更新 ---
+	@Transactional
+	public void updateByAdmin(UUID id, UserRequest req, Set<UUID> storeIds) {
+		// ユーザー取得（Admin用なので、storeIdチェック不要）
+		User user = findUserOrThrow(id);
 
-	// 更新（Manager用エンドポイント用）
-	public void update(UUID id, UserRequest req, Set<UUID> storeIds, UUID pathStoreId) {
-		// pathStoreIdが指定されている場合（Manager用エンドポイント）、整合性チェック
-		// findUserByIdでstoreIdチェックが実施される
-		User user = findUserById(id, pathStoreId);
-
-		// role変更の制約を検証（自分自身のrole変更禁止）
-		validateRoleChange(id, req.getRole());
-
-		// マネージャーの権限チェック: マネージャーはトレーナーのみ編集可能
-		validateManagerPermission(user.getRole(), req.getRole());
-
-		// StoreIdsのnullチェック (フロントから空配列[]が来る想定だが念のため)
+		// StoreIdsのnullチェック
 		if (storeIds == null) {
 			storeIds = Collections.emptySet();
 		}
 
-		// 1. 店長ロールのバリデーション (単一の店舗必須)
+		// 店長ロールのバリデーション (単一の店舗必須)
 		validateManagerRole(req.getRole(), storeIds);
 
+		// 共通の更新ロジック
+		validateAndUpdateUser(user, req, storeIds);
+	}
+
+	// --- Manager用: ユーザー更新 ---
+	@Transactional
+	public void updateByManager(UUID id, UserRequest req, UUID storeId) {
+		// ユーザー取得
+		User user = findUserOrThrow(id);
+		// store所属チェック
+		assertUserAssignedToStore(user, storeId);
+
+		// Manager APIではstoreIdを強制追加
+		Set<UUID> storeIds = new java.util.HashSet<>();
+		storeIds.add(storeId);
+
+		// 店長ロールのバリデーション (単一の店舗必須)
+		validateManagerRole(req.getRole(), storeIds);
+
+		// 共通の更新ロジック
+		validateAndUpdateUser(user, req, storeIds);
+	}
+
+	// --- ユーザー更新の共通ロジック ---
+	private void validateAndUpdateUser(User user, UserRequest req, Set<UUID> storeIds) {
 		// 既存の更新ロジック
 		setUserBasicFields(user, req);
 
@@ -172,18 +188,17 @@ public class AccountService {
 			user.setPassword(passwordEncoder.encode(req.getPass()));
 		}
 
-		// 2. 店舗の紐づけ情報の上書き
+		// 店舗の紐づけ情報の上書き
 		Set<Store> storesToAssign = validateAndGetStores(storeIds);
 		user.setStores(storesToAssign);
 		userRepository.save(user);
 	}
 
 	// --- ユーザーを有効化 ---
+	@Transactional
 	public void enableActive(UUID id, UUID storeId) {
-		User user = findUserById(id, storeId);
-		
-		// マネージャーの権限チェック: マネージャーはトレーナーのみ編集可能
-		validateManagerPermission(user.getRole());
+		User user = findUserOrThrow(id);
+		assertUserAssignedToStore(user, storeId);
 		
 		if (user.isActive()) {
 			return;
@@ -193,11 +208,10 @@ public class AccountService {
 	}
 
 	// --- ユーザーを無効化 ---
+	@Transactional
 	public void disableActive(UUID id, UUID storeId) {
-		User user = findUserById(id, storeId);
-		
-		// マネージャーの権限チェック: マネージャーはトレーナーのみ編集可能
-		validateManagerPermission(user.getRole());
+		User user = findUserOrThrow(id);
+		assertUserAssignedToStore(user, storeId);
 		
 		if (!user.isActive()) {
 			return;
@@ -207,8 +221,10 @@ public class AccountService {
 	}
 
 	// 削除
+	@Transactional
 	public void delete(UUID id, UUID storeId) {
-		User user = findUserById(id, storeId);
+		User user = findUserOrThrow(id);
+		assertUserAssignedToStore(user, storeId);
 
 		if (user.isActive()) {
 			throw new IllegalStateException("有効ユーザーは削除できません");
@@ -224,8 +240,21 @@ public class AccountService {
 	// idでアカウント情報を取得
 	@Transactional(readOnly = true)
 	public UserResponse findById(UUID id, UUID storeId) {
-		User user = findUserById(id, storeId);
+		User user = findUserOrThrow(id);
+		if (storeId != null) {
+			assertUserAssignedToStore(user, storeId);
+		}
 		return UserResponse.fromEntity(user);
+	}
+
+	// idでユーザーエンティティを取得（認可チェック用）
+	@Transactional(readOnly = true)
+	public User findUserEntityById(UUID id, UUID storeId) {
+		User user = findUserOrThrow(id);
+		if (storeId != null) {
+			assertUserAssignedToStore(user, storeId);
+		}
+		return user;
 	}
 
 	// --- ヘルパーメソッド ---
@@ -244,36 +273,42 @@ public class AccountService {
 		user.setActive(req.isActive());
 	}
 
-	private User findUserById(UUID id, UUID storeId) {
-		User user = userRepository.findById(id)
+	/**
+	 * ユーザーIDでユーザーを取得
+	 * 
+	 * <p>純粋にUserを取得するメソッド。store所属チェックは行わない。</p>
+	 * 
+	 * @param id ユーザーID
+	 * @return ユーザーエンティティ
+	 * @throws EntityNotFoundException ユーザーが見つからない場合
+	 */
+	private User findUserOrThrow(UUID id) {
+		return userRepository.findById(id)
 				.orElseThrow(() -> {
-					// システムエラーではなく、ビジネスロジックエラー（エンティティが見つからない）
-					// log.warnを使用（log.errorではない）
 					return new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + id);
 				});
+	}
 
-		// 店長の場合 (storeId != null)、ログインユーザーがそのstoreに属しているかチェック
-		if (storeId != null) {
-			User currentUser = securityUtil.getCurrentUserOrThrow();
-			
-			// ログインユーザーがそのstoreにアクセス可能か確認
-			if (!customerAuthorizationService.canAccessStore(currentUser, storeId)) {
-				throw new com.example.fitnessgym_mg.exception.AccessDeniedException("この店舗にアクセスする権限がありません");
-			}
-			
-			// 操作対象のユーザーがそのstoreに属するかチェック
+	/**
+	 * ユーザーが指定されたstoreに属しているかチェック
+	 * 
+	 * <p>ビジネスロジック: Manager APIでは、操作対象のユーザーが指定されたstoreに属している必要がある。</p>
+	 * 
+	 * @param user ユーザーエンティティ
+	 * @param storeId 店舗ID
+	 * @throws EntityNotFoundException ユーザーが指定されたstoreに属していない場合
+	 */
+	private void assertUserAssignedToStore(User user, UUID storeId) {
 			if (user.getStores() == null || user.getStores().isEmpty()) {
-				throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + id);
+			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + user.getId());
 			}
 			
 			boolean isAssignedToStore = user.getStores().stream()
 					.anyMatch(store -> store.getId().equals(storeId));
 
 			if (!isAssignedToStore) {
-				throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + id);
-			}
+			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("User not found with id: " + user.getId());
 		}
-		return user;
 	}
 
 	private Sort createSort(UserSortType sort) {
@@ -327,60 +362,9 @@ public class AccountService {
 		if (role == UserRole.MANAGER) {
 			// 店長の場合、店舗IDが1つだけ存在することを確認
 			if (storeIds == null || storeIds.size() != 1) {
-				throw new IllegalArgumentException("店長ユーザーには、割り当てる店舗を一つだけ選択する必要があります。");
+				throw new com.example.fitnessgym_mg.exception.BusinessRuleViolationException("店長ユーザーには、割り当てる店舗を一つだけ選択する必要があります。");
 			}
 		}
 	}
 
-	/**
-	 * マネージャー権限チェック（共通ロジック）
-	 * マネージャーはトレーナーのみ編集可能
-	 * 
-	 * @param targetRole 対象ユーザーのロール
-	 */
-	private void validateManagerPermission(UserRole targetRole) {
-		if (securityUtil.isManager() && targetRole != UserRole.TRAINER) {
-			throw new IllegalArgumentException("マネージャーはトレーナーのみ編集可能です。");
-		}
-	}
-
-	/**
-	 * マネージャー権限チェック（オーバーロード）
-	 * 編集前と編集後の両方のロールをチェック
-	 * 
-	 * @param currentRole 現在のロール
-	 * @param newRole 新しいロール
-	 */
-	private void validateManagerPermission(UserRole currentRole, UserRole newRole) {
-		validateManagerPermission(currentRole);
-		validateManagerPermission(newRole);
-	}
-
-	/**
-	 * role変更の制約を検証
-	 * 
-	 * <p>以下の制約を保証:</p>
-	 * <ul>
-	 *   <li>自分自身のrole変更を禁止</li>
-	 *   <li>ADMIN以外がADMINを作れない（create用）</li>
-	 * </ul>
-	 * 
-	 * @param targetUserId 変更対象のユーザーID（update用、createの場合はnull）
-	 * @param newRole 新しいロール
-	 * @throws IllegalArgumentException 自分自身のrole変更を試みた場合
-	 * @throws AccessDeniedException ADMIN以外がADMINを作成しようとした場合
-	 */
-	private void validateRoleChange(UUID targetUserId, UserRole newRole) {
-		User currentUser = securityUtil.getCurrentUserOrThrow();
-		
-		// 自分自身のrole変更を禁止（update用）
-		if (targetUserId != null && currentUser.getId().equals(targetUserId)) {
-			throw new IllegalArgumentException("自分自身のロールを変更することはできません");
-		}
-		
-		// ADMIN以外がADMINを作れない（create用）
-		if (newRole == UserRole.ADMIN && currentUser.getRole() != UserRole.ADMIN) {
-			throw new com.example.fitnessgym_mg.exception.AccessDeniedException("ADMINロールを作成できるのはADMINのみです");
-		}
-	}
 }

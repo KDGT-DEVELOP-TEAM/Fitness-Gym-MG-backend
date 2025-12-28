@@ -31,8 +31,10 @@ import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.Gender;
 import com.example.fitnessgym_mg.entity.enums.PostureImagePosition;
 import com.example.fitnessgym_mg.entity.enums.UserRole;
+import com.example.fitnessgym_mg.dto.response.PostureGroupResponse;
 import com.example.fitnessgym_mg.service.PostureGroupService;
 import com.example.fitnessgym_mg.service.PostureImageService;
+import org.mockito.ArgumentMatchers;
 
 @WebMvcTest({PostureGroupApiController.class, PostureImageApiController.class})
 class PostureGroupControllerTest {
@@ -114,7 +116,9 @@ class PostureGroupControllerTest {
         group.getImages().add(image);
         image.setPostureGroup(group);
 
-        when(postureGroupService.findByCustomerId(customerId)).thenReturn(List.of(group));
+        // モック設定: findByCustomerIdWithAuthを使用（Deprecatedメソッドは使用不可のため）
+        when(postureGroupService.findByCustomerIdWithAuth(ArgumentMatchers.any(User.class), ArgumentMatchers.eq(customerId)))
+                .thenReturn(List.of(PostureGroupResponse.fromEntity(group)));
 
         mockMvc.perform(get("/api/customers/{customerId}/posture_groups", customerId))
                 .andExpect(status().isOk())

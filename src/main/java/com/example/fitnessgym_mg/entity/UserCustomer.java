@@ -63,12 +63,13 @@ public class UserCustomer {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    @EqualsAndHashCode
     public static class UserCustomerId implements Serializable {
         
-        @Column(name = "user_id")
+        @Column(name = "user_id", nullable = false)
         private UUID userId;
         
-        @Column(name = "customer_id")
+        @Column(name = "customer_id", nullable = false)
         private UUID customerId;
     }
 }

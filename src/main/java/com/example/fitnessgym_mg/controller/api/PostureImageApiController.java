@@ -56,11 +56,11 @@ public class PostureImageApiController {
      */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<PostureImageUploadResponse> uploadImage(
-        @RequestParam("file") MultipartFile file,
-        @RequestParam("postureGroupId") UUID postureGroupId,
-        @RequestParam("position") PostureImagePosition position,
-        @RequestParam(value = "consentPublication", defaultValue = "false") boolean consentPublication,
-        @RequestParam(value = "takenAt", required = false) OffsetDateTime takenAt
+        @RequestParam MultipartFile file,
+        @RequestParam UUID postureGroupId,
+        @RequestParam PostureImagePosition position,
+        @RequestParam(defaultValue = "false") boolean consentPublication,
+        @RequestParam(required = false) OffsetDateTime takenAt
     ) {
         log.debug("Upload image request: groupId={}, position={}", postureGroupId, position);
         
@@ -69,7 +69,7 @@ public class PostureImageApiController {
         
         PostureImageUploadRequest request = new PostureImageUploadRequest();
         request.setPostureGroupId(postureGroupId);
-        request.setPosition(position.getCode());
+        request.setPosition(position);
         request.setConsentPublication(consentPublication);
         request.setTakenAt(takenAt);
         
