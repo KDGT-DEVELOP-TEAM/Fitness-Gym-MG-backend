@@ -7,18 +7,17 @@ public enum UserRole {
     MANAGER,
     TRAINER;
 
-    private final Set<UserRole> manageableRoles;
+    private Set<UserRole> manageableRoles;
 
     UserRole() {
-        this.manageableRoles = initializeManageableRoles();
+        // 初期化はstatic初期化ブロックで行う（enum定数の初期化順序の問題を回避）
     }
 
-    private Set<UserRole> initializeManageableRoles() {
-        return switch (this) {
-            case ADMIN -> Set.of(ADMIN, MANAGER, TRAINER);
-            case MANAGER -> Set.of(TRAINER);
-            case TRAINER -> Set.of();
-        };
+    static {
+        // すべてのenum定数が初期化された後にSetを設定
+        ADMIN.manageableRoles = Set.of(ADMIN, MANAGER, TRAINER);
+        MANAGER.manageableRoles = Set.of(TRAINER);
+        TRAINER.manageableRoles = Set.of();
     }
 
     /**

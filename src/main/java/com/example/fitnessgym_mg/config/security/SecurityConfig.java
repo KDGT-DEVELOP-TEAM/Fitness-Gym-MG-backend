@@ -111,10 +111,10 @@ public class SecurityConfig {
 					UsernamePasswordAuthenticationFilter.class
 				)
 
-			// レートリミットフィルター（JWTフィルターより前に配置）
+			// レートリミットフィルター（UsernamePasswordAuthenticationFilterより前に配置）
 			.addFilterBefore(
 					loginRateLimitFilter,
-					JwtAuthenticationFilter.class
+					UsernamePasswordAuthenticationFilter.class
 			)
 
 			// JWTフィルター

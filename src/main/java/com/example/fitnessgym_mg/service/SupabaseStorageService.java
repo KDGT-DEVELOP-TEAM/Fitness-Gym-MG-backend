@@ -39,7 +39,7 @@ import java.util.Map;
 @Service
 @Profile("server")
 @RequiredArgsConstructor
-public class SupabaseStorageService {
+public class SupabaseStorageService implements StorageService {
     
     private final SupabaseStorageProperties properties;
     private final RestTemplate restTemplate;

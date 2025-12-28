@@ -39,7 +39,7 @@ public class PostureImageService {
 
 	private final PostureImageRepository postureImageRepository;
 	private final PostureGroupRepository postureGroupRepository;
-	private final SupabaseStorageService storageService;
+	private final StorageService storageService;
 	private final AuthorizationFacade authorizationFacade;
 
 	// 許可するContent-Type
