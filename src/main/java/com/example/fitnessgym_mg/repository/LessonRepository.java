@@ -193,6 +193,24 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 			@Param("toDate") LocalDateTime toDate);
 
 	/**
+	 * トレーナーIDで指定期間内のレッスンを取得する（ページネーション対応）
+	 * 開始日時がfromDate以上かつtoDate未満のものを開始日時昇順で返す
+	 */
+	@Query("""
+			SELECT l
+			FROM Lesson l
+			WHERE l.trainer.id = :trainerId
+			  AND l.startDate >= :fromDate
+			  AND l.startDate < :toDate
+			ORDER BY l.startDate ASC
+			""")
+	org.springframework.data.domain.Page<Lesson> findUpcomingLessonsByTrainerIdBetween(
+			@Param("trainerId") UUID trainerId,
+			@Param("fromDate") LocalDateTime fromDate,
+			@Param("toDate") LocalDateTime toDate,
+			org.springframework.data.domain.Pageable pageable);
+
+	/**
 	 * レッスンIDでレッスンを取得し、関連エンティティもJOIN FETCHで取得（N+1問題を回避）
 	 * 
 	 * <p>この用途（詳細画面）では現状の実装が妥当です。</p>

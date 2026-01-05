@@ -367,6 +367,35 @@ public class LessonService {
 	}
 
 	/**
+	 * トレーナーIDで1週間後～1ヶ月後までのレッスンを取得（ページネーション対応）
+	 * トレーナーホームページ用
+	 * 
+	 * <p>認可方針: Service層で自己参照（自分のIDのみ）を検証。</p>
+	 * 
+	 * @param trainerId トレーナーID
+	 * @param pageable ページネーション情報
+	 * @return 1週間後～1ヶ月後までのレッスン一覧（ページネーション）
+	 */
+	@Transactional(readOnly = true)
+	public org.springframework.data.domain.Page<LessonResponse> getUpcomingLessonsByTrainerId(UUID trainerId, org.springframework.data.domain.Pageable pageable) {
+		// 認可チェック: Service層での最終防衛ライン（自己参照の検証）
+		User currentUser = securityUtil.getCurrentUserOrThrow();
+		if (!currentUser.getId().equals(trainerId)) {
+			throw new AccessDeniedException("自分のレッスンのみアクセス可能です");
+		}
+
+		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		LocalDateTime oneWeekLater = now.plusWeeks(1);
+		LocalDateTime oneMonthLater = now.plusMonths(1);
+
+		// 1週間後～1ヶ月後のレッスンを取得（ページネーション対応）
+		org.springframework.data.domain.Page<Lesson> lessonPage = lessonRepository.findUpcomingLessonsByTrainerIdBetween(
+				trainerId, oneWeekLater, oneMonthLater, pageable);
+
+		return lessonPage.map(LessonResponse::fromEntity);
+	}
+
+	/**
 	 * 顧客IDで体重/BMI履歴を取得
 	 * レッスンデータから体重とBMIの時系列データを取得
 	 */

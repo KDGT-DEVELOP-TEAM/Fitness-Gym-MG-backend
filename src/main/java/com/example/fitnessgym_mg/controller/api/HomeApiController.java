@@ -48,20 +48,26 @@ public class HomeApiController {
 
 	/**
 	 * GET /api/trainers/home
-	 * 当日・直近(1週間以内)の予約状況/レッスン概要の取得
+	 * 1週間後～1ヶ月後までのレッスン予定の取得（ページネーション対応）
+	 * トレーナーホームページ用
 	 */
 	@PreAuthorize("hasRole('TRAINER')")
 	@GetMapping("/trainers/home")
-	public ResponseEntity<HomeResponse> getTrainerHome() {
+	public ResponseEntity<HomeResponse> getTrainerHome(
+			@RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be 0 or greater") @Max(value = ApplicationConstants.MAX_PAGE_NUMBER, message = "Page is too large") int page,
+			@RequestParam(defaultValue = "10") @Min(value = ApplicationConstants.MIN_PAGE_SIZE, message = "Size must be at least 1") @Max(value = ApplicationConstants.MAX_PAGE_SIZE, message = "Size must not exceed 100") int size) {
 		// 現在ログイン中のトレーナーを取得
 		UUID trainerId = securityUtil.getCurrentUserOrThrow().getId();
 
-		// 直近1週間のレッスンを取得
-		List<LessonResponse> upcomingLessons = lessonService.getUpcomingLessonsByTrainerId(trainerId);
+		// ページネーション情報を設定
+		Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").ascending());
+
+		// 1週間後～1ヶ月後のレッスンを取得（ページネーション対応）
+		Page<LessonResponse> lessonPage = lessonService.getUpcomingLessonsByTrainerId(trainerId, pageable);
 
 		HomeResponse response = HomeResponse.builder()
-				.upcomingLessons(upcomingLessons)
-				.totalLessonCount(0L) // Trainer用: 統計情報は表示しないため0を設定
+				.upcomingLessons(lessonPage.getContent())
+				.totalLessonCount(lessonPage.getTotalElements()) // 総件数を設定
 				.build();
 
 		return ResponseEntity.ok(response);
