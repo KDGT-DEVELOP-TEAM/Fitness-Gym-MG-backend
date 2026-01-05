@@ -91,7 +91,13 @@ public class CustomerRequest {
 	// 有効/無効（新規作成時は必ず true で送信）
 	private boolean active = true;
 
-	// 店舗ID（ADMINの場合は必須、MANAGERの場合はパス変数から取得）
-	@NotNull(message = "店舗IDは必須です")
+	/**
+	 * 店舗ID
+	 * 
+	 * <p>ADMINの場合: 不要（null可）。顧客は店舗に紐づかない。</p>
+	 * <p>MANAGERの場合: パス変数から取得されるため、リクエストボディでは不要。</p>
+	 * <p>店舗と紐付くのはLessonであり、顧客自体は店舗に紐づかない。</p>
+	 * <p>ただし、MANAGERが作成する顧客は検索・フィルタリングのため店舗と紐付ける。</p>
+	 */
 	private UUID storeId;
 }

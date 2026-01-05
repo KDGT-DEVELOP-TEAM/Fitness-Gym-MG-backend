@@ -87,6 +87,9 @@ public class CustomerApiController {
 	/**
 	 * POST /api/admin/customers
 	 * 顧客の新規登録
+	 * 
+	 * <p>ADMINが顧客を作成する場合、店舗に紐付けずに作成します。</p>
+	 * <p>リクエストボディのstoreIdは不要です（無視されます）。</p>
 	 */
 	@PostMapping("/admin/customers")
 	public ResponseEntity<Void> createAdminCustomer(@Valid @RequestBody CustomerRequest request) {

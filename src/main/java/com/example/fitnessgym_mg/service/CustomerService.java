@@ -105,18 +105,6 @@ public class CustomerService {
 		// storeIdの決定: パス変数があればそれを優先、なければリクエストボディから取得
 		UUID storeId = storeIdFromPath != null ? storeIdFromPath : req.getStoreId();
 
-		if (storeId == null) {
-			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("店舗IDは必須です");
-		}
-
-		// 認可チェック: 店舗へのアクセス権を検証
-		authorizationFacade.checkCanAccessStoreOrThrow(currentUser, storeId);
-
-		// Storeエンティティの取得
-		Store store = storeRepository.findById(storeId)
-				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException(
-						"店舗が見つかりません: " + storeId));
-
 		// バリデーション: 作成時のビジネスルールチェック
 		validateForCreate(req);
 
@@ -136,8 +124,21 @@ public class CustomerService {
 		// システム設定
 		customer.setActive(true); // is_active は新規作成時は有効 (true)
 
-		// Storeとの紐付け
-		customer.addStore(store);
+		// Storeとの紐付け（storeIdが指定されている場合のみ）
+		// ADMINの場合: storeIdはnullで、店舗に紐付けない
+		// MANAGERの場合: storeIdFromPathが指定され、店舗と紐付ける（検索・フィルタリングのため）
+		if (storeId != null) {
+			// 認可チェック: 店舗へのアクセス権を検証
+			authorizationFacade.checkCanAccessStoreOrThrow(currentUser, storeId);
+
+			// Storeエンティティの取得
+			Store store = storeRepository.findById(storeId)
+					.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException(
+							"店舗が見つかりません: " + storeId));
+
+			// Storeとの紐付け
+			customer.addStore(store);
+		}
 
 		customerRepository.save(customer);
 	}
