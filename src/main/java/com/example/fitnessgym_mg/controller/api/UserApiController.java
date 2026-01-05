@@ -1,6 +1,7 @@
 package com.example.fitnessgym_mg.controller.api;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
@@ -47,6 +48,24 @@ public class UserApiController {
 	private final AccountService accountService;
 	private final SecurityUtil securityUtil;
 	private final AccountAuthorizationService accountAuthorizationService;
+	private final com.example.fitnessgym_mg.repository.UserRepository userRepository;
+
+	/**
+	 * GET /api/users
+	 * ユーザー一覧取得（オプション選択用）
+	 * 認証済みユーザー全員がアクセス可能
+	 * ページングなしで全ユーザーを返す
+	 */
+	@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
+	@GetMapping("/users")
+	public ResponseEntity<List<UserResponse>> getUsersForOptions() {
+		log.debug("ユーザー一覧取得（オプション選択用）リクエスト");
+		List<UserResponse> users = userRepository.findAll().stream()
+				.map(UserResponse::fromEntity)
+				.collect(java.util.stream.Collectors.toList());
+		log.info("ユーザー一覧取得（オプション選択用）成功: count={}", users.size());
+		return ResponseEntity.ok(users);
+	}
 
 	/**
 	 * GET /api/admin/users

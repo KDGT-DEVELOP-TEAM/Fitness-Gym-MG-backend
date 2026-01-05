@@ -1,5 +1,6 @@
 package com.example.fitnessgym_mg.controller.api;
 
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
@@ -40,8 +41,26 @@ import lombok.extern.slf4j.Slf4j;
 public class CustomerApiController {
 
 	private final CustomerService service;
+	private final com.example.fitnessgym_mg.repository.CustomerRepository customerRepository;
 
 	// ========== REST API エンドポイント ==========
+
+	/**
+	 * GET /api/customers
+	 * 顧客一覧取得（オプション選択用）
+	 * 認証済みユーザー全員がアクセス可能
+	 * ページングなしで全顧客を返す
+	 */
+	@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
+	@GetMapping("/customers")
+	public ResponseEntity<List<CustomerResponse>> getCustomersForOptions() {
+		log.debug("顧客一覧取得（オプション選択用）リクエスト");
+		List<CustomerResponse> customers = customerRepository.findAllNotDeleted().stream()
+				.map(CustomerResponse::fromEntity)
+				.collect(java.util.stream.Collectors.toList());
+		log.info("顧客一覧取得（オプション選択用）成功: count={}", customers.size());
+		return ResponseEntity.ok(customers);
+	}
 
 	/**
 	 * GET /api/admin/customers

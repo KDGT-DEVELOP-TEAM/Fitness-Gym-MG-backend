@@ -33,4 +33,14 @@ public interface CustomerRepositoryCustom {
 	 * @return 検索結果のページ
 	 */
 	Page<Customer> findAllNotDeleted(Specification<Customer> spec, Pageable pageable);
+
+	/**
+	 * 論理削除されていない全顧客を取得（オプション選択用）
+	 * 
+	 * <p>オプション選択用の全件取得メソッドです。
+	 * 論理削除条件が自動的に適用されます。</p>
+	 * 
+	 * @return 論理削除されていない全顧客のリスト
+	 */
+	java.util.List<Customer> findAllNotDeleted();
 }

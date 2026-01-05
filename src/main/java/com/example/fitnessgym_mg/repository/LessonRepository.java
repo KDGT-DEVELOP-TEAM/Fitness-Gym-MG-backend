@@ -147,6 +147,35 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 			@Param("fromDate") LocalDateTime fromDate);
 
 	/**
+	 * トレーナー別の次回レッスン希望日程一覧を取得
+	 * nextDateが設定されており、かつnextDateが未来の日時のレッスンのみ取得
+	 * 
+	 * <p>このメソッドは{@link com.example.fitnessgym_mg.dto.response.LessonResponse#fromEntity(Lesson)}で使用されることを前提としています。</p>
+	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer、nextStore、nextUser）がJOIN FETCH済みである必要があります。</p>
+	 * <p>JOIN FETCHが未使用の場合、{@link LessonResponse#fromEntity(Lesson)}内のnullチェックにより安全に処理されますが、パフォーマンス問題が発生する可能性があります。</p>
+	 * 
+	 * @param trainerId トレーナーID
+	 * @param now 現在日時（nextDate > now の条件でフィルタ）
+	 * @return 次回レッスン希望日程が設定されているレッスン一覧（nextDateの昇順）
+	 */
+	@Query("""
+			SELECT DISTINCT l
+			FROM Lesson l
+			LEFT JOIN FETCH l.customer
+			LEFT JOIN FETCH l.store
+			LEFT JOIN FETCH l.trainer
+			LEFT JOIN FETCH l.nextStore
+			LEFT JOIN FETCH l.nextUser
+			WHERE l.trainer.id = :trainerId
+			  AND l.nextDate IS NOT NULL
+			  AND l.nextDate > :now
+			ORDER BY l.nextDate ASC
+			""")
+	List<Lesson> findNextLessonsByTrainerId(
+			@Param("trainerId") UUID trainerId,
+			@Param("now") LocalDateTime now);
+
+	/**
 	 * トレーナーIDで指定期間内のレッスンを取得する
 	 * 開始日時がfromDate以上かつtoDate未満のものを開始日時昇順で返す
 	 */

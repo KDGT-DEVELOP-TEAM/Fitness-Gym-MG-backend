@@ -37,5 +37,11 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 		// SimpleJpaRepositoryのfindAllメソッドを使用
 		return findAll(notDeletedSpec, pageable);
 	}
+
+	@Override
+	public java.util.List<Customer> findAllNotDeleted() {
+		Specification<Customer> notDeletedSpec = CustomerSpecifications.notDeleted();
+		return findAll(notDeletedSpec);
+	}
 }
 
