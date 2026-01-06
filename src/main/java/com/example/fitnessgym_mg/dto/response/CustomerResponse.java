@@ -56,6 +56,30 @@ public class CustomerResponse {
 	 */
 	private BigDecimal latestWeight;
 	private UUID firstPostureGroupId; // 初回姿勢画像ID
+	
+	/**
+	 * 医療・既往歴（任意）
+	 * 
+	 * <p>Entity（{@link com.example.fitnessgym_mg.entity.Customer#medical}）の`medical`フィールドに対応します。</p>
+	 * <p>null許容フィールドです。顧客の医療歴や既往歴を記録するための任意項目です。</p>
+	 */
+	private String medical;
+	
+	/**
+	 * 禁忌事項（任意）
+	 * 
+	 * <p>Entity（{@link com.example.fitnessgym_mg.entity.Customer#taboo}）の`taboo`フィールドに対応します。</p>
+	 * <p>null許容フィールドです。トレーニング時の禁忌事項を記録するための任意項目です。</p>
+	 */
+	private String taboo;
+	
+	/**
+	 * メモ（任意）
+	 * 
+	 * <p>Entity（{@link com.example.fitnessgym_mg.entity.Customer#memo}）の`memo`フィールドに対応します。</p>
+	 * <p>null許容フィールドです。顧客に関する自由記入のメモを記録するための任意項目です。</p>
+	 */
+	private String memo;
 
 	/**
 	 * Customer エンティティから CustomerResponse DTO に変換する
@@ -85,6 +109,9 @@ public class CustomerResponse {
 		r.setAddress(c.getAddress());
 		r.setHeight(c.getHeight());
 		r.setFirstPostureGroupId(c.getFirstPostureGroupId());
+		r.setMedical(c.getMedical());
+		r.setTaboo(c.getTaboo());
+		r.setMemo(c.getMemo());
 		// latestWeightは別途設定が必要（レッスンから取得）
 		return r;
 	}
