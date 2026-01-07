@@ -40,7 +40,7 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = { "stores" })
+@ToString(exclude = {"stores", "email", "phone", "medical", "taboo", "memo"}) // セキュリティ: リレーションと個人情報・機密情報をログに出力しない
 public class Customer {
 
 	@EqualsAndHashCode.Include

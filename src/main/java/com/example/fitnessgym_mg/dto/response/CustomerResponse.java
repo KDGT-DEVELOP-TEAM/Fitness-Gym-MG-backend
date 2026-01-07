@@ -17,10 +17,10 @@ import lombok.ToString;
  * 顧客情報をAPIレスポンスとして返す際に使用
  * 年齢は自動計算される
  * 
- * <p>セキュリティ: 個人情報（email、phone）はログ出力から除外します。</p>
+ * <p>セキュリティ: 個人情報（email、phone）と機密情報（medical、taboo、memo）はログ出力から除外します。</p>
  */
 @Data
-@ToString(exclude = {"email", "phone"}) // セキュリティ: 個人情報をログに出力しない
+@ToString(exclude = {"email", "phone", "medical", "taboo", "memo"}) // セキュリティ: 個人情報と機密情報をログに出力しない
 public class CustomerResponse {
 
 	private UUID id;
