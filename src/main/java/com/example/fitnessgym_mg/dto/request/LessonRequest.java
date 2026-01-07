@@ -35,10 +35,10 @@ public class LessonRequest {
     /**
      * 体重（kg）
      * 
-     * <p>有効範囲: 0.0kg以上、500.0kg以下</p>
+     * <p>有効範囲: 30.0kg以上、300.0kg以下</p>
      */
-    @DecimalMin(value = "0.0", inclusive = true, message = "体重は0kg以上である必要があります")
-    @DecimalMax(value = "500.0", inclusive = true, message = "体重は500kg以下である必要があります")
+    @DecimalMin(value = "30.0", inclusive = true, message = "体重は30kg以上である必要があります")
+    @DecimalMax(value = "300.0", inclusive = true, message = "体重は300kg以下である必要があります")
     private BigDecimal weight;
     
     @Size(max = 500, message = "食事内容は500文字以内で入力してください")

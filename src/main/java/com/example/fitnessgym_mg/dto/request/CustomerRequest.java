@@ -63,11 +63,11 @@ public class CustomerRequest {
 	 * 電話番号
 	 * 
 	 * <p>数字とハイフンのみで入力してください。</p>
-	 * <p>日本の一般的な形式（例: 090-1234-5678）に対応するため、最大13文字まで許可します。</p>
+	 * <p>エンティティの制約に合わせて、最大12文字まで許可します。入力は-を含みません。</p>
 	 */
 	@NotBlank(message = "電話番号は必須です")
 	@Pattern(regexp = "^[0-9-]+$", message = "電話番号は数字とハイフンのみで入力してください")
-	@Size(max = 13, message = "電話番号は最大13文字まで入力できます")
+	@Size(max = 12, message = "電話番号は最大12文字まで入力できます")
 	private String phone;
 
 	@NotBlank(message = "住所は必須です")
