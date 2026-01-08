@@ -11,16 +11,24 @@ import com.example.fitnessgym_mg.repository.specification.CustomerSpecifications
 
 import jakarta.persistence.EntityManager;
 
+import java.util.List;
+
 /**
  * Customerリポジトリのカスタム実装
  * 論理削除条件を自動的に適用する機能を提供
+ * 
+ * <p>注意: データベースのcustomersテーブルにdeleted_atカラムが存在しないため、
+ * @SQLRestrictionを回避するためにネイティブSQLクエリを使用します。</p>
  */
 @Repository
 public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.util.UUID> 
 		implements CustomerRepositoryCustom {
 	
+	private final EntityManager entityManager;
+	
 	public CustomerRepositoryImpl(EntityManager entityManager) {
 		super(Customer.class, entityManager);
+		this.entityManager = entityManager;
 	}
 	
 	@Override
@@ -39,9 +47,30 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 	}
 
 	@Override
-	public java.util.List<Customer> findAllNotDeleted() {
-		Specification<Customer> notDeletedSpec = CustomerSpecifications.notDeleted();
-		return findAll(notDeletedSpec);
+	public List<Customer> findAllNotDeleted() {
+		// @SQLRestriction("deleted_at IS NULL")を回避するためにネイティブSQLクエリを使用
+		// データベースのcustomersテーブルにdeleted_atカラムが存在しないため、
+		// Hibernateの自動的な@SQLRestrictionの適用を回避する必要がある
+		// ネイティブクエリを使用してCustomerエンティティを直接取得
+		String nativeQuery = "SELECT * FROM customers";
+		
+		@SuppressWarnings("unchecked")
+		List<Customer> results = entityManager.createNativeQuery(nativeQuery, Customer.class).getResultList();
+		
+		return results;
+	}
+
+	@Override
+	public List<Object[]> findAllIdAndNameForOptions() {
+		// @SQLRestriction("deleted_at IS NULL")を完全に回避するためにネイティブSQLクエリを使用
+		// Object[]を返すことで、Hibernateのエンティティマッピングを完全に回避
+		// オプション選択用なので、idとnameのみを取得
+		String nativeQuery = "SELECT id, name FROM customers";
+		
+		@SuppressWarnings("unchecked")
+		List<Object[]> results = entityManager.createNativeQuery(nativeQuery).getResultList();
+		
+		return results;
 	}
 }
 

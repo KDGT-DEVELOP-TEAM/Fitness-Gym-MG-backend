@@ -50,14 +50,28 @@ public class CustomerApiController {
 	 * 顧客一覧取得（オプション選択用）
 	 * 認証済みユーザー全員がアクセス可能
 	 * ページングなしで全顧客を返す
+	 * 
+	 * <p>注意: @SQLRestrictionを回避するために、ネイティブSQLクエリを使用して
+	 * idとnameのみを取得し、直接CustomerResponseを作成します。</p>
 	 */
 	@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
 	@GetMapping("/customers")
 	public ResponseEntity<List<CustomerResponse>> getCustomersForOptions() {
 		log.debug("顧客一覧取得（オプション選択用）リクエスト");
-		List<CustomerResponse> customers = customerRepository.findAllNotDeleted().stream()
-				.map(CustomerResponse::fromEntity)
+		
+		// @SQLRestrictionを回避するために、ネイティブSQLクエリでidとnameのみを取得
+		List<Object[]> results = customerRepository.findAllIdAndNameForOptions();
+		
+		// Object[]からCustomerResponseを作成
+		List<CustomerResponse> customers = results.stream()
+				.map(row -> {
+					CustomerResponse response = new CustomerResponse();
+					response.setId((UUID) row[0]);
+					response.setName((String) row[1]);
+					return response;
+				})
 				.collect(java.util.stream.Collectors.toList());
+		
 		log.info("顧客一覧取得（オプション選択用）成功: count={}", customers.size());
 		return ResponseEntity.ok(customers);
 	}

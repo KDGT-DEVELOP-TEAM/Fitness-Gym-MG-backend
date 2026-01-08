@@ -43,4 +43,14 @@ public interface CustomerRepositoryCustom {
 	 * @return 論理削除されていない全顧客のリスト
 	 */
 	java.util.List<Customer> findAllNotDeleted();
+
+	/**
+	 * 全顧客のIDと名前を取得（オプション選択用、@SQLRestrictionを回避）
+	 * 
+	 * <p>ネイティブSQLクエリを使用して@SQLRestrictionを完全に回避します。
+	 * オプション選択用なので、idとnameのみを取得します。</p>
+	 * 
+	 * @return 顧客のIDと名前のリスト（[id, name]の配列）
+	 */
+	java.util.List<Object[]> findAllIdAndNameForOptions();
 }
