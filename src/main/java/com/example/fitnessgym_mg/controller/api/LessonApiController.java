@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 
 import jakarta.validation.Valid;
 
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -23,11 +24,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.HttpStatus;
 
 import com.example.fitnessgym_mg.dto.response.LessonResponse;
-import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.service.AuthorizationFacade;
 import com.example.fitnessgym_mg.service.LessonService;
-import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,7 +42,7 @@ import lombok.extern.slf4j.Slf4j;
 public class LessonApiController {
 
 	private final LessonService lessonService;
-	private final SecurityUtil securityUtil;
+	@SuppressWarnings("unused")
 	private final AuthorizationFacade authorizationFacade;
 	private final LessonRepository lessonRepository;
 
@@ -64,7 +63,7 @@ public class LessonApiController {
 		com.example.fitnessgym_mg.dto.response.LessonResponse response = lessonService
 				.getLessonDetail(savedLesson.getId());
 
-		return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
+		return ResponseEntity.status(HttpStatus.CREATED).body(response);
 	}
 
 	/**
@@ -73,13 +72,13 @@ public class LessonApiController {
 	 */
 	@PreAuthorize("@authorizationFacade.canAccessCustomer(authentication, #customerId)")
 	@GetMapping("/customers/{customer_id}/lessons")
-	public ResponseEntity<org.springframework.data.domain.Page<com.example.fitnessgym_mg.dto.response.LessonResponse>> getCustomerLessons(
+	public ResponseEntity<Page<LessonResponse>> getCustomerLessons(
 			@PathVariable("customer_id") UUID customerId,
 			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
 			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
 
 		Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
-		org.springframework.data.domain.Page<com.example.fitnessgym_mg.dto.response.LessonResponse> lessonPage = lessonService
+		Page<LessonResponse> lessonPage = lessonService
 				.getLessonsByCustomerId(customerId, pageable);
 
 		return ResponseEntity.ok(lessonPage);
