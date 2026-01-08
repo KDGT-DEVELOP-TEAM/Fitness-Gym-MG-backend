@@ -49,7 +49,7 @@ public class HomeApiController {
 
 	/**
 	 * GET /api/trainers/home
-	 * 1週間後～1ヶ月後までのレッスン予定の取得（ページネーション対応）
+	 * 1週間後～1ヶ月後までの次回レッスン希望の取得（ページネーション対応）
 	 * トレーナーホームページ用
 	 */
 	@PreAuthorize("hasRole('TRAINER')")
@@ -60,11 +60,11 @@ public class HomeApiController {
 		// 現在ログイン中のトレーナーを取得
 		UUID trainerId = securityUtil.getCurrentUserOrThrow().getId();
 
-		// ページネーション情報を設定
-		Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").ascending());
+		// ページネーション情報を設定（nextDateでソート）
+		Pageable pageable = PageRequest.of(page, size, Sort.by("nextDate").ascending());
 
-		// 1週間後～1ヶ月後のレッスンを取得（ページネーション対応）
-		Page<LessonResponse> lessonPage = lessonService.getUpcomingLessonsByTrainerId(trainerId, pageable);
+		// 1週間後～1ヶ月後の次回レッスン希望を取得（ページネーション対応）
+		Page<LessonResponse> lessonPage = lessonService.getNextLessonsByTrainerId(trainerId, pageable);
 
 		HomeResponse response = HomeResponse.builder()
 				.upcomingLessons(lessonPage.getContent())

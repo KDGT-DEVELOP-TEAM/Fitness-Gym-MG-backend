@@ -211,6 +211,73 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 			org.springframework.data.domain.Pageable pageable);
 
 	/**
+	 * 次回トレーナーIDで指定期間内の次回レッスン希望を取得する（ページネーション対応）
+	 * nextDateがfromDate以上かつtoDate未満のものをnextDate昇順で返す
+	 * 
+	 * <p>このメソッドは{@link com.example.fitnessgym_mg.dto.response.LessonResponse#fromEntity(Lesson)}で使用されることを前提としています。</p>
+	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer、nextStore、nextUser）がJOIN FETCH済みである必要があります。</p>
+	 * <p>JOIN FETCHが未使用の場合、{@link LessonResponse#fromEntity(Lesson)}内のnullチェックにより安全に処理されますが、パフォーマンス問題が発生する可能性があります。</p>
+	 * 
+	 * <p>注意: JOIN FETCHとページネーションを組み合わせる場合、カウントクエリを明示的に定義する必要があります。</p>
+	 * 
+	 * @param trainerId 次回トレーナーID（nextUser.id）
+	 * @param fromDate 開始日時（nextDate >= fromDate の条件でフィルタ）
+	 * @param toDate 終了日時（nextDate < toDate の条件でフィルタ）
+	 * @param pageable ページネーション情報
+	 * @return 次回レッスン希望日程が設定されているレッスンページ（nextDateの昇順）
+	 */
+	@Query(value = """
+			SELECT DISTINCT l
+			FROM Lesson l
+			LEFT JOIN FETCH l.store
+			LEFT JOIN FETCH l.trainer
+			LEFT JOIN FETCH l.nextStore
+			LEFT JOIN FETCH l.nextUser
+			WHERE l.nextUser.id = :trainerId
+			  AND l.nextDate IS NOT NULL
+			  AND l.nextDate >= :fromDate
+			  AND l.nextDate < :toDate
+			ORDER BY l.nextDate ASC
+			""",
+			countQuery = """
+			SELECT COUNT(DISTINCT l)
+			FROM Lesson l
+			WHERE l.nextUser.id = :trainerId
+			  AND l.nextDate IS NOT NULL
+			  AND l.nextDate >= :fromDate
+			  AND l.nextDate < :toDate
+			""")
+	org.springframework.data.domain.Page<Lesson> findNextLessonsByNextTrainerIdBetween(
+			@Param("trainerId") UUID trainerId,
+			@Param("fromDate") LocalDateTime fromDate,
+			@Param("toDate") LocalDateTime toDate,
+			org.springframework.data.domain.Pageable pageable);
+
+	/**
+	 * レッスンIDからCustomerのIDと名前を取得（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * <p>データベースに`deleted_at`カラムが存在しない場合でも、エラーが発生しません。</p>
+	 * 
+	 * @param lessonId レッスンID
+	 * @return CustomerのIDと名前のペア（存在しない場合はnull）
+	 */
+	@Query(nativeQuery = true, value = "SELECT c.id, c.name FROM lessons l JOIN customers c ON l.customer_id = c.id WHERE l.id = :lessonId")
+	java.util.Optional<Object[]> findCustomerIdAndNameByLessonId(@Param("lessonId") UUID lessonId);
+
+	/**
+	 * 複数のレッスンIDからCustomerのIDと名前を一括取得（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * <p>N+1問題を回避するため、複数のレッスンIDに対して一度のクエリでCustomer情報を取得します。</p>
+	 * 
+	 * @param lessonIds レッスンIDのリスト
+	 * @return レッスンIDとCustomerのID、名前のマッピング（レッスンID -> [Customer ID, Customer Name]）
+	 */
+	@Query(nativeQuery = true, value = "SELECT l.id as lesson_id, c.id as customer_id, c.name as customer_name FROM lessons l JOIN customers c ON l.customer_id = c.id WHERE l.id IN :lessonIds")
+	java.util.List<Object[]> findCustomerIdAndNameByLessonIds(@Param("lessonIds") java.util.List<UUID> lessonIds);
+
+	/**
 	 * レッスンIDでレッスンを取得し、関連エンティティもJOIN FETCHで取得（N+1問題を回避）
 	 * 
 	 * <p>この用途（詳細画面）では現状の実装が妥当です。</p>

@@ -44,6 +44,7 @@ import com.example.fitnessgym_mg.util.PageableValidator;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * レッスン関連のビジネスロジックを提供するService
@@ -57,6 +58,7 @@ import lombok.RequiredArgsConstructor;
  * </ul>
  * Service層は最終防衛ラインとして機能し、Controller層の前提に依存しない設計を維持する。</p>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class LessonService {
@@ -396,6 +398,98 @@ public class LessonService {
 	}
 
 	/**
+	 * 次回トレーナーIDで1週間後～1ヶ月後までの次回レッスン希望を取得（ページネーション対応）
+	 * トレーナーホームページ用
+	 * 
+	 * <p>認可方針: Service層で自己参照（自分のIDのみ）を検証。</p>
+	 * 
+	 * @param trainerId 次回トレーナーID（nextUser.id）
+	 * @param pageable ページネーション情報
+	 * @return 1週間後～1ヶ月後までの次回レッスン希望一覧（ページネーション）
+	 */
+	@Transactional(readOnly = true)
+	public org.springframework.data.domain.Page<LessonResponse> getNextLessonsByTrainerId(UUID trainerId, org.springframework.data.domain.Pageable pageable) {
+		// 認可チェック: Service層での最終防衛ライン（自己参照の検証）
+		User currentUser = securityUtil.getCurrentUserOrThrow();
+		if (!currentUser.getId().equals(trainerId)) {
+			throw new AccessDeniedException("自分のレッスンのみアクセス可能です");
+		}
+
+		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		LocalDateTime oneWeekLater = now.plusWeeks(1);
+		LocalDateTime oneMonthLater = now.plusMonths(1);
+
+		// 次回レッスン希望を取得（ページネーション対応）
+		org.springframework.data.domain.Page<Lesson> lessonPage = lessonRepository.findNextLessonsByNextTrainerIdBetween(
+				trainerId, oneWeekLater, oneMonthLater, pageable);
+
+		// CustomerはJOIN FETCHしていないため、Customerの情報をバッチで取得（N+1問題を回避）
+		java.util.List<Lesson> lessons = lessonPage.getContent();
+		java.util.Map<UUID, java.util.Map<String, Object>> customerMap = new java.util.HashMap<>();
+		
+		if (!lessons.isEmpty()) {
+			// レッスンIDのリストを作成
+			java.util.List<UUID> lessonIds = lessons.stream()
+					.map(Lesson::getId)
+					.collect(Collectors.toList());
+			
+			try {
+				// バッチでCustomer情報を取得（ネイティブSQLクエリを使用して@SQLRestrictionを回避）
+				java.util.List<Object[]> customerDataList = lessonRepository.findCustomerIdAndNameByLessonIds(lessonIds);
+				
+				log.debug("Customer情報取得: lessonIds={}, customerDataList.size()={}", lessonIds.size(), customerDataList.size());
+				
+				// レッスンIDをキーとしてCustomer情報をマップに格納
+				for (Object[] row : customerDataList) {
+					try {
+						// ネイティブSQLクエリの結果は、PostgreSQLではUUIDがObjectとして返される可能性がある
+						// 型変換を安全に行う
+						UUID lessonId = convertToUUID(row[0]);
+						UUID customerId = convertToUUID(row[1]);
+						String customerName = row[2] != null ? row[2].toString() : null;
+						
+						if (lessonId != null && customerId != null && customerName != null) {
+							java.util.Map<String, Object> customerInfo = new java.util.HashMap<>();
+							customerInfo.put("id", customerId);
+							customerInfo.put("name", customerName);
+							customerMap.put(lessonId, customerInfo);
+						}
+					} catch (Exception e) {
+						log.warn("Customer情報のマッピングに失敗: row={}, error={}", java.util.Arrays.toString(row), e.getMessage());
+					}
+				}
+			} catch (Exception e) {
+				log.error("Customer情報の取得に失敗: lessonIds={}, error={}", lessonIds, e.getMessage(), e);
+				// エラーが発生しても処理を続行（Customer情報なしでレスポンスを返す）
+			}
+		}
+
+		// LessonResponseに変換（nextDate, nextStoreName, nextTrainerNameも含める）
+		return lessonPage.map(lesson -> {
+			LessonResponse response = LessonResponse.fromEntity(lesson);
+			
+			// Customerの情報をマップから取得して設定
+			java.util.Map<String, Object> customerInfo = customerMap.get(lesson.getId());
+			if (customerInfo != null) {
+				response.setCustomerId((UUID) customerInfo.get("id"));
+				response.setCustomerName((String) customerInfo.get("name"));
+			}
+			
+			// 次回レッスン情報を設定
+			if (lesson.getNextDate() != null) {
+				response.setNextDate(lesson.getNextDate());
+			}
+			if (lesson.getNextStore() != null) {
+				response.setNextStoreName(lesson.getNextStore().getName());
+			}
+			if (lesson.getNextUser() != null) {
+				response.setNextTrainerName(lesson.getNextUser().getName());
+			}
+			return response;
+		});
+	}
+
+	/**
 	 * 顧客IDで体重/BMI履歴を取得
 	 * レッスンデータから体重とBMIの時系列データを取得
 	 */
@@ -710,5 +804,36 @@ public class LessonService {
 			List<Store> stores,
 			List<User> trainers,
 			boolean isTrainer) {
+	}
+
+	/**
+	 * ObjectをUUIDに安全に変換するヘルパーメソッド
+	 * 
+	 * @param obj UUIDに変換するオブジェクト
+	 * @return UUID（変換できない場合はnull）
+	 */
+	private UUID convertToUUID(Object obj) {
+		if (obj == null) {
+			return null;
+		}
+		if (obj instanceof UUID) {
+			return (UUID) obj;
+		}
+		if (obj instanceof String) {
+			try {
+				return UUID.fromString((String) obj);
+			} catch (IllegalArgumentException e) {
+				log.warn("UUIDへの変換に失敗: obj={}", obj);
+				return null;
+			}
+		}
+		// PostgreSQLのネイティブクエリでは、UUIDがjava.sql.Types.OTHERとして返される可能性がある
+		// toString()してからUUIDに変換を試みる
+		try {
+			return UUID.fromString(obj.toString());
+		} catch (IllegalArgumentException e) {
+			log.warn("UUIDへの変換に失敗: obj={}, obj.getClass()={}", obj, obj.getClass());
+			return null;
+		}
 	}
 }
