@@ -23,7 +23,7 @@ public class PasswordHashGenerator {
 			passwords = args;
 		} else {
 			// デモアカウントのパスワードをハッシュ化
-			passwords = new String[] { "password" };
+			passwords = new String[] { "password123" };
 		}
 
 		System.out.println("========================================");
