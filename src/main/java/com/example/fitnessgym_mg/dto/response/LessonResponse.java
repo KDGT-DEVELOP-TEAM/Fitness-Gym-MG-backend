@@ -96,8 +96,8 @@ public class LessonResponse {
 		if (lesson.getCustomer() != null) {
 			// Hibernateプロキシが初期化されているかチェック
 			if (Hibernate.isInitialized(lesson.getCustomer())) {
-				r.setCustomerId(lesson.getCustomer().getId());
-				r.setCustomerName(lesson.getCustomer().getName());
+			r.setCustomerId(lesson.getCustomer().getId());
+			r.setCustomerName(lesson.getCustomer().getName());
 			}
 			// プロキシが初期化されていない場合は、Customerの情報は設定しない
 			// （外部から設定されることを想定）
