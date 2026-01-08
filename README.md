@@ -358,12 +358,48 @@ erDiagram
 - `resources/schema.sql`, `resources/data.sql`: 初期化スクリプト
 - `test/java`: 各レイヤーに対応したユニットテスト／インテグレーションテスト
 
+## 環境変数設定
+
+本アプリケーションは、環境変数を使用して設定値を制御します。以下は設定可能な環境変数の一覧です。
+
+| 環境変数 | 説明 | デフォルト値 | 必須 |
+|---------|------|------------|------|
+| `SUPABASE_PASSWORD` | Supabaseデータベースのパスワード | なし | ✅ |
+| `SUPABASE_STORAGE_URL` | Supabase StorageのURL | `https://your-project.supabase.co` | ❌ |
+| `SUPABASE_SERVICE_KEY` | Supabase Storageのサービスキー | なし | ✅ |
+| `SUPABASE_BUCKET_NAME` | Supabase Storageのバケット名 | `postures` | ❌ |
+| `SUPABASE_MAX_FILE_SIZE_MB` | ファイルサイズの上限（MB） | `10` | ❌ |
+| `JWT_SECRET` | JWT署名用の秘密鍵（256ビット以上推奨） | `fitnessgym-mg-secret-key-change-this-in-production-256bit` | ⚠️ |
+| `JWT_EXPIRATION` | JWTトークンの有効期限（ミリ秒） | `86400000` (24時間) | ❌ |
+| `JWT_AUDIENCE` | JWTトークンの対象 | `frontend` | ❌ |
+| `LOGIN_RATE_LIMIT_MAX_ATTEMPTS` | ログイン試行回数の上限 | `5` | ❌ |
+| `LOGIN_RATE_LIMIT_TIME_WINDOW_MINUTES` | ログイン試行回数の時間窓（分） | `5` | ❌ |
+| `CORS_ALLOWED_ORIGINS` | 許可するオリジン（カンマ区切り） | `http://localhost:5173` | ❌ |
+
+**設定例（`.env`ファイルまたは環境変数）**:
+```bash
+# データベース
+SUPABASE_PASSWORD=your-password
+
+# Supabase Storage
+SUPABASE_STORAGE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_KEY=your-service-key
+SUPABASE_BUCKET_NAME=postures
+
+# JWT
+JWT_SECRET=your-256-bit-secret-key
+JWT_EXPIRATION=86400000
+```
+
+**注意事項**:
+- 本番環境では、`JWT_SECRET`を必ず環境変数から設定してください（256ビット以上推奨）
 ## セットアップと実行
 1. 依存関係を取得  
    `./gradlew build`
-2. アプリケーションを起動  
+2. 環境変数を設定（上記参照）
+3. アプリケーションを起動  
    `./gradlew bootRun`
-3. テスト実行  
+4. テスト実行  
    `./gradlew test`
 
 ## コミットメッセージ規則
