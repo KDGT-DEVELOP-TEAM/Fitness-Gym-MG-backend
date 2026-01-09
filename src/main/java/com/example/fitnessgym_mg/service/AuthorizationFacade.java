@@ -197,8 +197,8 @@ public class AuthorizationFacade {
      */
     public boolean canAccessCustomer(Authentication authentication, UUID customerId) {
         try {
-            User currentUser = securityUtil.getUserFromAuthenticationOrThrow(authentication);
-            return canAccessCustomer(currentUser, customerId);
+        User currentUser = securityUtil.getUserFromAuthenticationOrThrow(authentication);
+        return canAccessCustomer(currentUser, customerId);
         } catch (Exception e) {
             log.error("AuthorizationFacade.canAccessCustomer (SpEL): Failed to extract user or check access - authentication={}, customerId={}", 
                     authentication != null ? authentication.getName() : "null", customerId, e);

@@ -201,7 +201,7 @@ public class LessonService {
 		// トレーニングと姿勢画像の取得（順次実行、N+1問題を回避するためJOIN FETCHを使用）
 		List<TrainingResponse> trainings = trainingService.getTrainingsByLessonId(lessonId);
 		List<PostureGroup> postureGroups = postureGroupRepository.findByLessonIdWithImages(lessonId);
-		
+
 		// 姿勢画像をレスポンスに変換し、署名付きURLも生成（並列化）
 		int expiresIn = com.example.fitnessgym_mg.config.ApplicationConstants.DEFAULT_SIGNED_URL_EXPIRES_IN;
 		List<PostureImageResponse> postureImages = postureGroups.stream()
@@ -317,7 +317,7 @@ public class LessonService {
 		// LessonResponseに変換し、Customer情報を設定
 		return lessonPage.map(lesson -> {
 			LessonResponse response = LessonResponse.fromEntity(lesson);
-			
+				
 			// Customer情報を設定（全レッスンが同じcustomerIdを持つため）
 			if (customerIdForResponse != null) {
 				response.setCustomerId(customerIdForResponse);
@@ -331,7 +331,7 @@ public class LessonService {
 			if (lesson.getWeight() != null && customer != null && customer.getHeight() != null) {
 				java.math.BigDecimal bmi = BmiCalculator.calculate(lesson.getWeight(), customer.getHeight());
 				response.setBmi(bmi);
-			}
+						}
 			
 			// 次回レッスン情報を設定
 			if (lesson.getNextDate() != null) {

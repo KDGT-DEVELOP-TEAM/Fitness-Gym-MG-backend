@@ -158,8 +158,9 @@ public class PostureImageService {
 		String storageKey = generateStorageKey(customerId, request.getPostureGroupId(), position);
 
 		// 5. 既存画像を検索・削除
+		// 注意: ネイティブクエリを使用しているため、positionのcode値を渡す必要がある
 		Optional<PostureImage> existingImage = postureImageRepository
-				.findByPostureGroupIdAndPosition(request.getPostureGroupId(), position);
+				.findByPostureGroupIdAndPosition(request.getPostureGroupId(), position.getCode());
 
 		if (existingImage.isPresent()) {
 			log.info("Deleting existing image: position={}, storageKey={}",
@@ -465,10 +466,11 @@ public class PostureImageService {
 
 	/**
 	 * storageKey生成
-	 * パターン: postures/{customerId}/{groupId}/{position}.jpg
+	 * パターン: {customerId}/{groupId}/{position}.jpg
+	 * 注意: バケット名（postures）は含めない。SupabaseStorageServiceでバケット名と結合される。
 	 */
 	private String generateStorageKey(UUID customerId, UUID groupId, PostureImagePosition position) {
-		return String.format("postures/%s/%s/%s.jpg",
+		return String.format("%s/%s/%s.jpg",
 				customerId, groupId, position.getCode());
 	}
 }

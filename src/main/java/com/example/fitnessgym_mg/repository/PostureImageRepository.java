@@ -31,12 +31,16 @@ public interface PostureImageRepository extends JpaRepository<PostureImage, UUID
 	/**
 	 * 姿勢グループIDと位置で姿勢画像を検索
 	 * 
+	 * <p>注意: ネイティブクエリを使用している理由は、JPQLクエリでPostureImagePosition型のパラメータを
+	 * 直接比較する際にHibernateが正しく型変換できないためです。PostgreSQLのposture_position型に
+	 * キャストする必要があります。</p>
+	 * 
 	 * @param postureGroupId 姿勢グループID
-	 * @param position 画像位置（FRONT, SIDE, BACK）
+	 * @param positionCode 画像位置のコード値（"front", "right", "back", "left"）
 	 * @return 姿勢画像（存在する場合）
 	 */
-    @Query("SELECT pi FROM PostureImage pi WHERE pi.postureGroup.id = :postureGroupId AND pi.position = :position")
-    Optional<PostureImage> findByPostureGroupIdAndPosition(@Param("postureGroupId") UUID postureGroupId, @Param("position") PostureImagePosition position);
+    @Query(value = "SELECT * FROM posture_images WHERE posture_group_id = :postureGroupId AND position = CAST(:positionCode AS posture_position)", nativeQuery = true)
+    Optional<PostureImage> findByPostureGroupIdAndPosition(@Param("postureGroupId") UUID postureGroupId, @Param("positionCode") String positionCode);
     
 	/**
 	 * IDのリストで姿勢画像を一括取得

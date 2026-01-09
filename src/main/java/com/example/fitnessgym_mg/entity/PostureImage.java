@@ -5,7 +5,6 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
@@ -14,7 +13,10 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
-import com.example.fitnessgym_mg.entity.converter.PostureImagePositionConverter;
+import org.hibernate.annotations.JdbcType;
+import org.hibernate.type.SqlTypes;
+
+import com.example.fitnessgym_mg.entity.type.PostureImagePositionType;
 import com.example.fitnessgym_mg.entity.enums.PostureImagePosition;
 
 import lombok.AllArgsConstructor;
@@ -71,9 +73,11 @@ public class PostureImage {
 
 	/**
 	 * 撮影位置（FRONT, RIGHT, BACK, LEFT）
+	 * <p>PostgreSQL ENUM型（posture_position）としてマッピング</p>
+	 * <p>カスタム型（PostureImagePositionType）を使用してcode値（"front", "right", "back", "left"）でマッピングします。</p>
 	 */
-	@Convert(converter = PostureImagePositionConverter.class)
-	@Column(name = "position", nullable = false)
+	@JdbcType(PostureImagePositionType.class)
+	@Column(name = "position", nullable = false, columnDefinition = "posture_position")
 	private PostureImagePosition position;
 
 	/**

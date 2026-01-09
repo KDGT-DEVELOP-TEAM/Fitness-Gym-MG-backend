@@ -4,7 +4,7 @@ import com.example.fitnessgym_mg.entity.enums.PostureImagePosition;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 
-@Converter(autoApply = true)
+@Converter(autoApply = false)
 public class PostureImagePositionConverter implements AttributeConverter<PostureImagePosition, String> {
 
     @Override
