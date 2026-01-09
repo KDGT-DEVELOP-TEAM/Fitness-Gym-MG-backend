@@ -8,6 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.UserRole;
 import com.example.fitnessgym_mg.repository.CustomerRepository;
+import com.example.fitnessgym_mg.repository.CustomerRepositoryCustom;
+import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.UserCustomerRepository;
 import com.example.fitnessgym_mg.service.policy.RolePolicy;
 
@@ -34,6 +36,7 @@ public class CustomerAuthorizationService {
 
 	private final CustomerRepository customerRepository;
 	private final UserCustomerRepository userCustomerRepository;
+	private final LessonRepository lessonRepository;
 	private final RolePolicy rolePolicy;
 
 	/**
@@ -61,25 +64,33 @@ public class CustomerAuthorizationService {
 			return false;
 		}
 
+		log.debug("Authorization check: userId={}, role={}, customerId={}", currentUser.getId(), currentUser.getRole(), customerId);
+
 		// スーパーユーザー（ADMIN）は全顧客にアクセス可能
 		if (rolePolicy.isSuperUser(currentUser)) {
+			log.debug("Authorization check: SuperUser access granted");
 			return true;
 		}
 
 		// MANAGER: 自分の店舗に所属する顧客のみアクセス可能
 		// 顧客が存在しない、または店舗に所属していない場合はfalseを返す
 		if (currentUser.getRole() == UserRole.MANAGER) {
-			return canManagerAccessCustomer(currentUser, customerId);
+			boolean result = canManagerAccessCustomer(currentUser, customerId);
+			log.debug("Authorization check: MANAGER access={} for customerId={}", result, customerId);
+			return result;
 		}
 
 		// TRAINER: 担当している顧客のみアクセス可能
 		// 顧客が存在しない、または割り当てられていない場合はfalseを返す
 		if (currentUser.getRole() == UserRole.TRAINER) {
-			return isTrainerAssignedToCustomer(currentUser.getId(), customerId);
+			boolean result = isTrainerAssignedToCustomer(currentUser.getId(), customerId);
+			log.debug("Authorization check: TRAINER access={} for trainerId={}, customerId={}", result, currentUser.getId(), customerId);
+			return result;
 		}
 
 		// その他のロール（現時点ではCUSTOMERロールは未対応）
 		// 将来的にCUSTOMERロールが追加された場合は、currentUser.getId().equals(customerId) のチェックを実装予定
+		log.warn("Authorization check failed: Unknown role={}", currentUser.getRole());
 		return false;
 	}
 
@@ -94,20 +105,72 @@ public class CustomerAuthorizationService {
 	 */
 	private boolean canManagerAccessCustomer(User manager, UUID customerId) {
 		// RepositoryレベルのEXISTSクエリで、マネージャーと顧客が同じ店舗に所属しているか確認
-		return customerRepository.existsManagerCustomerInSameStore(manager.getId(), customerId);
+		// @SQLRestrictionを回避するため、ネイティブSQLクエリを使用するexistsManagerCustomerInSameStoreNative()を使用
+		// CustomerRepositoryをCustomerRepositoryCustomにキャストして直接呼び出す
+		try {
+			if (customerRepository instanceof CustomerRepositoryCustom) {
+				boolean result = ((CustomerRepositoryCustom) customerRepository)
+						.existsManagerCustomerInSameStoreNative(manager.getId(), customerId);
+				log.debug("canManagerAccessCustomer: managerId={}, customerId={}, result={}", 
+						manager.getId(), customerId, result);
+				return result;
+			} else {
+				log.error("CustomerRepository does not implement CustomerRepositoryCustom");
+				return false;
+			}
+		} catch (Exception e) {
+			log.error("canManagerAccessCustomer failed: managerId={}, customerId={}", 
+					manager.getId(), customerId, e);
+			return false;
+		}
 	}
 
 	/**
 	 * トレーナーが顧客に割り当てられているか確認（存在確認専用クエリ）
 	 * 
 	 * <p>Service層で複合キー構造を知らないようにするため、Repositoryのメソッドを使用。</p>
+	 * <p>以下の2つの条件のいずれかを満たす場合、トレーナーは顧客にアクセス可能:</p>
+	 * <ul>
+	 *   <li>user_customersテーブルにレコードが存在する（明示的な割り当て）</li>
+	 *   <li>lessonsテーブルで、そのトレーナーがその顧客の次回レッスン希望日程の担当として設定されている（nextUser.id = trainerId）</li>
+	 * </ul>
 	 * 
 	 * @param trainerId トレーナーID
 	 * @param customerId 顧客ID
-	 * @return 割り当てられている場合 true
+	 * @return 割り当てられている、または次回レッスン希望日程の担当として設定されている場合 true
 	 */
 	private boolean isTrainerAssignedToCustomer(UUID trainerId, UUID customerId) {
-		return userCustomerRepository.existsByUserIdAndCustomerId(trainerId, customerId);
+		if (trainerId == null) {
+			log.warn("isTrainerAssignedToCustomer: trainerId is null");
+			return false;
+		}
+		
+		if (customerId == null) {
+			log.warn("isTrainerAssignedToCustomer: customerId is null, trainerId={}", trainerId);
+			return false;
+		}
+		
+		try {
+			// 1. user_customersテーブルで明示的な割り当てを確認
+			boolean hasUserCustomerRecord = userCustomerRepository.existsByUserIdAndCustomerId(trainerId, customerId);
+			
+			if (hasUserCustomerRecord) {
+				return true;
+			}
+			
+			// 2. lessonsテーブルで次回レッスン希望日程の担当として設定されているかを確認
+			boolean hasNextLessonRecord = lessonRepository.existsNextLessonByTrainerIdAndCustomerId(trainerId, customerId);
+			
+			if (hasNextLessonRecord) {
+				return true;
+			}
+			
+			log.warn("isTrainerAssignedToCustomer: No assignment or next lesson found - trainerId={}, customerId={}. Check if UserCustomer record or Lesson record with nextUser exists in database.", trainerId, customerId);
+			return false;
+		} catch (Exception e) {
+			log.error("isTrainerAssignedToCustomer: Exception occurred - trainerId={}, customerId={}", trainerId, customerId, e);
+			return false;
+		}
 	}
 
 }

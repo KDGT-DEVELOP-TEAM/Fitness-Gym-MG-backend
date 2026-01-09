@@ -192,6 +192,33 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Spring Securityの認可エラーのハンドリング
+     * @PreAuthorizeアノテーションによる認可チェックで拒否された場合に発生
+     * HTTPステータスコード403 Forbiddenを返す
+     */
+    @ExceptionHandler(org.springframework.security.authorization.AuthorizationDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAuthorizationDenied(org.springframework.security.authorization.AuthorizationDeniedException e) {
+        // 認可拒否の詳細情報をログに記録
+        // Spring Security 6.x の AuthorizationDeniedException は getMessage() のみを提供
+        String message = e.getMessage() != null ? e.getMessage() : "Access Denied";
+        Throwable cause = e.getCause();
+        
+        log.warn("Authorization denied: message={}, cause={}", 
+            message,
+            cause != null ? cause.getClass().getSimpleName() + ": " + cause.getMessage() : "none");
+        
+        // スタックトレースの最初の数行をログに記録（デバッグ用）
+        if (log.isDebugEnabled()) {
+            log.debug("Authorization denied stack trace:", e);
+        }
+        
+        // 情報漏洩を防ぐため、詳細情報はログに記録し、クライアントには汎用的なメッセージを返す
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse("ACCESS_DENIED", "このリソースにアクセスする権限がありません"));
+    }
+
+    /**
      * データベース整合性違反エラーのハンドリング
      * UNIQUE制約違反の場合はConflictExceptionに変換
      * その他のDB制約違反（NOT NULL、FK制約など）は適切な例外に変換

@@ -22,19 +22,22 @@ public interface PostureGroupRepository extends JpaRepository<PostureGroup, UUID
      * 顧客IDに紐づく姿勢画像グループ一覧を取得
      * 
      * <p>@EntityGraphを使用してN+1問題を回避し、関連データを1回のクエリで取得します。</p>
-     * <p>- customer, lesson, images: 必須関連をJOIN FETCHで取得</p>
+     * <p>- lesson, images: 必須関連をJOIN FETCHで取得</p>
+     * <p>注意: customerはJOIN FETCHしないことで、@SQLRestrictionの適用を回避します。</p>
      * <p>ソート順: レッスン開始日の降順 → 撮影日時の降順（最新順）</p>
      * 
      * <p>注意: JPA仕様上、FETCH JOIN + DISTINCT + ORDER BYの順序は保証されないため、
      * @EntityGraphを使用することで、順序保証の問題を回避しています。</p>
      */
-    @EntityGraph(attributePaths = {"customer", "lesson", "images"})
-    @Query("""
-            SELECT pg
+    @EntityGraph(attributePaths = {"lesson", "images"})
+    @Query(value = """
+            SELECT DISTINCT pg
             FROM PostureGroup pg
+            LEFT JOIN FETCH pg.lesson
+            LEFT JOIN FETCH pg.images
             WHERE pg.customer.id = :customerId
             ORDER BY pg.lesson.startDate DESC, pg.capturedAt DESC
-            """)
+            """, nativeQuery = false)
     List<PostureGroup> findAllWithImagesByCustomerId(@Param("customerId") UUID customerId);
     
     /**

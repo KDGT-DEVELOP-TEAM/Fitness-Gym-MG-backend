@@ -53,4 +53,47 @@ public interface CustomerRepositoryCustom {
 	 * @return 顧客のIDと名前のリスト（[id, name]の配列）
 	 */
 	java.util.List<Object[]> findAllIdAndNameForOptions();
+
+	/**
+	 * 顧客IDで顧客を取得し、storesもJOIN FETCHで一括取得（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * <p>データベースに`deleted_at`カラムが存在しない場合でも、エラーが発生しません。</p>
+	 * 
+	 * @param customerId 顧客ID
+	 * @return 顧客エンティティ（存在しない場合はempty）
+	 */
+	java.util.Optional<Customer> findByIdWithStoresNative(java.util.UUID customerId);
+
+	/**
+	 * マネージャーと顧客が同じ店舗に所属しているか確認（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * 
+	 * @param managerId マネージャーID
+	 * @param customerId 顧客ID
+	 * @return 同じ店舗に所属している場合 true
+	 */
+	boolean existsManagerCustomerInSameStoreNative(java.util.UUID managerId, java.util.UUID customerId);
+
+	/**
+	 * メールアドレスの存在確認（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * 
+	 * @param email メールアドレス
+	 * @return メールアドレスが存在する場合 true
+	 */
+	boolean existsByEmailNative(String email);
+
+	/**
+	 * メールアドレスの存在確認（指定ID以外、@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * 
+	 * @param email メールアドレス
+	 * @param id 除外する顧客ID
+	 * @return メールアドレスが存在する場合 true
+	 */
+	boolean existsByEmailAndIdNotNative(String email, java.util.UUID id);
 }

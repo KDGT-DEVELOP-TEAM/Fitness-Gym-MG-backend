@@ -24,6 +24,7 @@ import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.CustomerSort;
 import com.example.fitnessgym_mg.exception.InvalidRequestException;
 import com.example.fitnessgym_mg.repository.CustomerRepository;
+import com.example.fitnessgym_mg.repository.CustomerRepositoryCustom;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.repository.UserCustomerRepository;
@@ -151,8 +152,16 @@ public class CustomerService {
 		// email変更時の重複チェック
 		if (!customer.getEmail().equals(req.getEmail())) {
 			// emailが変更されている場合のみチェック
-			if (customerRepository.existsByEmailAndIdNot(req.getEmail(), id)) {
-				throw new com.example.fitnessgym_mg.exception.InvalidRequestException("このメールアドレスは既に登録されています");
+			// @SQLRestrictionを回避するため、ネイティブSQLクエリを使用するexistsByEmailAndIdNotNative()を使用
+			// CustomerRepositoryをCustomerRepositoryCustomにキャストして直接呼び出す
+			if (customerRepository instanceof CustomerRepositoryCustom) {
+				boolean emailExists = ((CustomerRepositoryCustom) customerRepository)
+						.existsByEmailAndIdNotNative(req.getEmail(), id);
+				if (emailExists) {
+					throw new com.example.fitnessgym_mg.exception.InvalidRequestException("このメールアドレスは既に登録されています");
+				}
+			} else {
+				throw new RuntimeException("CustomerRepository does not implement CustomerRepositoryCustom");
 			}
 		}
 
@@ -226,11 +235,19 @@ public class CustomerService {
 	@Transactional(readOnly = true)
 	private Customer getAuthorizedCustomer(UUID id, User currentUser) {
 		// 1. エンティティ取得（Repository直接アクセス）
-		Customer customer = customerRepository.findByIdWithStores(id)
-				.orElseThrow(() -> {
-					log.warn("顧客が見つかりません: customerId={}", id);
-					return new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません: " + id);
-				});
+		// @SQLRestrictionを回避するために、ネイティブSQLクエリを使用するfindByIdWithStoresNative()を使用
+		// CustomerRepositoryをCustomerRepositoryCustomにキャストして直接呼び出す
+		Customer customer;
+		if (customerRepository instanceof CustomerRepositoryCustom) {
+			customer = ((CustomerRepositoryCustom) customerRepository)
+					.findByIdWithStoresNative(id)
+					.orElseThrow(() -> {
+						log.warn("顧客が見つかりません: customerId={}", id);
+						return new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません: " + id);
+					});
+		} else {
+			throw new RuntimeException("CustomerRepository does not implement CustomerRepositoryCustom");
+		}
 
 		// 2. 状態検証: 論理削除チェック
 		if (customer.isDeleted()) {
@@ -310,8 +327,16 @@ public class CustomerService {
 	 */
 	private void validateForCreate(CustomerRequest req) {
 		// emailの重複チェック
-		if (customerRepository.existsByEmail(req.getEmail())) {
-			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("このメールアドレスは既に登録されています");
+		// @SQLRestrictionを回避するため、ネイティブSQLクエリを使用するexistsByEmailNative()を使用
+		// CustomerRepositoryをCustomerRepositoryCustomにキャストして直接呼び出す
+		if (customerRepository instanceof CustomerRepositoryCustom) {
+			boolean emailExists = ((CustomerRepositoryCustom) customerRepository)
+					.existsByEmailNative(req.getEmail());
+			if (emailExists) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException("このメールアドレスは既に登録されています");
+			}
+		} else {
+			throw new RuntimeException("CustomerRepository does not implement CustomerRepositoryCustom");
 		}
 	}
 

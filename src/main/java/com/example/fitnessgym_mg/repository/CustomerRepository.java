@@ -41,56 +41,61 @@ public interface CustomerRepository
 	/**
 	 * マネージャーと顧客が同じ店舗に所属しているか確認（存在確認専用クエリ）
 	 * 
-	 * <p>N+1問題を回避するため、JOINを使用したEXISTSクエリで実装。</p>
-	 * <p>EXISTSを使用することで、COUNTベースのクエリよりも効率的に動作します。</p>
+	 * <p>注意: このメソッドは@SQLRestrictionを回避するため、CustomerRepositoryCustomの
+	 * existsManagerCustomerInSameStoreNative()を使用します。</p>
+	 * 
+	 * @deprecated @SQLRestrictionを回避するため、CustomerRepositoryCustom.existsManagerCustomerInSameStoreNative()を使用してください。
 	 * 
 	 * @param managerId マネージャーID
 	 * @param customerId 顧客ID
 	 * @return 同じ店舗に所属している場合 true
 	 */
-	@Query("""
-			SELECT CASE WHEN EXISTS (
-				SELECT 1
-				FROM User u
-				JOIN u.stores ms
-				JOIN Customer c ON c.id = :customerId
-				JOIN c.stores cs
-				WHERE u.id = :managerId
-				  AND ms.id = cs.id
-			) THEN true ELSE false END
-			""")
-	boolean existsManagerCustomerInSameStore(
-			@Param("managerId") UUID managerId,
-			@Param("customerId") UUID customerId);
+	@Deprecated
+	default boolean existsManagerCustomerInSameStore(UUID managerId, UUID customerId) {
+		if (this instanceof CustomerRepositoryCustom) {
+			return ((CustomerRepositoryCustom) this).existsManagerCustomerInSameStoreNative(managerId, customerId);
+		}
+		throw new UnsupportedOperationException("CustomerRepositoryCustomの実装が必要です");
+	}
 
 	/**
-	 * メールアドレスの存在確認（論理削除された顧客は除外）
+	 * メールアドレスの存在確認
+	 * 
+	 * <p>注意: このメソッドは@SQLRestrictionを回避するため、CustomerRepositoryCustomの
+	 * existsByEmailNative()を使用します。</p>
+	 * 
+	 * @deprecated @SQLRestrictionを回避するため、CustomerRepositoryCustom.existsByEmailNative()を使用してください。
 	 * 
 	 * @param email メールアドレス
 	 * @return メールアドレスが存在する場合 true
 	 */
-	@Query("""
-			SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END
-			FROM Customer c
-			WHERE c.email = :email
-			  AND c.deletedAt IS NULL
-			""")
-	boolean existsByEmail(@Param("email") String email);
+	@Deprecated
+	default boolean existsByEmail(String email) {
+		if (this instanceof CustomerRepositoryCustom) {
+			return ((CustomerRepositoryCustom) this).existsByEmailNative(email);
+		}
+		throw new UnsupportedOperationException("CustomerRepositoryCustomの実装が必要です");
+	}
 
 	/**
-	 * メールアドレスの存在確認（指定ID以外、論理削除された顧客は除外）
+	 * メールアドレスの存在確認（指定ID以外）
 	 * 更新時の重複チェック用
+	 * 
+	 * <p>注意: このメソッドは@SQLRestrictionを回避するため、CustomerRepositoryCustomの
+	 * existsByEmailAndIdNotNative()を使用します。</p>
+	 * 
+	 * @deprecated @SQLRestrictionを回避するため、CustomerRepositoryCustom.existsByEmailAndIdNotNative()を使用してください。
 	 * 
 	 * @param email メールアドレス
 	 * @param id 除外する顧客ID
 	 * @return メールアドレスが存在する場合 true
 	 */
-	@Query("""
-			SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END
-			FROM Customer c
-			WHERE c.email = :email
-			  AND c.id != :id
-			  AND c.deletedAt IS NULL
-			""")
-	boolean existsByEmailAndIdNot(@Param("email") String email, @Param("id") UUID id);
+	@Deprecated
+	default boolean existsByEmailAndIdNot(String email, UUID id) {
+		if (this instanceof CustomerRepositoryCustom) {
+			return ((CustomerRepositoryCustom) this).existsByEmailAndIdNotNative(email, id);
+		}
+		throw new UnsupportedOperationException("CustomerRepositoryCustomの実装が必要です");
+	}
+
 }

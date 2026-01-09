@@ -242,6 +242,7 @@ public class LessonService {
 
 	/**
 	 * 顧客IDに紐づくレッスン履歴をページネーション対応で取得
+	 * CustomerをJOIN FETCHしないことで@SQLRestrictionを回避し、Customer情報はネイティブSQLクエリで別途取得
 	 */
 	@Transactional(readOnly = true)
 	public Page<LessonResponse> getLessonsByCustomerId(UUID customerId, Pageable pageable) {
@@ -252,8 +253,63 @@ public class LessonService {
 		// offset検証: DoS対策として巨大なOFFSETクエリを防ぐ
 		PageableValidator.validateOffset(pageable);
 
+		// CustomerをJOIN FETCHしないことで@SQLRestrictionを回避
 		Page<Lesson> lessonPage = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId, pageable);
-		return lessonPage.map(LessonResponse::fromEntity);
+
+		// Customer情報をネイティブSQLクエリで一括取得（すべてのレッスンが同じcustomerIdを持つため、1回のクエリで取得可能）
+		java.util.Map<UUID, java.util.Map<String, Object>> customerMap = new java.util.HashMap<>();
+		java.util.List<Lesson> lessons = lessonPage.getContent();
+		
+		if (!lessons.isEmpty()) {
+			// レッスンIDのリストを作成
+			java.util.List<UUID> lessonIds = lessons.stream()
+					.map(Lesson::getId)
+					.collect(Collectors.toList());
+			
+			try {
+				// バッチでCustomer情報を取得（ネイティブSQLクエリを使用して@SQLRestrictionを回避）
+				java.util.List<Object[]> customerDataList = lessonRepository.findCustomerIdAndNameByLessonIds(lessonIds);
+				
+				log.debug("Customer情報取得: lessonIds={}, customerDataList.size()={}", lessonIds.size(), customerDataList.size());
+				
+				// レッスンIDをキーとしてCustomer情報をマップに格納
+				for (Object[] row : customerDataList) {
+					try {
+						// ネイティブSQLクエリの結果は、PostgreSQLではUUIDがObjectとして返される可能性がある
+						// 型変換を安全に行う
+						UUID lessonId = convertToUUID(row[0]);
+						UUID customerIdFromRow = convertToUUID(row[1]);
+						String customerName = row[2] != null ? row[2].toString() : null;
+						
+						if (lessonId != null && customerIdFromRow != null && customerName != null) {
+							java.util.Map<String, Object> customerInfo = new java.util.HashMap<>();
+							customerInfo.put("id", customerIdFromRow);
+							customerInfo.put("name", customerName);
+							customerMap.put(lessonId, customerInfo);
+						}
+					} catch (Exception e) {
+						log.warn("Customer情報のマッピングに失敗: row={}, error={}", java.util.Arrays.toString(row), e.getMessage());
+					}
+				}
+			} catch (Exception e) {
+				log.error("Customer情報の取得に失敗: lessonIds={}, error={}", lessonIds, e.getMessage(), e);
+				// エラーが発生しても処理を続行（Customer情報なしでレスポンスを返す）
+			}
+		}
+
+		// LessonResponseに変換し、Customer情報を設定
+		return lessonPage.map(lesson -> {
+			LessonResponse response = LessonResponse.fromEntity(lesson);
+			
+			// Customerの情報をマップから取得して設定
+			java.util.Map<String, Object> customerInfo = customerMap.get(lesson.getId());
+			if (customerInfo != null) {
+				response.setCustomerId((UUID) customerInfo.get("id"));
+				response.setCustomerName((String) customerInfo.get("name"));
+			}
+			
+			return response;
+		});
 	}
 
 	/**

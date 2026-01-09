@@ -41,7 +41,8 @@ public class AuthorizationFacade {
         try {
             return customerAuthorizationService.canAccessCustomerInternal(currentUser, customerId);
         } catch (RuntimeException e) {
-            log.error("Authorization check failed unexpectedly for customerId={}", customerId, e);
+            log.error("AuthorizationFacade.canAccessCustomer: Authorization check failed unexpectedly - userId={}, customerId={}", 
+                    currentUser != null ? currentUser.getId() : "null", customerId, e);
             return false;
         }
     }
@@ -112,7 +113,11 @@ public class AuthorizationFacade {
      */
     public void checkCanAccessCustomerOrThrow(User currentUser, UUID customerId) {
         if (!canAccessCustomer(currentUser, customerId)) {
-            throw new com.example.fitnessgym_mg.exception.AccessDeniedException("この顧客にアクセスする権限がありません");
+            String userId = currentUser != null ? currentUser.getId().toString() : "unknown";
+            String resource = "customer:" + (customerId != null ? customerId.toString() : "unknown");
+            log.warn("Access denied: userId={}, resource={}, role={}", 
+                    userId, resource, currentUser != null ? currentUser.getRole() : "unknown");
+            throw new com.example.fitnessgym_mg.exception.AccessDeniedException(userId, resource);
         }
     }
     
@@ -191,8 +196,14 @@ public class AuthorizationFacade {
      * @return アクセス可能な場合 true
      */
     public boolean canAccessCustomer(Authentication authentication, UUID customerId) {
-        User currentUser = securityUtil.getUserFromAuthenticationOrThrow(authentication);
-        return canAccessCustomer(currentUser, customerId);
+        try {
+            User currentUser = securityUtil.getUserFromAuthenticationOrThrow(authentication);
+            return canAccessCustomer(currentUser, customerId);
+        } catch (Exception e) {
+            log.error("AuthorizationFacade.canAccessCustomer (SpEL): Failed to extract user or check access - authentication={}, customerId={}", 
+                    authentication != null ? authentication.getName() : "null", customerId, e);
+            return false;
+        }
     }
     
     /**
