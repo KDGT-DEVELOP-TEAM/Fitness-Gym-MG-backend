@@ -249,8 +249,45 @@ public class LessonService {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		authorizationFacade.checkCanAccessCustomerOrThrow(currentUser, customerId);
 
-		return lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId).stream()
-				.map(LessonResponse::fromEntity)
+		// Customer情報を取得（BMI計算に必要）
+		Customer customer = customerRepository.findById(customerId)
+				.orElse(null);
+		java.math.BigDecimal customerHeight = customer != null ? customer.getHeight() : null;
+
+		// レッスン一覧を取得
+		List<Lesson> lessons = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId);
+
+		// LessonResponseに変換し、weightとbmiを設定
+		return lessons.stream()
+				.map(lesson -> {
+					LessonResponse response = LessonResponse.fromEntity(lesson);
+					
+					// Customer情報を設定
+					if (customer != null) {
+						response.setCustomerId(customer.getId());
+						response.setCustomerName(customer.getName());
+					}
+					
+					// weightとbmiを設定（BMI計算に必要）
+					response.setWeight(lesson.getWeight());
+					if (lesson.getWeight() != null && customerHeight != null) {
+						java.math.BigDecimal bmi = BmiCalculator.calculate(lesson.getWeight(), customerHeight);
+						response.setBmi(bmi);
+					}
+					
+					// 次回レッスン情報を設定
+					if (lesson.getNextDate() != null) {
+						response.setNextDate(lesson.getNextDate());
+					}
+					if (lesson.getNextStore() != null) {
+						response.setNextStoreName(lesson.getNextStore().getName());
+					}
+					if (lesson.getNextUser() != null) {
+						response.setNextTrainerName(lesson.getNextUser().getName());
+					}
+					
+					return response;
+				})
 				.collect(Collectors.toList());
 	}
 
@@ -287,6 +324,24 @@ public class LessonService {
 			}
 			if (customerNameForResponse != null) {
 				response.setCustomerName(customerNameForResponse);
+			}
+			
+			// weightとbmiを設定（BMI計算に必要）
+			response.setWeight(lesson.getWeight());
+			if (lesson.getWeight() != null && customer != null && customer.getHeight() != null) {
+				java.math.BigDecimal bmi = BmiCalculator.calculate(lesson.getWeight(), customer.getHeight());
+				response.setBmi(bmi);
+			}
+			
+			// 次回レッスン情報を設定
+			if (lesson.getNextDate() != null) {
+				response.setNextDate(lesson.getNextDate());
+			}
+			if (lesson.getNextStore() != null) {
+				response.setNextStoreName(lesson.getNextStore().getName());
+			}
+			if (lesson.getNextUser() != null) {
+				response.setNextTrainerName(lesson.getNextUser().getName());
 			}
 			
 			return response;
