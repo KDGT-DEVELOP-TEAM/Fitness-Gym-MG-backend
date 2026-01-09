@@ -15,9 +15,12 @@ public class CustomerSpecifications {
 	 * 
 	 * <p>すべての取得系メソッドで必ず合成すること。</p>
 	 * 
-	 * @return 論理削除されていない顧客のSpecification
+	 * <p>注意: データベースにdeleted_atカラムが存在しないため、常にtrueを返します。</p>
+	 * 
+	 * @return 論理削除されていない顧客のSpecification（常にtrue）
 	 */
 	public static Specification<Customer> notDeleted() {
-		return (root, query, cb) -> cb.isNull(root.get("deletedAt"));
+		// deletedAtフィールドが@Transientのため、常にtrueを返す
+		return (root, query, cb) -> cb.conjunction();
 	}
 }

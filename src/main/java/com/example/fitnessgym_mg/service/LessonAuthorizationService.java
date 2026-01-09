@@ -32,13 +32,15 @@ public class LessonAuthorizationService {
     
     private final LessonRepository lessonRepository;
     private final RolePolicy rolePolicy;
+    private final CustomerAuthorizationService customerAuthorizationService;
     
     /**
      * 現在のユーザーが指定されたレッスンにアクセス可能か確認（内部実装）
      * 
      * <p>このメソッドは内部実装用。外部からはAuthorizationFacade経由でアクセスすること。</p>
      * 
-     * <p>RepositoryレベルのEXISTSクエリを使用し、「取得」と「可否判定」を混ぜない。</p>
+     * <p>レッスン履歴一覧と同じ認可ロジックを使用するため、レッスンIDから顧客IDを取得し、
+     * 顧客へのアクセス権限をチェックする。</p>
      * 
      * @param currentUser 現在のユーザー
      * @param lessonId レッスンID
@@ -56,13 +58,17 @@ public class LessonAuthorizationService {
             return false;
         }
         
-        // スーパーユーザー（ADMIN）は全レッスンにアクセス可能
-        if (rolePolicy.isSuperUser(currentUser)) {
-            return true;
+        // レッスンIDから顧客IDを取得
+        UUID customerId = lessonRepository.findCustomerIdByLessonId(lessonId)
+            .orElse(null);
+        
+        if (customerId == null) {
+            log.warn("Authorization check failed: Lesson not found. lessonId={}", lessonId);
+            return false;
         }
         
-        // RepositoryレベルのEXISTSクエリで、ユーザーがレッスンにアクセス可能か確認
-        return lessonRepository.existsAccessibleLesson(currentUser.getId(), lessonId);
+        // レッスン履歴一覧と同じ認可ロジックを使用
+        return customerAuthorizationService.canAccessCustomerInternal(currentUser, customerId);
     }
     
     

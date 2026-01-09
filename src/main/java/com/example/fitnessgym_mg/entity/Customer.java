@@ -17,10 +17,8 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import jakarta.persistence.Version;
 
 import org.hibernate.annotations.DynamicUpdate;
-import org.hibernate.annotations.SQLRestriction;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -35,7 +33,6 @@ import lombok.ToString;
 @Entity
 @Table(name = "customers")
 @DynamicUpdate
-@SQLRestriction("deleted_at IS NULL")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -135,14 +132,13 @@ public class Customer {
 	/**
 	 * 楽観ロック用バージョンフィールド
 	 */
-	@Version
-	@Column(name = "version")
+	@jakarta.persistence.Transient
 	private Long version;
 
 	/**
 	 * 論理削除日時（nullの場合は削除されていない）
 	 */
-	@Column(name = "deleted_at")
+	@jakarta.persistence.Transient
 	private OffsetDateTime deletedAt;
 
 	@PrePersist

@@ -363,6 +363,12 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 		      WHERE uc.id.userId = :userId
 		        AND uc.id.customerId = c.id
 		    )
+		    OR EXISTS (
+		      SELECT 1 FROM Lesson l2
+		      WHERE l2.nextUser.id = :userId
+		        AND l2.customer.id = c.id
+		        AND l2.nextDate IS NOT NULL
+		    )
 		  )
 		""")
 	boolean existsAccessibleLesson(

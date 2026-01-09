@@ -34,9 +34,9 @@ public interface UserCustomerRepository extends JpaRepository<UserCustomer, User
      * 
      * <p>設計方針:</p>
      * <ul>
-     *   <li>論理削除された顧客（deletedAt IS NULL）と無効（active = true）の顧客は除外されます。</li>
+     *   <li>無効（active = false）の顧客は除外されます。</li>
      *   <li>UserCustomer経由ではactiveな顧客しか扱わないことを前提としています。</li>
-     *   <li>この仕様は、CustomerRepositoryのnotDeleted()とは別の設計判断です。</li>
+     *   <li>データベースにdeleted_atカラムが存在しないため、論理削除のチェックは行いません。</li>
      * </ul>
      * 
      * <p>注意: 将来コレクションFETCH（例: customer.stores）を追加する場合は、
@@ -50,7 +50,6 @@ public interface UserCustomerRepository extends JpaRepository<UserCustomer, User
             FROM UserCustomer uc 
             JOIN FETCH uc.customer 
             WHERE uc.id.userId = :userId 
-              AND uc.customer.deletedAt IS NULL
               AND uc.customer.active = true
             ORDER BY uc.customer.kana
             """)

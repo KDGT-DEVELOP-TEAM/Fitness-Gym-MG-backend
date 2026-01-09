@@ -34,7 +34,6 @@ public interface CustomerRepository
 			FROM Customer c
 			LEFT JOIN FETCH c.stores
 			WHERE c.id = :customerId
-			  AND c.deletedAt IS NULL
 			""")
 	java.util.Optional<Customer> findByIdWithStores(@Param("customerId") UUID customerId);
 
