@@ -9,8 +9,6 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
@@ -73,6 +71,7 @@ public class LessonService {
 	private final UserRepository userRepository;
 	private final SecurityUtil securityUtil;
 	private final AuthorizationFacade authorizationFacade;
+	private final StorageService storageService;
 
 	/**
 	 * レッスン一覧の検索と絞り込み
@@ -199,27 +198,28 @@ public class LessonService {
 		UUID customerId = lesson.getCustomer().getId();
 		authorizationFacade.checkCanAccessCustomerOrThrow(currentUser, customerId);
 
-		// トレーニングと姿勢画像の取得を並列化
-		CompletableFuture<List<TrainingResponse>> trainingsFuture = CompletableFuture
-				.supplyAsync(() -> trainingService.getTrainingsByLessonId(lessonId));
-
-		CompletableFuture<List<PostureGroup>> postureGroupsFuture = CompletableFuture
-				.supplyAsync(() -> postureGroupRepository.findByLessonIdOrderByCapturedAtDesc(lessonId));
-
-		// 両方の結果を待機
-		List<TrainingResponse> trainings;
-		List<PostureImageResponse> postureImages;
-		try {
-			trainings = trainingsFuture.get();
-			List<PostureGroup> postureGroups = postureGroupsFuture.get();
-			postureImages = postureGroups.stream()
-					.flatMap(pg -> pg.getImages().stream())
-					.map(PostureImageResponse::fromEntity)
-					.collect(Collectors.toList());
-		} catch (InterruptedException | ExecutionException e) {
-			Thread.currentThread().interrupt();
-			throw new RuntimeException("データ取得中にエラーが発生しました", e);
-		}
+		// トレーニングと姿勢画像の取得（順次実行、N+1問題を回避するためJOIN FETCHを使用）
+		List<TrainingResponse> trainings = trainingService.getTrainingsByLessonId(lessonId);
+		List<PostureGroup> postureGroups = postureGroupRepository.findByLessonIdWithImages(lessonId);
+		
+		// 姿勢画像をレスポンスに変換し、署名付きURLも生成（並列化）
+		int expiresIn = com.example.fitnessgym_mg.config.ApplicationConstants.DEFAULT_SIGNED_URL_EXPIRES_IN;
+		List<PostureImageResponse> postureImages = postureGroups.stream()
+				.flatMap(pg -> pg.getImages().stream())
+				.parallel() // 並列ストリームに変換して署名付きURL生成を並列化
+				.map(entity -> {
+					PostureImageResponse response = PostureImageResponse.fromEntity(entity);
+					// 署名付きURLを生成して設定（並列実行）
+					try {
+						String signedUrl = storageService.generateSignedUrl(entity.getStorageKey(), expiresIn);
+						response.setSignedUrl(signedUrl);
+					} catch (Exception e) {
+						log.warn("Failed to generate signed URL for image: {}", entity.getId(), e);
+						// 署名付きURLの生成に失敗しても続行（URLなしで表示）
+					}
+					return response;
+				})
+				.collect(Collectors.toList());
 
 		// レスポンス作成（fromEntityを使用して基本データを設定）
 		LessonResponse response = LessonResponse.fromEntity(lesson);
@@ -537,14 +537,19 @@ public class LessonService {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		authorizationFacade.checkCanAccessCustomerOrThrow(currentUser, customerId);
 
+		// Customer情報を1回のクエリで取得（N+1問題を回避）
+		Customer customer = customerRepository.findById(customerId)
+				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません"));
+		java.math.BigDecimal customerHeight = customer.getHeight();
+
+		// レッスン一覧を取得（CustomerはJOIN FETCHしない）
 		List<Lesson> lessons = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId);
 
+		// Customer情報を使用してBMIを計算（N+1問題を回避）
 		return lessons.stream()
-				.filter(lesson -> lesson.getWeight() != null && lesson.getStartDate() != null
-						&& lesson.getCustomer() != null)
+				.filter(lesson -> lesson.getWeight() != null && lesson.getStartDate() != null)
 				.map(lesson -> {
-					java.math.BigDecimal bmi = BmiCalculator.calculate(lesson.getWeight(),
-							lesson.getCustomer().getHeight());
+					java.math.BigDecimal bmi = BmiCalculator.calculate(lesson.getWeight(), customerHeight);
 					return com.example.fitnessgym_mg.dto.response.VitalsHistoryResponse.VitalsData.builder()
 							.date(DateTimeUtil.toUtcOffsetAssumingUtc(lesson.getStartDate()))
 							.weight(lesson.getWeight())

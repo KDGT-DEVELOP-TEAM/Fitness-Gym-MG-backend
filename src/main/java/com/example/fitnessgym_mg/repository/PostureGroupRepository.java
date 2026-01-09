@@ -46,6 +46,24 @@ public interface PostureGroupRepository extends JpaRepository<PostureGroup, UUID
     List<PostureGroup> findByLessonIdOrderByCapturedAtDesc(UUID lessonId);
     
     /**
+     * レッスンIDに紐づく姿勢画像グループ一覧を取得（imagesもJOIN FETCH）
+     * N+1問題を回避するため、imagesも一括取得
+     * 
+     * <p>@EntityGraphを使用してN+1問題を回避し、関連データを1回のクエリで取得します。</p>
+     * <p>- images: 必須関連をJOIN FETCHで取得</p>
+     * <p>ソート順: 撮影日時の降順（最新順）</p>
+     */
+    @EntityGraph(attributePaths = {"images"})
+    @Query("""
+        SELECT DISTINCT pg
+        FROM PostureGroup pg
+        LEFT JOIN FETCH pg.images
+        WHERE pg.lesson.id = :lessonId
+        ORDER BY pg.capturedAt DESC
+        """)
+    List<PostureGroup> findByLessonIdWithImages(@Param("lessonId") UUID lessonId);
+    
+    /**
      * 顧客IDに紐づく姿勢画像グループ一覧を取得（撮影日時の降順）
      * 注: findAllWithImagesByCustomerId()と機能が重複するため、用途に応じて使い分け
      * - findAllWithImagesByCustomerId(): JOIN FETCHで最適化（関連データも取得）

@@ -46,6 +46,11 @@ public class PostureImageResponse {
     private String position;
     
     /**
+     * 署名付きURL（オプショナル、レッスン詳細取得時に生成される）
+     */
+    private String signedUrl;
+    
+    /**
      * PostureImageエンティティからレスポンスDTOに変換
      */
     public static PostureImageResponse fromEntity(PostureImage entity) {
