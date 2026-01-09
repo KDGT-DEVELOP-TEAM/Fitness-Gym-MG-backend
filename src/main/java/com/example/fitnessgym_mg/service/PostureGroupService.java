@@ -34,6 +34,7 @@ public class PostureGroupService {
 	private final PostureGroupRepository postureGroupRepository;
 	private final LessonRepository lessonRepository;
 	private final AuthorizationFacade authorizationFacade;
+	private final StorageService storageService;
 
 	/**
 	 * 顧客IDで姿勢画像グループ一覧をDBから取得
@@ -56,9 +57,12 @@ public class PostureGroupService {
 	 * <p>Controller層から呼び出されるメソッド。
 	 * 認可チェックとDTO変換をService層で実施し、ControllerはHTTPレスポンスの生成のみに集中する。</p>
 	 * 
+	 * <p>各画像の署名付きURLを生成して設定します。
+	 * Storageにファイルが存在しない場合は空文字列を設定し、処理を継続します。</p>
+	 * 
 	 * @param currentUser 現在のユーザー（認可チェック用）
 	 * @param customerId 顧客ID
-	 * @return 姿勢画像グループ一覧（DTO）
+	 * @return 姿勢画像グループ一覧（DTO、各画像にsignedUrlが設定されている）
 	 * @throws AccessDeniedException アクセス権限がない場合（HTTP 403 Forbidden）
 	 */
 	@Transactional(readOnly = true)
@@ -67,10 +71,81 @@ public class PostureGroupService {
 		authorizationFacade.checkCanAccessCustomerOrThrow(currentUser, customerId);
 
 		// エンティティ取得とDTO変換
-		return postureGroupRepository.findAllWithImagesByCustomerId(customerId)
+		List<PostureGroupResponse> responses = postureGroupRepository.findAllWithImagesByCustomerId(customerId)
 				.stream()
 				.map(PostureGroupResponse::fromEntity)
 				.collect(Collectors.toList());
+
+		// 各画像のsignedUrlを生成（並列処理でパフォーマンス最適化）
+		// LessonServiceと同じパターンで実装（一貫性を保つ）
+		int expiresIn = com.example.fitnessgym_mg.config.ApplicationConstants.DEFAULT_SIGNED_URL_EXPIRES_IN;
+		
+		// すべてのグループの画像をフラット化して並列処理
+		responses.forEach(group -> {
+			if (group.getImages() != null && !group.getImages().isEmpty()) {
+				// LessonServiceと同じパターン: parallel().map()を使用
+				List<com.example.fitnessgym_mg.dto.response.PostureImageResponse> imagesWithSignedUrls = 
+					group.getImages().stream()
+						.parallel() // 並列ストリームに変換して署名付きURL生成を並列化
+						.map(imageResponse -> {
+							try {
+								// storageKeyがnullの場合は空文字列を設定
+								if (imageResponse.getStorageKey() == null) {
+									log.warn("Storage key is null for image: imageId={}", imageResponse.getId());
+									imageResponse.setSignedUrl("");
+									return imageResponse;
+								}
+
+								String originalStorageKey = imageResponse.getStorageKey();
+								String signedUrl = storageService.generateSignedUrl(
+										originalStorageKey, 
+										expiresIn
+								);
+								// nullチェック: generateSignedUrlがnullを返す場合（ファイルが存在しない）
+								String finalSignedUrl = signedUrl != null ? signedUrl : "";
+								imageResponse.setSignedUrl(finalSignedUrl);
+								
+								// 検証ログ: signedUrlの生成結果を詳細に記録
+								if (finalSignedUrl.isEmpty()) {
+									log.warn("Generated empty signedUrl for image: imageId={}, storageKey={}, expiresIn={}", 
+										imageResponse.getId(),
+										originalStorageKey.length() > 100 
+											? originalStorageKey.substring(0, 100) + "..." 
+											: originalStorageKey,
+										expiresIn);
+								} else {
+									log.debug("Generated signedUrl for image: imageId={}, storageKey={}, signedUrlLength={}, signedUrlPrefix={}", 
+										imageResponse.getId(),
+										originalStorageKey.length() > 50 
+											? originalStorageKey.substring(0, 50) + "..." 
+											: originalStorageKey,
+										finalSignedUrl.length(),
+										finalSignedUrl.length() > 100 
+											? finalSignedUrl.substring(0, 100) + "..." 
+											: finalSignedUrl);
+								}
+							} catch (Exception e) {
+								log.warn("Failed to generate signed URL for image: imageId={}, storageKey={}", 
+										imageResponse.getId(), 
+										imageResponse.getStorageKey() != null 
+											? (imageResponse.getStorageKey().length() > 100 
+												? imageResponse.getStorageKey().substring(0, 100) + "..." 
+												: imageResponse.getStorageKey())
+											: "null",
+										e);
+								// エラーが発生しても続行（空文字列を設定）
+								imageResponse.setSignedUrl("");
+							}
+							return imageResponse;
+						})
+						.collect(Collectors.toList());
+				
+				// 並列処理で生成されたsignedUrlを設定
+				group.setImages(imagesWithSignedUrls);
+			}
+		});
+
+		return responses;
 	}
 
 	/**
