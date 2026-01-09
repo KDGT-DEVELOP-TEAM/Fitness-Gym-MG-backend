@@ -9,6 +9,8 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
@@ -197,15 +199,27 @@ public class LessonService {
 		UUID customerId = lesson.getCustomer().getId();
 		authorizationFacade.checkCanAccessCustomerOrThrow(currentUser, customerId);
 
-		// トレーニング取得
-		List<TrainingResponse> trainings = trainingService.getTrainingsByLessonId(lessonId);
+		// トレーニングと姿勢画像の取得を並列化
+		CompletableFuture<List<TrainingResponse>> trainingsFuture = CompletableFuture
+				.supplyAsync(() -> trainingService.getTrainingsByLessonId(lessonId));
 
-		// 姿勢画像取得
-		List<PostureGroup> postureGroups = postureGroupRepository.findByLessonIdOrderByCapturedAtDesc(lessonId);
-		List<PostureImageResponse> postureImages = postureGroups.stream()
-				.flatMap(pg -> pg.getImages().stream())
-				.map(PostureImageResponse::fromEntity)
-				.collect(Collectors.toList());
+		CompletableFuture<List<PostureGroup>> postureGroupsFuture = CompletableFuture
+				.supplyAsync(() -> postureGroupRepository.findByLessonIdOrderByCapturedAtDesc(lessonId));
+
+		// 両方の結果を待機
+		List<TrainingResponse> trainings;
+		List<PostureImageResponse> postureImages;
+		try {
+			trainings = trainingsFuture.get();
+			List<PostureGroup> postureGroups = postureGroupsFuture.get();
+			postureImages = postureGroups.stream()
+					.flatMap(pg -> pg.getImages().stream())
+					.map(PostureImageResponse::fromEntity)
+					.collect(Collectors.toList());
+		} catch (InterruptedException | ExecutionException e) {
+			Thread.currentThread().interrupt();
+			throw new RuntimeException("データ取得中にエラーが発生しました", e);
+		}
 
 		// レスポンス作成（fromEntityを使用して基本データを設定）
 		LessonResponse response = LessonResponse.fromEntity(lesson);
@@ -256,56 +270,23 @@ public class LessonService {
 		// CustomerをJOIN FETCHしないことで@SQLRestrictionを回避
 		Page<Lesson> lessonPage = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId, pageable);
 
-		// Customer情報をネイティブSQLクエリで一括取得（すべてのレッスンが同じcustomerIdを持つため、1回のクエリで取得可能）
-		java.util.Map<UUID, java.util.Map<String, Object>> customerMap = new java.util.HashMap<>();
-		java.util.List<Lesson> lessons = lessonPage.getContent();
+		// Customer情報を1回のクエリで取得（すべてのレッスンが同じcustomerIdを持つため）
+		Customer customer = customerRepository.findById(customerId)
+				.orElse(null);
 		
-		if (!lessons.isEmpty()) {
-			// レッスンIDのリストを作成
-			java.util.List<UUID> lessonIds = lessons.stream()
-					.map(Lesson::getId)
-					.collect(Collectors.toList());
-			
-			try {
-				// バッチでCustomer情報を取得（ネイティブSQLクエリを使用して@SQLRestrictionを回避）
-				java.util.List<Object[]> customerDataList = lessonRepository.findCustomerIdAndNameByLessonIds(lessonIds);
-				
-				log.debug("Customer情報取得: lessonIds={}, customerDataList.size()={}", lessonIds.size(), customerDataList.size());
-				
-				// レッスンIDをキーとしてCustomer情報をマップに格納
-				for (Object[] row : customerDataList) {
-					try {
-						// ネイティブSQLクエリの結果は、PostgreSQLではUUIDがObjectとして返される可能性がある
-						// 型変換を安全に行う
-						UUID lessonId = convertToUUID(row[0]);
-						UUID customerIdFromRow = convertToUUID(row[1]);
-						String customerName = row[2] != null ? row[2].toString() : null;
-						
-						if (lessonId != null && customerIdFromRow != null && customerName != null) {
-							java.util.Map<String, Object> customerInfo = new java.util.HashMap<>();
-							customerInfo.put("id", customerIdFromRow);
-							customerInfo.put("name", customerName);
-							customerMap.put(lessonId, customerInfo);
-						}
-					} catch (Exception e) {
-						log.warn("Customer情報のマッピングに失敗: row={}, error={}", java.util.Arrays.toString(row), e.getMessage());
-					}
-				}
-			} catch (Exception e) {
-				log.error("Customer情報の取得に失敗: lessonIds={}, error={}", lessonIds, e.getMessage(), e);
-				// エラーが発生しても処理を続行（Customer情報なしでレスポンスを返す）
-			}
-		}
+		UUID customerIdForResponse = customer != null ? customer.getId() : customerId;
+		String customerNameForResponse = customer != null ? customer.getName() : null;
 
 		// LessonResponseに変換し、Customer情報を設定
 		return lessonPage.map(lesson -> {
 			LessonResponse response = LessonResponse.fromEntity(lesson);
 			
-			// Customerの情報をマップから取得して設定
-			java.util.Map<String, Object> customerInfo = customerMap.get(lesson.getId());
-			if (customerInfo != null) {
-				response.setCustomerId((UUID) customerInfo.get("id"));
-				response.setCustomerName((String) customerInfo.get("name"));
+			// Customer情報を設定（全レッスンが同じcustomerIdを持つため）
+			if (customerIdForResponse != null) {
+				response.setCustomerId(customerIdForResponse);
+			}
+			if (customerNameForResponse != null) {
+				response.setCustomerName(customerNameForResponse);
 			}
 			
 			return response;
