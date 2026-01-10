@@ -76,28 +76,56 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	 * 実施日時（startDate）で降順ソートする（全店舗対象）
 	 * 
 	 * <p>このメソッドは{@link com.example.fitnessgym_mg.dto.response.LessonResponse#fromEntity(Lesson)}で使用されることを前提としています。</p>
-	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer）がJOIN FETCH済みである必要があります。</p>
-	 * <p>JOIN FETCHが未使用の場合、{@link LessonResponse#fromEntity(Lesson)}内のnullチェックにより安全に処理されますが、パフォーマンス問題が発生する可能性があります。</p>
+	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer）がJOIN FETCH済みです。</p>
 	 * 
 	 * @param endDate 終了日時（この日時より前のレッスンを取得）
 	 * @param pageable ページネーション情報
 	 * @return レッスンページ
 	 */
-	Page<Lesson> findByEndDateBefore(LocalDateTime endDate, Pageable pageable);
+	@Query(value = """
+			SELECT DISTINCT l
+			FROM Lesson l
+			LEFT JOIN FETCH l.store
+			LEFT JOIN FETCH l.trainer
+			LEFT JOIN FETCH l.customer
+			WHERE l.endDate < :endDate
+			ORDER BY l.startDate DESC
+			""",
+			countQuery = """
+			SELECT COUNT(DISTINCT l)
+			FROM Lesson l
+			WHERE l.endDate < :endDate
+			""")
+	Page<Lesson> findByEndDateBefore(@Param("endDate") LocalDateTime endDate, Pageable pageable);
 
 	/**
 	 * 店舗IDで絞り込み、かつ終了日時が指定時刻より前のレッスンを検索する（一覧表示用）
 	 * 
 	 * <p>このメソッドは{@link com.example.fitnessgym_mg.dto.response.LessonResponse#fromEntity(Lesson)}で使用されることを前提としています。</p>
-	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer）がJOIN FETCH済みである必要があります。</p>
-	 * <p>JOIN FETCHが未使用の場合、{@link LessonResponse#fromEntity(Lesson)}内のnullチェックにより安全に処理されますが、パフォーマンス問題が発生する可能性があります。</p>
+	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer）がJOIN FETCH済みです。</p>
 	 * 
 	 * @param storeId 店舗ID
 	 * @param endDate 終了日時（この日時より前のレッスンを取得）
 	 * @param pageable ページネーション情報
 	 * @return レッスンページ
 	 */
-	Page<Lesson> findByStoreIdAndEndDateBefore(UUID storeId, LocalDateTime endDate, Pageable pageable);
+	@Query(value = """
+			SELECT DISTINCT l
+			FROM Lesson l
+			LEFT JOIN FETCH l.store
+			LEFT JOIN FETCH l.trainer
+			LEFT JOIN FETCH l.customer
+			WHERE l.store.id = :storeId
+			  AND l.endDate < :endDate
+			ORDER BY l.startDate DESC
+			""",
+			countQuery = """
+			SELECT COUNT(DISTINCT l)
+			FROM Lesson l
+			WHERE l.store.id = :storeId
+			  AND l.endDate < :endDate
+			""")
+	Page<Lesson> findByStoreIdAndEndDateBefore(@Param("storeId") UUID storeId, @Param("endDate") LocalDateTime endDate, Pageable pageable);
 
 	// --- 2. グラフデータ集計 ---
 
@@ -105,18 +133,19 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	 * PostgreSQL の date_trunc を利用し、
 	 * 期間（週/月など）別にレッスン回数を集計する（全店舗 or 店舗指定）
 	 * 
-	 * <p>DTO Projectionを使用し、Repositoryの返却型への依存を排除。</p>
+	 * <p>型マッピングの問題を回避するため、Object[]で受け取り、Service層で手動マッピングする。</p>
+	 * <p>結果: [periodStart (Timestamp), count (BigInteger)]</p>
 	 */
 	@Query(value = """
-			SELECT date_trunc(:type, l.start_date) AS periodStart, 
-			       COUNT(*) AS count
+			SELECT date_trunc(:type, l.start_date)::timestamptz AS periodStart, 
+			       COUNT(*)::bigint AS count
 			FROM lessons l
 			WHERE l.end_date < :now
 			  AND (:storeId IS NULL OR l.store_id = :storeId)
 			GROUP BY periodStart
 			ORDER BY periodStart DESC
 			""", nativeQuery = true)
-	List<PeriodCount> countLessonsGroupedByPeriod(
+	List<Object[]> countLessonsGroupedByPeriodRaw(
 			@Param("type") String type,
 			@Param("now") LocalDateTime now,
 			@Param("storeId") UUID storeId);
@@ -124,18 +153,19 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	/**
 	 * 顧客IDでグラフデータを集計（期間別レッスン回数）
 	 * 
-	 * <p>DTO Projectionを使用し、Repositoryの返却型への依存を排除。</p>
+	 * <p>型マッピングの問題を回避するため、Object[]で受け取り、Service層で手動マッピングする。</p>
+	 * <p>結果: [periodStart (Timestamp), count (BigInteger)]</p>
 	 */
 	@Query(value = """
-			SELECT date_trunc(:type, l.start_date) AS periodStart, 
-			       COUNT(*) AS count
+			SELECT date_trunc(:type, l.start_date)::timestamptz AS periodStart, 
+			       COUNT(*)::bigint AS count
 			FROM lessons l
 			WHERE l.end_date < :now
 			  AND l.customer_id = :customerId
 			GROUP BY periodStart
 			ORDER BY periodStart DESC
 			""", nativeQuery = true)
-	List<PeriodCount> countLessonsGroupedByPeriodByCustomerId(
+	List<Object[]> countLessonsGroupedByPeriodByCustomerIdRaw(
 			@Param("type") String type,
 			@Param("now") LocalDateTime now,
 			@Param("customerId") UUID customerId);

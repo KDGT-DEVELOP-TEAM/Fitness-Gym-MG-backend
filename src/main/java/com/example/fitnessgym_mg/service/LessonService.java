@@ -1,6 +1,9 @@
 package com.example.fitnessgym_mg.service;
 
+import java.math.BigInteger;
+import java.sql.Timestamp;
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -136,9 +139,14 @@ public class LessonService {
 		// 1. 期間タイプの決定とJPQL呼び出し
 		String intervalType = (period == ChartPeriod.WEEK) ? "week" : "month";
 
-		// DBから集計結果を取得（DTO Projectionを使用）
-		List<PeriodCount> rawChartData = lessonRepository.countLessonsGroupedByPeriod(
+		// DBから集計結果を取得（Object[]で受け取り、手動マッピング）
+		List<Object[]> rawResults = lessonRepository.countLessonsGroupedByPeriodRaw(
 				intervalType, now, storeUuid);
+		
+		// Object[]からPeriodCountに変換
+		List<PeriodCount> rawChartData = rawResults.stream()
+				.map(this::mapToPeriodCount)
+				.collect(Collectors.toList());
 
 		return buildChartData(rawChartData, period);
 	}
@@ -368,11 +376,112 @@ public class LessonService {
 		// 1. 期間タイプの決定
 		String intervalType = (period == ChartPeriod.WEEK) ? "week" : "month";
 
-		// DBから集計結果を取得（DTO Projectionを使用）
-		List<PeriodCount> rawChartData = lessonRepository.countLessonsGroupedByPeriodByCustomerId(
+		// DBから集計結果を取得（Object[]で受け取り、手動マッピング）
+		List<Object[]> rawResults = lessonRepository.countLessonsGroupedByPeriodByCustomerIdRaw(
 				intervalType, now, customerId);
+		
+		// Object[]からPeriodCountに変換
+		List<PeriodCount> rawChartData = rawResults.stream()
+				.map(this::mapToPeriodCount)
+				.collect(Collectors.toList());
 
 		return buildChartData(rawChartData, period);
+	}
+
+	/**
+	 * Object[]からPeriodCountへの手動マッピング
+	 * 
+	 * <p>PostgreSQLのネイティブクエリ結果を型安全にマッピングする。</p>
+	 * <p>結果配列: [periodStart (Timestamp/OffsetDateTime/LocalDateTime/Instant), count (BigInteger/Number)]</p>
+	 * <p>PostgreSQLのtimestamptzは、JDBCドライバのバージョンによって異なるJava型にマッピングされるため、
+	 * 複数の型に対応する必要がある。</p>
+	 * 
+	 * @param row クエリ結果のObject配列
+	 * @return PeriodCountレコード
+	 * @throws IllegalArgumentException 行がnull、配列長が不足、またはサポートされていない型の場合
+	 */
+	private PeriodCount mapToPeriodCount(Object[] row) {
+		if (row == null) {
+			log.error("Query result row is null");
+			throw new IllegalArgumentException("Invalid query result: row is null");
+		}
+		if (row.length < 2) {
+			log.error("Query result row has insufficient elements: length={}", row.length);
+			throw new IllegalArgumentException("Invalid query result: row must have at least 2 elements, but got " + row.length);
+		}
+		
+		// periodStartの変換: 複数の型に対応（よく使われる型を優先的にチェック）
+		OffsetDateTime periodStart;
+		if (row[0] == null) {
+			log.error("periodStart value is null in query result");
+			throw new IllegalArgumentException("Invalid query result: periodStart is null");
+		}
+		
+		try {
+			if (row[0] instanceof Timestamp) {
+				Timestamp timestamp = (Timestamp) row[0];
+				periodStart = OffsetDateTime.ofInstant(timestamp.toInstant(), ZoneOffset.UTC);
+				log.debug("Converted Timestamp to OffsetDateTime: {}", periodStart);
+			} else if (row[0] instanceof OffsetDateTime) {
+				periodStart = (OffsetDateTime) row[0];
+				log.debug("Using OffsetDateTime as-is: {}", periodStart);
+			} else if (row[0] instanceof Instant) {
+				Instant instant = (Instant) row[0];
+				periodStart = OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
+				log.debug("Converted Instant to OffsetDateTime: {}", periodStart);
+			} else if (row[0] instanceof java.time.LocalDateTime) {
+				periodStart = ((java.time.LocalDateTime) row[0]).atOffset(ZoneOffset.UTC);
+				log.debug("Converted LocalDateTime to OffsetDateTime: {}", periodStart);
+			} else {
+				String actualType = row[0].getClass().getName();
+				String actualValue = row[0].toString();
+				log.warn("Unsupported type for periodStart: type={}, value={}", actualType, actualValue);
+				throw new IllegalArgumentException(
+					String.format("Unsupported type for periodStart: %s (value: %s). Supported types: Timestamp, OffsetDateTime, Instant, LocalDateTime", 
+						actualType, actualValue));
+			}
+		} catch (IllegalArgumentException e) {
+			// 既に適切なメッセージが設定されているため、そのまま再スロー
+			throw e;
+		} catch (Exception e) {
+			log.error("Error converting periodStart to OffsetDateTime: type={}, value={}", 
+				row[0].getClass().getName(), row[0], e);
+			throw new IllegalArgumentException(
+				String.format("Failed to convert periodStart to OffsetDateTime: %s", e.getMessage()), e);
+		}
+		
+		// countの変換: BigInteger or Number -> Long
+		Long count;
+		try {
+			if (row[1] == null) {
+				log.warn("count value is null in query result, using 0 as default");
+				count = 0L;
+			} else if (row[1] instanceof BigInteger) {
+				count = ((BigInteger) row[1]).longValue();
+				log.debug("Converted BigInteger count to Long: {}", count);
+			} else if (row[1] instanceof Number) {
+				count = ((Number) row[1]).longValue();
+				log.debug("Converted Number count to Long: {}", count);
+			} else {
+				String actualType = row[1].getClass().getName();
+				String actualValue = row[1].toString();
+				log.warn("Unsupported type for count: type={}, value={}", actualType, actualValue);
+				throw new IllegalArgumentException(
+					String.format("Unsupported type for count: %s (value: %s). Supported types: BigInteger, Number", 
+						actualType, actualValue));
+			}
+		} catch (IllegalArgumentException e) {
+			// 既に適切なメッセージが設定されているため、そのまま再スロー
+			throw e;
+		} catch (Exception e) {
+			log.error("Error converting count to Long: type={}, value={}", 
+				row[1] != null ? row[1].getClass().getName() : "null", 
+				row[1], e);
+			throw new IllegalArgumentException(
+				String.format("Failed to convert count to Long: %s", e.getMessage()), e);
+		}
+		
+		return new PeriodCount(periodStart, count);
 	}
 
 	/**
