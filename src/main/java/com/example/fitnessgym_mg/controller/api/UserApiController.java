@@ -76,12 +76,13 @@ public class UserApiController {
 	public ResponseEntity<Page<UserResponse>> getUsers(
 			@RequestParam(required = false) @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") String name,
 			@RequestParam(required = false) UserRole role,
-			@RequestParam(defaultValue = "created") UserSortType sort,
+			@RequestParam(defaultValue = "created") String sort,
 			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
 			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
 
 		Pageable pageable = PageRequest.of(page, size);
-		Page<UserResponse> userPage = accountService.searchUsers(name, role, sort, null, pageable);
+		UserSortType sortEnum = UserSortType.fromCode(sort);
+		Page<UserResponse> userPage = accountService.searchUsers(name, role, sortEnum, null, pageable);
 		log.debug("ユーザー一覧取得成功: page={}, size={}, total={}", page, size, userPage.getTotalElements());
 		return ResponseEntity.ok(userPage);
 	}
@@ -168,7 +169,7 @@ public class UserApiController {
 			@PathVariable("store_id") UUID storeId,
 			@RequestParam(required = false) @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") String name,
 			@RequestParam(required = false) UserRole role,
-			@RequestParam(defaultValue = "created") UserSortType sort,
+			@RequestParam(defaultValue = "created") String sort,
 			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
 			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
 
@@ -178,7 +179,8 @@ public class UserApiController {
 		}
 
 		Pageable pageable = PageRequest.of(page, size);
-		Page<UserResponse> userPage = accountService.searchUsers(name, role, sort, storeId, pageable);
+		UserSortType sortEnum = UserSortType.fromCode(sort);
+		Page<UserResponse> userPage = accountService.searchUsers(name, role, sortEnum, storeId, pageable);
 		return ResponseEntity.ok(userPage);
 	}
 

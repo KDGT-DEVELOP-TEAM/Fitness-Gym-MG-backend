@@ -1,11 +1,19 @@
 package com.example.fitnessgym_mg.service;
 
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors; // StoreエンティティのSetに変換するために追加
 
 import jakarta.persistence.criteria.JoinType;
+
+import org.hibernate.Hibernate;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -36,6 +44,9 @@ public class AccountService {
 	private final StoreRepository storeRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final LessonRepository lessonRepository;
+
+	@PersistenceContext
+	private EntityManager entityManager;
 
 	// --- ユーザー検索 ---
 	@Transactional(readOnly = true)
@@ -76,6 +87,72 @@ public class AccountService {
 
 		// 3. 検索の実行（キーワードがない場合は従来通りSpecificationを使用）
 		Page<User> users = userRepository.findAll(spec, sortedPageable);
+
+		// stores関係を明示的にロード（LazyInitializationExceptionを防ぐ）
+		// Hibernate.initialize()が機能しない場合に備えて、別途storesを取得して設定する
+		List<User> userList = users.getContent();
+		if (!userList.isEmpty()) {
+			// 全ユーザーIDを取得
+			List<UUID> userIds = userList.stream().map(User::getId).toList();
+			
+			// 全ユーザーのstoresを一度のクエリで取得
+			String storesQuery = """
+					SELECT us.user_id, s.id, s.name
+					FROM user_stores us
+					JOIN stores s ON us.store_id = s.id
+					WHERE us.user_id IN (:userIds)
+					""";
+			
+			@SuppressWarnings("unchecked")
+			List<Object[]> storeResults = entityManager
+					.createNativeQuery(storesQuery)
+					.setParameter("userIds", userIds)
+					.getResultList();
+			
+			// User IDをキーとしたMapを作成
+			java.util.Map<UUID, Set<Store>> userStoresMap = new java.util.HashMap<>();
+			for (Object[] row : storeResults) {
+				try {
+					UUID userId;
+					if (row[0] instanceof UUID) {
+						userId = (UUID) row[0];
+					} else if (row[0] instanceof String) {
+						userId = UUID.fromString((String) row[0]);
+					} else {
+						continue;
+					}
+					
+					UUID currentStoreId;
+					if (row[1] instanceof UUID) {
+						currentStoreId = (UUID) row[1];
+					} else if (row[1] instanceof String) {
+						currentStoreId = UUID.fromString((String) row[1]);
+					} else {
+						continue;
+					}
+					
+					String storeName = row[2] != null ? row[2].toString() : null;
+					if (storeName == null) {
+						continue;
+					}
+					
+					Store store = new Store();
+					store.setId(currentStoreId);
+					store.setName(storeName);
+					
+					userStoresMap.computeIfAbsent(userId, k -> new HashSet<>()).add(store);
+				} catch (Exception e) {
+					// マッピングエラーはスキップ
+					continue;
+				}
+			}
+			
+			// 各Userにstoresを設定
+			userList.forEach(user -> {
+				Set<Store> stores = userStoresMap.getOrDefault(user.getId(), new HashSet<>());
+				user.setStores(stores);
+			});
+		}
 
 		return users.map(UserResponse::fromEntity);
 	}
@@ -244,6 +321,51 @@ public class AccountService {
 		if (storeId != null) {
 			assertUserAssignedToStore(user, storeId);
 		}
+		
+		// stores関係を明示的にロード（LazyInitializationExceptionを防ぐ）
+		// user_storesテーブルからstoresを取得して設定する
+		String storesQuery = """
+				SELECT us.user_id, s.id, s.name
+				FROM user_stores us
+				JOIN stores s ON us.store_id = s.id
+				WHERE us.user_id = :userId
+				""";
+		
+		@SuppressWarnings("unchecked")
+		List<Object[]> storeResults = entityManager
+				.createNativeQuery(storesQuery)
+				.setParameter("userId", id)
+				.getResultList();
+		
+		Set<Store> stores = new HashSet<>();
+		for (Object[] row : storeResults) {
+			try {
+				UUID currentStoreId;
+				if (row[1] instanceof UUID) {
+					currentStoreId = (UUID) row[1];
+				} else if (row[1] instanceof String) {
+					currentStoreId = UUID.fromString((String) row[1]);
+				} else {
+					continue;
+				}
+				
+				String storeName = row[2] != null ? row[2].toString() : null;
+				if (storeName == null) {
+					continue;
+				}
+				
+				Store store = new Store();
+				store.setId(currentStoreId);
+				store.setName(storeName);
+				stores.add(store);
+			} catch (Exception e) {
+				// マッピングエラーはスキップ
+				continue;
+			}
+		}
+		
+		user.setStores(stores);
+		
 		return UserResponse.fromEntity(user);
 	}
 
