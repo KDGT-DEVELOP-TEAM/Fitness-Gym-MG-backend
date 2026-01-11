@@ -81,18 +81,19 @@ public class HomeApiController {
 	@PreAuthorize("hasRole('ADMIN')")
 	@GetMapping("/admin/home")
 	public ResponseEntity<HomeResponse> getAdminHome(
+			@RequestParam(required = false) UUID storeId,
 			@RequestParam(defaultValue = "month") String chartType,
 			@RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be 0 or greater") @Max(value = ApplicationConstants.MAX_PAGE_NUMBER, message = "Page is too large") int page,
 			@RequestParam(defaultValue = "10") @Min(value = ApplicationConstants.MIN_PAGE_SIZE, message = "Size must be at least 1") @Max(value = ApplicationConstants.MAX_PAGE_SIZE, message = "Size must not exceed 100") int size) {
 
 		// レッスン履歴一覧（最新の数件）
 		Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
-		var lessonPage = lessonService.searchLessons(null, pageable);
+		var lessonPage = lessonService.searchLessons(storeId, pageable);
 		List<LessonResponse> recentLessons = lessonPage.getContent();
 
 		// グラフデータ（StringからChartPeriodに変換）
 		ChartPeriod period = convertToChartPeriod(chartType);
-		var chartData = lessonService.getLessonChartData(null, period);
+		var chartData = lessonService.getLessonChartData(storeId, period);
 
 		// 総レッスン数（簡易版：ページネーションの総件数を使用）
 		long totalLessonCount = lessonPage.getTotalElements();
