@@ -1,6 +1,9 @@
 package com.example.fitnessgym_mg.service;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,6 +16,7 @@ import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.ActionType;
 import com.example.fitnessgym_mg.entity.enums.TargetTableType;
 import com.example.fitnessgym_mg.repository.AuditLogRepository;
+import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
@@ -30,8 +34,15 @@ import lombok.extern.slf4j.Slf4j;
 public class AuditLogService {
 
 	private final AuditLogRepository auditLogRepository;
+	private final LessonRepository lessonRepository;
 	private final SecurityUtil securityUtil;
 	private final AccountAuthorizationService accountAuthorizationService;
+
+	/**
+	 * 顧客情報を保持する内部レコード
+	 */
+	private record CustomerInfo(UUID customerId, String customerName) {
+	}
 
 	/**
 	 * 監査ログを記録する
@@ -87,6 +98,39 @@ public class AuditLogService {
 		
 		Page<AuditLog> auditLogPage = auditLogRepository.findAllByOrderByCreatedAtDesc(pageable);
 
-		return auditLogPage.map(AuditLogResponse::fromEntity);
+		// レッスン関連のログからレッスンIDを収集
+		List<UUID> lessonIds = auditLogPage.getContent().stream()
+				.filter(log -> log.getTargetTable() == TargetTableType.LESSONS)
+				.map(AuditLog::getTargetId)
+				.distinct()
+				.collect(Collectors.toList());
+
+		// 顧客情報を一括取得（N+1問題を回避）
+		Map<UUID, CustomerInfo> customerInfoMap = Map.of();
+		if (!lessonIds.isEmpty()) {
+			List<Object[]> customerDataList = lessonRepository.findCustomerIdAndNameByLessonIds(lessonIds);
+			customerInfoMap = customerDataList.stream()
+					.collect(Collectors.toMap(
+							row -> (UUID) row[0], // lesson_id
+							row -> new CustomerInfo(
+									(UUID) row[1], // customer_id
+									(String) row[2] // customer_name
+							)
+					));
+		}
+
+		// レスポンスDTOに変換し、顧客情報をマッピング
+		final Map<UUID, CustomerInfo> finalCustomerInfoMap = customerInfoMap;
+		return auditLogPage.map(log -> {
+			AuditLogResponse response = AuditLogResponse.fromEntity(log);
+			if (log.getTargetTable() == TargetTableType.LESSONS) {
+				CustomerInfo customerInfo = finalCustomerInfoMap.get(log.getTargetId());
+				if (customerInfo != null) {
+					response.setCustomerId(customerInfo.customerId());
+					response.setCustomerName(customerInfo.customerName());
+				}
+			}
+			return response;
+		});
 	}
 }

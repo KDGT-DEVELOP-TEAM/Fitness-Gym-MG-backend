@@ -27,6 +27,8 @@ public class AuditLogResponse {
     private String action;
     private String targetTable;
     private UUID targetId;
+    private UUID customerId;
+    private String customerName;
     private LocalDateTime createdAt;
     
     /**
