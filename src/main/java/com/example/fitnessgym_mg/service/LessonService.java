@@ -75,6 +75,7 @@ public class LessonService {
 	private final SecurityUtil securityUtil;
 	private final AuthorizationFacade authorizationFacade;
 	private final StorageService storageService;
+	private final AuditLogService auditLogService;
 
 	/**
 	 * レッスン一覧の検索と絞り込み
@@ -180,6 +181,14 @@ public class LessonService {
 		if (request.getTrainings() != null && !request.getTrainings().isEmpty()) {
 			trainingService.createTrainings(savedLesson.getId(), request.getTrainings());
 		}
+
+		// 監査ログ記録
+		auditLogService.recordAuditLog(
+				com.example.fitnessgym_mg.entity.enums.ActionType.CREATE,
+				com.example.fitnessgym_mg.entity.enums.TargetTableType.LESSONS,
+				savedLesson.getId(),
+				currentUser
+		);
 
 		return savedLesson;
 	}
@@ -787,7 +796,17 @@ public class LessonService {
 		// 注意: lesson.setCustomer(), lesson.setStore(), lesson.setTrainer()は呼び出さない
 
 		// レッスン保存
-		return lessonRepository.save(lesson);
+		Lesson savedLesson = lessonRepository.save(lesson);
+
+		// 監査ログ記録
+		auditLogService.recordAuditLog(
+				com.example.fitnessgym_mg.entity.enums.ActionType.UPDATE,
+				com.example.fitnessgym_mg.entity.enums.TargetTableType.LESSONS,
+				savedLesson.getId(),
+				currentUser
+		);
+
+		return savedLesson;
 	}
 
 	/**

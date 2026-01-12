@@ -67,10 +67,10 @@ public class AuditLog {
 	private TargetTableType targetTable;
 
 	/**
-	 * 対象レコードID（文字列形式）
+	 * 対象レコードID（UUID形式）
 	 */
 	@Column(name = "target_id", nullable = false)
-	private String targetId;
+	private UUID targetId;
 
 	/**
 	 * 作成日時（DB登録時に自動設定、更新不可）
