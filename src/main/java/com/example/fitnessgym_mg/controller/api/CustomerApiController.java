@@ -239,6 +239,18 @@ public class CustomerApiController {
 	}
 
 	/**
+	 * GET /api/trainers/customers
+	 * 担当顧客の一覧取得（storeId不要版）
+	 * 現在ログイン中のトレーナーが所属する店舗の全ての顧客リストを取得
+	 */
+	@PreAuthorize("hasRole('TRAINER')")
+	@GetMapping("/trainers/customers")
+	public ResponseEntity<java.util.List<CustomerResponse>> getTrainerCustomersWithoutStoreId() {
+		java.util.List<CustomerResponse> customers = service.getAllCustomersForTrainerStores();
+		return ResponseEntity.ok(customers);
+	}
+
+	/**
 	 * GET /api/customers/{customer_id}/profile
 	 * 顧客の基本プロフィール情報取得
 	 */

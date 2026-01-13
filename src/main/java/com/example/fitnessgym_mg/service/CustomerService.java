@@ -45,6 +45,7 @@ public class CustomerService {
 	private final StoreRepository storeRepository;
 	private final AuthorizationFacade authorizationFacade;
 	private final SecurityUtil securityUtil;
+	private final com.example.fitnessgym_mg.repository.UserRepository userRepository;
 
 	// --- 顧客一覧検索（ページネーション対応） ---
 	@Transactional(readOnly = true)
@@ -274,6 +275,35 @@ public class CustomerService {
 		return userCustomerRepository.findByUserIdWithCustomer(trainerId).stream()
 				.filter(uc -> !uc.getCustomer().isDeleted() && uc.getCustomer().isActive())
 				.map(uc -> CustomerResponse.fromEntity(uc.getCustomer()))
+				.collect(Collectors.toList());
+	}
+
+	/**
+	 * 現在ログイン中のトレーナーが全店舗の全ての顧客リストを取得
+	 * システム内の全店舗の全顧客を取得（店舗フィルタリングなし）
+	 */
+	@Transactional(readOnly = true)
+	public List<CustomerResponse> getAllCustomersForTrainerStores() {
+		User currentUser = securityUtil.getCurrentUserOrThrow();
+		
+		log.info("トレーナーが全店舗の顧客を取得: trainerId={}", currentUser.getId());
+		
+		// 店舗フィルタリングなしで、論理削除されていない全顧客を取得
+		Specification<Customer> distinctSpec = (root, query, cb) -> {
+			query.distinct(true);
+			return cb.conjunction();
+		};
+		
+		// 論理削除されていない、かつ有効な顧客のみを取得
+		// Pageable.unpaged()を使用して全件取得
+		Page<Customer> customerPage = customerRepository.findAllNotDeleted(distinctSpec, Pageable.unpaged());
+		List<Customer> customers = customerPage.getContent();
+		
+		log.info("全店舗の顧客取得完了: trainerId={}, count={}", currentUser.getId(), customers.size());
+		
+		return customers.stream()
+				.filter(Customer::isActive)
+				.map(CustomerResponse::fromEntity)
 				.collect(Collectors.toList());
 	}
 
