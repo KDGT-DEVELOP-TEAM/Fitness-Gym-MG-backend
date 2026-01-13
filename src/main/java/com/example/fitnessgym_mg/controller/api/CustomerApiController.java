@@ -105,10 +105,18 @@ public class CustomerApiController {
 	 * <p>ADMINが顧客を作成する場合、店舗に紐付けずに作成します。</p>
 	 * <p>リクエストボディのstoreIdは不要です（無視されます）。</p>
 	 */
+	@PreAuthorize("hasRole('ADMIN')")
 	@PostMapping("/admin/customers")
 	public ResponseEntity<Void> createAdminCustomer(@Valid @RequestBody CustomerRequest request) {
-		service.create(request, null);
-		return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
+		log.debug("顧客作成リクエスト受信: name={}, email={}", request.getName(), request.getEmail());
+		try {
+			service.create(request, null);
+			log.info("顧客作成成功: name={}, email={}", request.getName(), request.getEmail());
+			return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
+		} catch (Exception e) {
+			log.error("顧客作成失敗: name={}, email={}, error={}", request.getName(), request.getEmail(), e.getMessage(), e);
+			throw e; // 例外を再スローしてGlobalExceptionHandlerで処理
+		}
 	}
 
 	/**

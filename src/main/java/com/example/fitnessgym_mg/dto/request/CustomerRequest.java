@@ -71,7 +71,7 @@ public class CustomerRequest {
 	private String phone;
 
 	@NotBlank(message = "住所は必須です")
-	@Size(max = 200)
+	@Size(max = 500)
 	private String address;
 
 	// ★★ 任意項目 ★★

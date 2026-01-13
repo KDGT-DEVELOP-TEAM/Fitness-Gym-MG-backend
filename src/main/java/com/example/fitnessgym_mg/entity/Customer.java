@@ -19,6 +19,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.JdbcType;
+
+import com.example.fitnessgym_mg.entity.type.GenderType;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -58,8 +61,10 @@ public class Customer {
 
 	/**
 	 * 性別
+	 * <p>PostgreSQL ENUM型（customer_gender）としてマッピング</p>
+	 * <p>カスタム型（GenderType）を使用してENUM名（"MALE"、"FEMALE"）でマッピングします。</p>
 	 */
-	@jakarta.persistence.Convert(converter = com.example.fitnessgym_mg.entity.converter.GenderConverter.class)
+	@JdbcType(GenderType.class)
 	@Column(nullable = false, columnDefinition = "customer_gender")
 	private com.example.fitnessgym_mg.entity.enums.Gender gender;
 
