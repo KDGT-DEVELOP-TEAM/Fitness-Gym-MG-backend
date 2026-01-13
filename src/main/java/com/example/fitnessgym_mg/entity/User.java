@@ -17,6 +17,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.JdbcType;
+
+import com.example.fitnessgym_mg.entity.type.UserRoleType;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -103,8 +106,10 @@ public class User {
 
 	/**
 	 * ユーザーロール（ADMIN, MANAGER, TRAINER）
+	 * <p>PostgreSQL ENUM型（user_role）としてマッピング</p>
+	 * <p>カスタム型（UserRoleType）を使用してcode値（"admin", "manager", "trainer"）でマッピングします。</p>
 	 */
-	@jakarta.persistence.Convert(converter = com.example.fitnessgym_mg.entity.converter.UserRoleConverter.class)
+	@JdbcType(UserRoleType.class)
 	@Column(nullable = false, columnDefinition = "user_role")
 	private com.example.fitnessgym_mg.entity.enums.UserRole role;
 
