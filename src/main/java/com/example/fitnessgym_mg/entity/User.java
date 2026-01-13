@@ -114,6 +114,13 @@ public class User {
 	private com.example.fitnessgym_mg.entity.enums.UserRole role;
 
 	/**
+	 * Supabase AuthユーザーID
+	 * <p>Supabaseのauth.usersテーブルとの紐付けに使用します。</p>
+	 */
+	@Column(name = "auth_user_id")
+	private UUID authUserId;
+
+	/**
 	 * 有効/無効フラグ
 	 */
 	@Column(name = "is_active", nullable = false)

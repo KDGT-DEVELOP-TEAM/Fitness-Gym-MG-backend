@@ -30,12 +30,15 @@ import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.UserRole;
 import com.example.fitnessgym_mg.entity.enums.UserSortType;
+import com.example.fitnessgym_mg.repository.CustomerRepository;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AccountService {
@@ -44,6 +47,8 @@ public class AccountService {
 	private final StoreRepository storeRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final LessonRepository lessonRepository;
+	private final SupabaseAuthService supabaseAuthService;
+	private final CustomerRepository customerRepository;
 
 	@PersistenceContext
 	private EntityManager entityManager;
@@ -201,22 +206,96 @@ public class AccountService {
 		if (req.getPass() == null || req.getPass().trim().isEmpty()) {
 			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("パスワードは必須です。");
 		}
+		
+		// パスワードの強度チェック
+		if (req.getPass().length() < 6) {
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("パスワードは6文字以上である必要があります");
+		}
 
-		// メールアドレスの重複チェック（DB制約の前にチェック）
-		if (userRepository.findByEmail(req.getEmail()).isPresent()) {
+		// メールアドレスの正規化
+		String normalizedEmail = req.getEmail().trim().toLowerCase();
+		log.info("Starting user creation process: email={}", normalizedEmail);
+		
+		// メールアドレスの重複チェック（ローカルDB - Userテーブル）
+		boolean userExists = userRepository.findByEmail(normalizedEmail).isPresent();
+		log.info("User table check: email={}, exists={}", normalizedEmail, userExists);
+		if (userExists) {
+			log.warn("Email already exists in User table: email={}", normalizedEmail);
 			throw new com.example.fitnessgym_mg.exception.ConflictException("このメールアドレスは既に登録されています");
+		}
+		
+		// Customerテーブルのメールアドレス重複チェック
+		boolean customerExists = customerRepository.existsByEmailNative(normalizedEmail);
+		log.info("Customer table check: email={}, exists={}", normalizedEmail, customerExists);
+		if (customerExists) {
+			log.warn("Email already exists in Customer table: email={}", normalizedEmail);
+			throw new com.example.fitnessgym_mg.exception.ConflictException(
+				"このメールアドレスは既に顧客として登録されています。顧客とユーザーで同じメールアドレスは使用できません。");
+		}
+
+		// Supabase Auth側のユーザー存在チェック（オプション、エラーが発生しても続行）
+		boolean supabaseUserExists = false;
+		try {
+			log.info("Checking user existence in Supabase Auth: email={}", normalizedEmail);
+			supabaseUserExists = supabaseAuthService.userExists(normalizedEmail);
+			log.info("Supabase Auth existence check: email={}, exists={}", normalizedEmail, supabaseUserExists);
+			if (supabaseUserExists) {
+				log.warn("User already exists in Supabase Auth but not in local DB: email={}", normalizedEmail);
+				throw new com.example.fitnessgym_mg.exception.ConflictException(
+					"このメールアドレスは既にSupabase Authに登録されています。管理者に連絡してください。");
+			}
+		} catch (com.example.fitnessgym_mg.exception.ConflictException e) {
+			// 既存ユーザーエラーはそのまま再スロー
+			throw e;
+		} catch (Exception e) {
+			// 存在チェックのエラーは無視して続行（Supabase側でエラーになる可能性があるが、試行する）
+			log.warn("Failed to check user existence in Supabase Auth: email={}, error={}", 
+				normalizedEmail, e.getMessage());
+		}
+
+		// Supabase Authにユーザーを作成
+		log.info("Attempting to create user in Supabase Auth: email={}", normalizedEmail);
+		UUID authUserId;
+		try {
+			authUserId = supabaseAuthService.createUser(normalizedEmail, req.getPass());
+			log.info("Successfully created user in Supabase Auth: email={}, authUserId={}", normalizedEmail, authUserId);
+		} catch (IllegalArgumentException e) {
+			// バリデーションエラー
+			log.error("Invalid request for Supabase Auth user creation: email={}, error={}, userExists={}, customerExists={}", 
+				normalizedEmail, e.getMessage(), userExists, customerExists, e);
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(e.getMessage(), e);
+		} catch (RuntimeException e) {
+			// 既存ユーザーエラーの場合
+			if (e.getMessage() != null && e.getMessage().contains("既にSupabase Authに登録されています")) {
+				log.warn("User already exists in Supabase Auth: email={}, userExists={}, customerExists={}", 
+					normalizedEmail, userExists, customerExists);
+				throw new com.example.fitnessgym_mg.exception.ConflictException(e.getMessage(), e);
+			}
+			log.error("Failed to create user in Supabase Auth: email={}, userExists={}, customerExists={}, supabaseUserExists={}, error={}", 
+				normalizedEmail, userExists, customerExists, supabaseUserExists, e.getMessage(), e);
+			throw new RuntimeException("Supabase Authでのユーザー作成に失敗しました: " + e.getMessage(), e);
+		} catch (Exception e) {
+			log.error("Unexpected error creating user in Supabase Auth: email={}, userExists={}, customerExists={}, supabaseUserExists={}, error={}", 
+				normalizedEmail, userExists, customerExists, supabaseUserExists, e.getMessage(), e);
+			throw new RuntimeException("Supabase Authでのユーザー作成に失敗しました: " + e.getMessage(), e);
 		}
 
 		// ユーザーの基本情報設定
+		log.info("Creating local user record: email={}, authUserId={}", normalizedEmail, authUserId);
 		User user = new User();
 		setUserBasicFields(user, req);
+		// 正規化されたメールアドレスを設定
+		user.setEmail(normalizedEmail);
 		// パスワードはハッシュ化してから設定（エンティティのsetPasswordはハッシュを受け取る）
 		user.setPassword(passwordEncoder.encode(req.getPass()));
+		// Supabase AuthのユーザーIDを設定
+		user.setAuthUserId(authUserId);
 
 		// 店舗の紐づけ
 		Set<Store> storesToAssign = validateAndGetStores(storeIds);
 		user.setStores(storesToAssign);
 		userRepository.save(user);
+		log.info("Successfully created user in local database: email={}, userId={}", normalizedEmail, user.getId());
 	}
 
 	// --- Admin用: ユーザー更新 ---
