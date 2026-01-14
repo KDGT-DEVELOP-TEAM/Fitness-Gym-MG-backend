@@ -37,13 +37,13 @@ public class UserRepositoryImpl implements UserRepositoryCustom {
 	 * <p>search_vectorカラム（tsvector型）が存在することを前提とします。</p>
 	 */
 	@Override
-	public Page<User> searchByFullText(String keyword, UserRole role, Pageable pageable) {
+	public Page<User> searchByFullText(String keyword, UserRole role, UUID storeId, Pageable pageable) {
 		// キーワードがnullまたは空文字の場合は、全文検索をスキップ
 		boolean useFullTextSearch = keyword != null && !keyword.trim().isEmpty();
 
 		// ネイティブクエリでtsvectorを使用
 		StringBuilder sql = new StringBuilder();
-		sql.append("SELECT u.* FROM users u");
+		sql.append("SELECT DISTINCT u.* FROM users u");
 
 		StringBuilder whereClause = new StringBuilder();
 		boolean hasCondition = false;
@@ -61,6 +61,8 @@ public class UserRepositoryImpl implements UserRepositoryCustom {
 				hasCondition = true;
 			}
 		}
+
+		// 店舗フィルタリングは適用しない（全てのユーザーを表示）
 
 		sql.append(whereClause);
 		sql.append(" ORDER BY u.created_at DESC");
@@ -80,6 +82,7 @@ public class UserRepositoryImpl implements UserRepositoryCustom {
 			query.setParameter("role", role.name());
 			countQuery.setParameter("role", role.name());
 		}
+		// 店舗フィルタリングは適用しないため、storeIdパラメータは設定しない
 
 		query.setFirstResult((int) pageable.getOffset());
 		query.setMaxResults(pageable.getPageSize());
@@ -121,11 +124,11 @@ public class UserRepositoryImpl implements UserRepositoryCustom {
 						continue;
 					}
 					
-					UUID storeId;
+					UUID fetchedStoreId;
 					if (row[1] instanceof UUID) {
-						storeId = (UUID) row[1];
+						fetchedStoreId = (UUID) row[1];
 					} else if (row[1] instanceof String) {
-						storeId = UUID.fromString((String) row[1]);
+						fetchedStoreId = UUID.fromString((String) row[1]);
 					} else {
 						continue;
 					}
@@ -136,7 +139,7 @@ public class UserRepositoryImpl implements UserRepositoryCustom {
 					}
 					
 					Store store = new Store();
-					store.setId(storeId);
+					store.setId(fetchedStoreId);
 					store.setName(storeName);
 					
 					userStoresMap.computeIfAbsent(userId, k -> new HashSet<>()).add(store);

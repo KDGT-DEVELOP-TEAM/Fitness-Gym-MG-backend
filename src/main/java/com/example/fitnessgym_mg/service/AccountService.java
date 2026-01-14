@@ -62,12 +62,10 @@ public class AccountService {
 			UUID storeId, // 検索条件のstoreIdは単一でOK
 			Pageable pageable) {
 
+		log.debug("searchUsers called: keyword={}, role={}, sort={}, storeId={}, page={}, size={}", keyword, role, sort, storeId, pageable.getPageNumber(), pageable.getPageSize());
 		Specification<User> spec = (root, query, cb) -> null;
 
-		// --- 1-1. 店舗IDによる絞り込み (中間テーブル user_stores 経由) ---
-		if (storeId != null) {
-			spec = spec.and((root, query, cb) -> cb.equal(root.join("stores", JoinType.INNER).get("id"), storeId));
-		}
+		// 店舗フィルタリングは適用しない（全てのユーザーを表示）
 
 		// --- 1-2. キーワードによる絞り込み ---
 		if (keyword != null && !keyword.isEmpty()) {
@@ -76,7 +74,8 @@ public class AccountService {
 			Sort sortObj = createSort(sort);
 			Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sortObj);
 			
-			return userRepository.searchByFullText(keyword, role, sortedPageable)
+			// 店舗フィルタリングは適用しないため、storeIdはnullを渡す
+			return userRepository.searchByFullText(keyword, role, null, sortedPageable)
 				.map(UserResponse::fromEntity);
 		}
 
@@ -92,6 +91,7 @@ public class AccountService {
 
 		// 3. 検索の実行（キーワードがない場合は従来通りSpecificationを使用）
 		Page<User> users = userRepository.findAll(spec, sortedPageable);
+		log.debug("searchUsers result (Specification): totalElements={}, totalPages={}, numberOfElements={}", users.getTotalElements(), users.getTotalPages(), users.getNumberOfElements());
 
 		// stores関係を明示的にロード（LazyInitializationExceptionを防ぐ）
 		// Hibernate.initialize()が機能しない場合に備えて、別途storesを取得して設定する

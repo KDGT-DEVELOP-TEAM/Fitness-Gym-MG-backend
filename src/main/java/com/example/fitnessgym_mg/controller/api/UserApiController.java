@@ -173,14 +173,11 @@ public class UserApiController {
 			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
 			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
 
-		// Manager APIではTRAINERロールのみ検索可能
-		if (role != null && role != UserRole.TRAINER) {
-			throw new InvalidRequestException("Manager APIではTRAINERロールのみ検索可能です");
-		}
-
+		log.debug("getManagerUsers called: storeId={}, name={}, role={}, sort={}, page={}, size={}", storeId, name, role, sort, page, size);
 		Pageable pageable = PageRequest.of(page, size);
 		UserSortType sortEnum = UserSortType.fromCode(sort);
 		Page<UserResponse> userPage = accountService.searchUsers(name, role, sortEnum, storeId, pageable);
+		log.debug("getManagerUsers result: totalElements={}, totalPages={}, numberOfElements={}", userPage.getTotalElements(), userPage.getTotalPages(), userPage.getNumberOfElements());
 		return ResponseEntity.ok(userPage);
 	}
 

@@ -1,5 +1,7 @@
 package com.example.fitnessgym_mg.repository;
 
+import java.util.UUID;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -18,9 +20,10 @@ public interface UserRepositoryCustom {
 	 * 
 	 * @param keyword 検索キーワード（名前・かな）
 	 * @param role ロール（nullの場合は全ロール）
+	 * @param storeId 店舗ID（nullの場合は全店舗）
 	 * @param pageable ページネーション情報
 	 * @return 検索結果のページ
 	 */
-	Page<User> searchByFullText(String keyword, UserRole role, Pageable pageable);
+	Page<User> searchByFullText(String keyword, UserRole role, UUID storeId, Pageable pageable);
 }
 
