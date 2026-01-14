@@ -105,6 +105,8 @@ public class CustomerService {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 
 		// storeIdの決定: パス変数があればそれを優先、なければリクエストボディから取得
+		// 注意: 現在の実装では、ADMINとMANAGERの両方でリクエストボディのstoreIdを使用するため、
+		// storeIdFromPathは後方互換性のために残しているが、通常はnullになる
 		UUID storeId = storeIdFromPath != null ? storeIdFromPath : req.getStoreId();
 
 		// バリデーション: 作成時のビジネスルールチェック
@@ -127,8 +129,8 @@ public class CustomerService {
 		customer.setActive(true); // is_active は新規作成時は有効 (true)
 
 		// Storeとの紐付け（storeIdが指定されている場合のみ）
-		// ADMINの場合: storeIdはnullで、店舗に紐付けない
-		// MANAGERの場合: storeIdFromPathが指定され、店舗と紐付ける（検索・フィルタリングのため）
+		// ADMINとMANAGERの両方: リクエストボディのstoreIdを使用して店舗に紐付ける（顧客がどの店舗で登録されたかを記録するため）
+		// storeIdFromPathは後方互換性のために残しているが、通常はnullになる
 		if (storeId != null) {
 			// 認可チェック: 店舗へのアクセス権を検証
 			authorizationFacade.checkCanAccessStoreOrThrow(currentUser, storeId);
@@ -138,7 +140,7 @@ public class CustomerService {
 					.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException(
 							"店舗が見つかりません: " + storeId));
 
-			// Storeとの紐付け
+			// Storeとの紐付け（store_customersテーブルに保存される）
 			customer.addStore(store);
 		}
 

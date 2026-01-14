@@ -102,19 +102,21 @@ public class CustomerApiController {
 	 * POST /api/admin/customers
 	 * 顧客の新規登録
 	 * 
-	 * <p>ADMINが顧客を作成する場合、店舗に紐付けずに作成します。</p>
-	 * <p>リクエストボディのstoreIdは不要です（無視されます）。</p>
+	 * <p>ADMINが顧客を作成する場合、リクエストボディのstoreIdを使用して店舗に紐付けます。</p>
+	 * <p>storeIdが指定されている場合、その店舗に紐付けてstore_customersテーブルに保存します。</p>
+	 * <p>storeIdがnullの場合、店舗に紐付けずに作成します。</p>
 	 */
 	@PreAuthorize("hasRole('ADMIN')")
 	@PostMapping("/admin/customers")
 	public ResponseEntity<Void> createAdminCustomer(@Valid @RequestBody CustomerRequest request) {
-		log.debug("顧客作成リクエスト受信: name={}, email={}", request.getName(), request.getEmail());
+		log.debug("顧客作成リクエスト受信: name={}, email={}, storeId={}", request.getName(), request.getEmail(), request.getStoreId());
 		try {
-			service.create(request, null);
-			log.info("顧客作成成功: name={}, email={}", request.getName(), request.getEmail());
+			// ADMINの場合、リクエストボディのstoreIdを使用（nullの場合は店舗に紐付けない）
+			service.create(request, request.getStoreId());
+			log.info("顧客作成成功: name={}, email={}, storeId={}", request.getName(), request.getEmail(), request.getStoreId());
 			return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
 		} catch (Exception e) {
-			log.error("顧客作成失敗: name={}, email={}, error={}", request.getName(), request.getEmail(), e.getMessage(), e);
+			log.error("顧客作成失敗: name={}, email={}, storeId={}, error={}", request.getName(), request.getEmail(), request.getStoreId(), e.getMessage(), e);
 			throw e; // 例外を再スローしてGlobalExceptionHandlerで処理
 		}
 	}
@@ -174,16 +176,27 @@ public class CustomerApiController {
 	 */
 
 	/**
-	 * POST /api/stores/{store_id}/manager/customers
+	 * POST /api/manager/customers
 	 * 顧客の新規登録(店舗内管轄)
+	 * 
+	 * <p>MANAGERが顧客を作成する場合、リクエストボディのstoreIdを使用して店舗に紐付けます。</p>
+	 * <p>storeIdが指定されている場合、その店舗に紐付けてstore_customersテーブルに保存します。</p>
 	 */
-	@PreAuthorize("hasRole('MANAGER') and @authorizationFacade.canAccessStore(authentication, #storeId)")
-	@PostMapping("/stores/{store_id}/manager/customers")
+	@PreAuthorize("hasRole('MANAGER')")
+	@PostMapping("/manager/customers")
 	public ResponseEntity<Void> createManagerCustomer(
-			@PathVariable("store_id") UUID storeId,
 			@Valid @RequestBody CustomerRequest request) {
-		service.create(request, storeId);
-		return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
+		log.debug("顧客作成リクエスト受信: name={}, email={}, storeId={}", request.getName(), request.getEmail(), request.getStoreId());
+		try {
+			// MANAGERの場合、リクエストボディのstoreIdを使用（nullの場合は店舗に紐付けない）
+			// 認可チェックはCustomerService内で実施
+			service.create(request, request.getStoreId());
+			log.info("顧客作成成功: name={}, email={}, storeId={}", request.getName(), request.getEmail(), request.getStoreId());
+			return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
+		} catch (Exception e) {
+			log.error("顧客作成失敗: name={}, email={}, storeId={}, error={}", request.getName(), request.getEmail(), request.getStoreId(), e.getMessage(), e);
+			throw e; // 例外を再スローしてGlobalExceptionHandlerで処理
+		}
 	}
 
 	/**
