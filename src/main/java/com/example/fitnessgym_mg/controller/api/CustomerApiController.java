@@ -226,19 +226,6 @@ public class CustomerApiController {
 	}
 
 	/**
-	 * GET /api/stores/{store_id}/trainers/customers
-	 * 担当顧客の一覧取得
-	 */
-	@PreAuthorize("hasRole('TRAINER') and @authorizationFacade.canAccessStore(authentication, #storeId)")
-	@GetMapping("/stores/{store_id}/trainers/customers")
-	public ResponseEntity<java.util.List<CustomerResponse>> getTrainerCustomers(
-			@PathVariable("store_id") UUID storeId) {
-		// 現在ログイン中のトレーナーを取得（Service層で実施されるため、ここでは不要）
-		java.util.List<CustomerResponse> customers = service.getMyCustomers();
-		return ResponseEntity.ok(customers);
-	}
-
-	/**
 	 * GET /api/trainers/customers
 	 * 担当顧客の一覧取得（storeId不要版）
 	 * 現在ログイン中のトレーナーが所属する店舗の全ての顧客リストを取得

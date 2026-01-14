@@ -255,6 +255,49 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 	}
 
 	@Override
+	public boolean existsTrainerCustomerInSameStoreNative(UUID trainerId, UUID customerId) {
+		// @SQLRestriction("deleted_at IS NULL")を回避するためにネイティブSQLクエリを使用
+		// トレーナーと顧客が同じ店舗に所属しているか確認
+		String query = """
+				SELECT EXISTS (
+					SELECT 1
+					FROM users u
+					JOIN user_stores us ON u.id = us.user_id
+					JOIN store_customers sc ON us.store_id = sc.store_id
+					WHERE u.id = :trainerId
+					  AND sc.customer_id = :customerId
+				)
+				""";
+		
+		try {
+			Object result = entityManager
+					.createNativeQuery(query)
+					.setParameter("trainerId", trainerId)
+					.setParameter("customerId", customerId)
+					.getSingleResult();
+			
+			// PostgreSQLではEXISTSの結果はboolean型だが、JPAのcreateNativeQueryでは様々な型で返される可能性がある
+			if (result instanceof Boolean) {
+				return (Boolean) result;
+			} else if (result instanceof Number) {
+				return ((Number) result).intValue() != 0;
+			} else if (result instanceof String) {
+				String str = ((String) result).trim().toLowerCase();
+				return "true".equals(str) || "t".equals(str) || "1".equals(str);
+			}
+			// 予期しない型の場合はfalseを返す
+			System.err.println("Warning: existsTrainerCustomerInSameStoreNative returned unexpected type: " + (result != null ? result.getClass().getName() : "null"));
+			return false;
+		} catch (jakarta.persistence.NoResultException e) {
+			return false;
+		} catch (Exception e) {
+			System.err.println("Error in existsTrainerCustomerInSameStoreNative: trainerId=" + trainerId + ", customerId=" + customerId + ", error=" + e.getMessage());
+			e.printStackTrace();
+			return false;
+		}
+	}
+
+	@Override
 	public boolean existsByEmailNative(String email) {
 		// @SQLRestriction("deleted_at IS NULL")を回避するためにネイティブSQLクエリを使用
 		// メールアドレスの存在確認

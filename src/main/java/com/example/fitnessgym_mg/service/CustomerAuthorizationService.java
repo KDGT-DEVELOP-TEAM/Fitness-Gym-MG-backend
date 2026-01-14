@@ -10,7 +10,6 @@ import com.example.fitnessgym_mg.entity.enums.UserRole;
 import com.example.fitnessgym_mg.repository.CustomerRepository;
 import com.example.fitnessgym_mg.repository.CustomerRepositoryCustom;
 import com.example.fitnessgym_mg.repository.LessonRepository;
-import com.example.fitnessgym_mg.repository.UserCustomerRepository;
 import com.example.fitnessgym_mg.service.policy.RolePolicy;
 
 import lombok.RequiredArgsConstructor;
@@ -35,7 +34,6 @@ import lombok.extern.slf4j.Slf4j;
 public class CustomerAuthorizationService {
 
 	private final CustomerRepository customerRepository;
-	private final UserCustomerRepository userCustomerRepository;
 	private final LessonRepository lessonRepository;
 	private final RolePolicy rolePolicy;
 
@@ -80,10 +78,10 @@ public class CustomerAuthorizationService {
 			return result;
 		}
 
-		// TRAINER: 担当している顧客のみアクセス可能
-		// 顧客が存在しない、または割り当てられていない場合はfalseを返す
+		// TRAINER: 所属店舗のすべての顧客にアクセス可能
+		// トレーナーと顧客が同じ店舗に所属しているかチェック
 		if (currentUser.getRole() == UserRole.TRAINER) {
-			boolean result = isTrainerAssignedToCustomer(currentUser.getId(), customerId);
+			boolean result = canTrainerAccessCustomerByStore(currentUser, customerId);
 			log.debug("Authorization check: TRAINER access={} for trainerId={}, customerId={}", result, currentUser.getId(), customerId);
 			return result;
 		}
@@ -126,49 +124,30 @@ public class CustomerAuthorizationService {
 	}
 
 	/**
-	 * トレーナーが顧客に割り当てられているか確認（存在確認専用クエリ）
+	 * トレーナーが店舗ベースで顧客にアクセス可能か確認
+	 * トレーナーと顧客が同じ店舗に所属しているかチェック
 	 * 
-	 * <p>Service層で複合キー構造を知らないようにするため、Repositoryのメソッドを使用。</p>
-	 * <p>以下の2つの条件のいずれかを満たす場合、トレーナーは顧客にアクセス可能:</p>
-	 * <ul>
-	 *   <li>user_customersテーブルにレコードが存在する（明示的な割り当て）</li>
-	 *   <li>lessonsテーブルで、そのトレーナーがその顧客の次回レッスン希望日程の担当として設定されている（nextUser.id = trainerId）</li>
-	 * </ul>
-	 * 
-	 * @param trainerId トレーナーID
+	 * @param trainer トレーナー
 	 * @param customerId 顧客ID
-	 * @return 割り当てられている、または次回レッスン希望日程の担当として設定されている場合 true
+	 * @return アクセス可能な場合 true
 	 */
-	private boolean isTrainerAssignedToCustomer(UUID trainerId, UUID customerId) {
-		if (trainerId == null) {
-			log.warn("isTrainerAssignedToCustomer: trainerId is null");
-			return false;
-		}
-		
-		if (customerId == null) {
-			log.warn("isTrainerAssignedToCustomer: customerId is null, trainerId={}", trainerId);
-			return false;
-		}
-		
+	private boolean canTrainerAccessCustomerByStore(User trainer, UUID customerId) {
+		// RepositoryレベルのEXISTSクエリで、トレーナーと顧客が同じ店舗に所属しているか確認
+		// canManagerAccessCustomerと同様のロジックを使用
 		try {
-			// 1. user_customersテーブルで明示的な割り当てを確認
-			boolean hasUserCustomerRecord = userCustomerRepository.existsByUserIdAndCustomerId(trainerId, customerId);
-			
-			if (hasUserCustomerRecord) {
-				return true;
+			if (customerRepository instanceof CustomerRepositoryCustom) {
+				boolean result = ((CustomerRepositoryCustom) customerRepository)
+						.existsTrainerCustomerInSameStoreNative(trainer.getId(), customerId);
+				log.debug("canTrainerAccessCustomerByStore: trainerId={}, customerId={}, result={}", 
+						trainer.getId(), customerId, result);
+				return result;
+			} else {
+				log.error("CustomerRepository does not implement CustomerRepositoryCustom");
+				return false;
 			}
-			
-			// 2. lessonsテーブルで次回レッスン希望日程の担当として設定されているかを確認
-			boolean hasNextLessonRecord = lessonRepository.existsNextLessonByTrainerIdAndCustomerId(trainerId, customerId);
-			
-			if (hasNextLessonRecord) {
-				return true;
-			}
-			
-			log.warn("isTrainerAssignedToCustomer: No assignment or next lesson found - trainerId={}, customerId={}. Check if UserCustomer record or Lesson record with nextUser exists in database.", trainerId, customerId);
-			return false;
 		} catch (Exception e) {
-			log.error("isTrainerAssignedToCustomer: Exception occurred - trainerId={}, customerId={}", trainerId, customerId, e);
+			log.error("canTrainerAccessCustomerByStore failed: trainerId={}, customerId={}", 
+					trainer.getId(), customerId, e);
 			return false;
 		}
 	}

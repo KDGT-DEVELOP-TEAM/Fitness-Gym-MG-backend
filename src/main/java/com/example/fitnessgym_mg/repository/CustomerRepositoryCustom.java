@@ -77,6 +77,17 @@ public interface CustomerRepositoryCustom {
 	boolean existsManagerCustomerInSameStoreNative(java.util.UUID managerId, java.util.UUID customerId);
 
 	/**
+	 * トレーナーと顧客が同じ店舗に所属しているか確認（ネイティブSQLクエリ）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * 
+	 * @param trainerId トレーナーID
+	 * @param customerId 顧客ID
+	 * @return 同じ店舗に所属している場合 true
+	 */
+	boolean existsTrainerCustomerInSameStoreNative(java.util.UUID trainerId, java.util.UUID customerId);
+
+	/**
 	 * メールアドレスの存在確認（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
 	 * 
 	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>

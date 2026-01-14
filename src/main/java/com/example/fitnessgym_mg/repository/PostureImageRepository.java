@@ -98,11 +98,6 @@ public interface PostureImageRepository extends JpaRepository<PostureImage, UUID
 			      WHERE u.id = :userId
 			        AND ms.id = cs.id
 			    )
-			    OR EXISTS (
-			      SELECT 1 FROM UserCustomer uc
-			      WHERE uc.id.userId = :userId
-			        AND uc.id.customerId = c.id
-			    )
 			  )
 		) THEN true ELSE false END
 		""")
@@ -151,11 +146,6 @@ public interface PostureImageRepository extends JpaRepository<PostureImage, UUID
 		      JOIN c.stores cs
 		      WHERE u.id = :userId
 		        AND ms.id = cs.id
-		    )
-		    OR EXISTS (
-		      SELECT 1 FROM UserCustomer uc
-		      WHERE uc.id.userId = :userId
-		        AND uc.id.customerId = c.id
 		    )
 		  )
 		""")

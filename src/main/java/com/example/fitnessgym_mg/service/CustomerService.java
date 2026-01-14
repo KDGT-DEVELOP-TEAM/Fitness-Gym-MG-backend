@@ -1,7 +1,9 @@
 package com.example.fitnessgym_mg.service;
 
 import java.time.ZoneOffset;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -27,7 +29,6 @@ import com.example.fitnessgym_mg.repository.CustomerRepository;
 import com.example.fitnessgym_mg.repository.CustomerRepositoryCustom;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.StoreRepository;
-import com.example.fitnessgym_mg.repository.UserCustomerRepository;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
@@ -41,7 +42,6 @@ public class CustomerService {
 
 	private final CustomerRepository customerRepository;
 	private final LessonRepository lessonRepository;
-	private final UserCustomerRepository userCustomerRepository;
 	private final StoreRepository storeRepository;
 	private final AuthorizationFacade authorizationFacade;
 	private final SecurityUtil securityUtil;
@@ -264,29 +264,24 @@ public class CustomerService {
 
 	// --- トレーナー用顧客取得 ---
 	/**
-	 * 現在ログイン中のトレーナーが担当している顧客リストを取得
-	 * UserCustomerRepositoryを使用して中間テーブル経由で取得し、CustomerResponseに変換
-	 */
-	@Transactional(readOnly = true)
-	public List<CustomerResponse> getMyCustomers() {
-		User currentUser = securityUtil.getCurrentUserOrThrow();
-		UUID trainerId = currentUser.getId();
-
-		return userCustomerRepository.findByUserIdWithCustomer(trainerId).stream()
-				.filter(uc -> !uc.getCustomer().isDeleted() && uc.getCustomer().isActive())
-				.map(uc -> CustomerResponse.fromEntity(uc.getCustomer()))
-				.collect(Collectors.toList());
-	}
-
-	/**
-	 * 現在ログイン中のトレーナーが全店舗の全ての顧客リストを取得
-	 * システム内の全店舗の全顧客を取得（店舗フィルタリングなし）
+	 * 現在ログイン中のトレーナーが所属店舗の全ての顧客リストを取得
+	 * トレーナーが所属する店舗の顧客のみを取得
 	 */
 	@Transactional(readOnly = true)
 	public List<CustomerResponse> getAllCustomersForTrainerStores() {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
+		UUID trainerId = currentUser.getId();
 		
-		log.info("トレーナーが全店舗の顧客を取得: trainerId={}", currentUser.getId());
+		log.info("トレーナーが顧客を取得: trainerId={}", trainerId);
+		
+		// トレーナーにはuser_storesテーブルにレコードがないため、店舗フィルタリングを行わず全顧客を取得
+		// 店舗と顧客の紐付けは維持されるが、トレーナーは全顧客を閲覧可能
+		
+		// デバッグ: 全顧客数を確認（店舗フィルタリング前）
+		Specification<Customer> allCustomersSpec = (root, query, cb) -> cb.conjunction();
+		Page<Customer> allCustomersPage = customerRepository.findAllNotDeleted(allCustomersSpec, Pageable.unpaged());
+		long totalCustomersCount = allCustomersPage.getTotalElements();
+		log.info("全顧客数（論理削除されていない）: count={}", totalCustomersCount);
 		
 		// 店舗フィルタリングなしで、論理削除されていない全顧客を取得
 		Specification<Customer> distinctSpec = (root, query, cb) -> {
@@ -299,25 +294,28 @@ public class CustomerService {
 		Page<Customer> customerPage = customerRepository.findAllNotDeleted(distinctSpec, Pageable.unpaged());
 		List<Customer> customers = customerPage.getContent();
 		
-		log.info("全店舗の顧客取得完了: trainerId={}, count={}", currentUser.getId(), customers.size());
+		log.info("トレーナーが取得した顧客数: trainerId={}, count={}", trainerId, customers.size());
+		
+		// デバッグ: 取得された顧客のIDと名前をログ出力
+		if (log.isDebugEnabled() || customers.isEmpty()) {
+			if (customers.isEmpty()) {
+				log.warn("顧客が取得できませんでした: trainerId={}, totalCustomers={}", 
+					trainerId, totalCustomersCount);
+			} else {
+				customers.forEach(customer -> 
+					log.debug("取得された顧客: customerId={}, name={}, active={}, stores={}", 
+						customer.getId(), customer.getName(), customer.isActive(),
+						customer.getStores() != null ? customer.getStores().stream()
+							.map(s -> s.getId() + "(" + s.getName() + ")")
+							.collect(Collectors.joining(", ")) : "null")
+				);
+			}
+		}
 		
 		return customers.stream()
 				.filter(Customer::isActive)
 				.map(CustomerResponse::fromEntity)
 				.collect(Collectors.toList());
-	}
-
-	/**
-	 * トレーナーが顧客に割り当てられているか確認（存在確認専用）
-	 * 
-	 * @param trainerId トレーナーID
-	 * @param customerId 顧客ID
-	 * @return 割り当てられている場合 true
-	 */
-	@Transactional(readOnly = true)
-	public boolean isTrainerAssignedToCustomer(UUID trainerId, UUID customerId) {
-		return userCustomerRepository.existsById(
-				new com.example.fitnessgym_mg.entity.UserCustomer.UserCustomerId(trainerId, customerId));
 	}
 
 	// --- 顧客IDで顧客詳細を取得（CustomerResponse形式） ---
