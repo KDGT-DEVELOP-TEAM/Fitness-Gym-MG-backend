@@ -855,11 +855,16 @@ public class LessonService {
 
 		// 次回店舗・トレーナーの組み合わせ検証（nullでない場合のみ）
 		if (nextStore != null && nextTrainer != null) {
-			// 次回トレーナーが次回店舗に所属しているか検証
-			if (nextTrainer.getStores() == null || nextTrainer.getStores().isEmpty() ||
-					!nextTrainer.getStores().contains(nextStore)) {
-				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
-						"次回トレーナーは次回店舗に所属している必要があります");
+			// トレーナーにはuser_storesテーブルにレコードがないため、店舗所属チェックをスキップ
+			// トレーナーは所属していない店舗でも次回予約を設定可能
+			// ただし、MANAGERロールの場合は店舗所属チェックを実施
+			if (nextTrainer.getRole() != UserRole.TRAINER) {
+				// MANAGERまたはADMINの場合のみ、店舗所属チェックを実施
+				if (nextTrainer.getStores() == null || nextTrainer.getStores().isEmpty() ||
+						!nextTrainer.getStores().contains(nextStore)) {
+					throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+							"次回トレーナーは次回店舗に所属している必要があります");
+				}
 			}
 		}
 
@@ -881,19 +886,21 @@ public class LessonService {
 	 * @throws InvalidRequestException 検証失敗の場合
 	 */
 	private void validateLessonEntityCombinations(Customer customer, Store store, User trainer) {
-		// トレーナーが指定店舗に所属しているか検証
-		if (trainer.getStores() == null || trainer.getStores().isEmpty() ||
-				!trainer.getStores().contains(store)) {
-			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
-					"指定されたトレーナーは指定された店舗に所属していません");
+		// トレーナーにはuser_storesテーブルにレコードがないため、店舗所属チェックをスキップ
+		// トレーナーは所属していない店舗でもレッスンを作成可能
+		// ただし、MANAGERロールの場合は店舗所属チェックを実施（店長はuser_storesテーブルにレコードがある）
+		if (trainer.getRole() != UserRole.TRAINER) {
+			// MANAGERまたはADMINの場合のみ、店舗所属チェックを実施
+			if (trainer.getStores() == null || trainer.getStores().isEmpty() ||
+					!trainer.getStores().contains(store)) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+						"指定されたトレーナーは指定された店舗に所属していません");
+			}
 		}
 
-		// 顧客が指定店舗に紐づいているか検証
-		if (customer.getStores() == null || customer.getStores().isEmpty() ||
-				!customer.getStores().contains(store)) {
-			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
-					"指定された顧客は指定された店舗に紐づいていません");
-		}
+		// 顧客が店舗に紐づいているかのチェックを削除
+		// 店舗と顧客の紐付けは維持するが、レッスン作成の条件からは除外
+		// 顧客が店舗に紐づいていなくてもレッスンを作成可能
 	}
 
 	/**
