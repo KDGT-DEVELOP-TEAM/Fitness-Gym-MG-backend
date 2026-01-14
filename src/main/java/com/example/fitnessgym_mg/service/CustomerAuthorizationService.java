@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.fitnessgym_mg.entity.Customer;
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.UserRole;
 import com.example.fitnessgym_mg.repository.CustomerRepository;
@@ -125,21 +126,34 @@ public class CustomerAuthorizationService {
 
 	/**
 	 * トレーナーが店舗ベースで顧客にアクセス可能か確認
-	 * トレーナーと顧客が同じ店舗に所属しているかチェック
+	 * トレーナーにはuser_storesテーブルにレコードがないため、店舗チェックをスキップ
+	 * トレーナーは全顧客にアクセス可能（顧客一覧と同様のロジック）
 	 * 
 	 * @param trainer トレーナー
 	 * @param customerId 顧客ID
 	 * @return アクセス可能な場合 true
 	 */
 	private boolean canTrainerAccessCustomerByStore(User trainer, UUID customerId) {
-		// RepositoryレベルのEXISTSクエリで、トレーナーと顧客が同じ店舗に所属しているか確認
-		// canManagerAccessCustomerと同様のロジックを使用
+		// トレーナーにはuser_storesテーブルにレコードがないため、店舗チェックをスキップ
+		// トレーナーは全顧客にアクセス可能（顧客一覧と同様のロジック）
+		// 顧客が存在し、論理削除されていない、かつ有効な場合にアクセス可能
 		try {
 			if (customerRepository instanceof CustomerRepositoryCustom) {
-				boolean result = ((CustomerRepositoryCustom) customerRepository)
-						.existsTrainerCustomerInSameStoreNative(trainer.getId(), customerId);
-				log.debug("canTrainerAccessCustomerByStore: trainerId={}, customerId={}, result={}", 
-						trainer.getId(), customerId, result);
+				// 顧客が存在し、論理削除されていない、かつ有効かを確認
+				java.util.Optional<Customer> customerOpt = ((CustomerRepositoryCustom) customerRepository)
+						.findByIdWithStoresNative(customerId);
+				
+				if (customerOpt.isEmpty()) {
+					log.debug("canTrainerAccessCustomerByStore: customer not found - trainerId={}, customerId={}", 
+							trainer.getId(), customerId);
+					return false;
+				}
+				
+				Customer customer = customerOpt.get();
+				// 顧客が有効で、論理削除されていない場合にアクセス可能
+				boolean result = customer.isActive() && !customer.isDeleted();
+				log.debug("canTrainerAccessCustomerByStore: trainerId={}, customerId={}, active={}, deleted={}, result={}", 
+						trainer.getId(), customerId, customer.isActive(), customer.isDeleted(), result);
 				return result;
 			} else {
 				log.error("CustomerRepository does not implement CustomerRepositoryCustom");
