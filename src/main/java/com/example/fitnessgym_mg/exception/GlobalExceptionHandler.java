@@ -25,9 +25,13 @@ public class GlobalExceptionHandler {
     /**
      * @RequestParam のバリデーションエラーのハンドリング
      * @Validated を使用した場合に発生する ConstraintViolationException を処理
+     * 
+     * <p>パフォーマンス考慮: バリデーションエラーは高頻度で発生する可能性があるため、
+     * スタックトレースは出力しません。</p>
      */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException e) {
+        // 高頻度で発生する可能性があるため、スタックトレースは出力しない
         log.warn("Validation error: {}", e.getMessage());
         // すべてのバリデーションエラーメッセージを取得
         List<String> errorMessages = e.getConstraintViolations().stream()
@@ -43,9 +47,13 @@ public class GlobalExceptionHandler {
     /**
      * @RequestBody のバリデーションエラーのハンドリング
      * @Valid を使用した場合に発生する MethodArgumentNotValidException を処理
+     * 
+     * <p>パフォーマンス考慮: バリデーションエラーは高頻度で発生する可能性があるため、
+     * スタックトレースは出力しません。</p>
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(MethodArgumentNotValidException e) {
+        // 高頻度で発生する可能性があるため、スタックトレースは出力しない
         log.warn("Validation error: {}", e.getMessage());
         // すべてのバリデーションエラーメッセージを取得
         List<String> errorMessages = e.getBindingResult().getFieldErrors().stream()
@@ -61,9 +69,13 @@ public class GlobalExceptionHandler {
     /**
      * 不正なリクエストエラーのハンドリング
      * Controller層で意図的にthrowされたInvalidRequestExceptionを処理
+     * 
+     * <p>パフォーマンス考慮: クライアントの入力ミスは高頻度で発生する可能性があるため、
+     * スタックトレースは出力しません。</p>
      */
     @ExceptionHandler(InvalidRequestException.class)
     public ResponseEntity<ErrorResponse> handleInvalidRequest(InvalidRequestException e) {
+        // 高頻度で発生する可能性があるため、スタックトレースは出力しない
         log.warn("Invalid request: {}", e.getMessage());
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
@@ -73,9 +85,13 @@ public class GlobalExceptionHandler {
     /**
      * ビジネスルール違反エラーのハンドリング
      * Service層で意図的にthrowされたBusinessRuleViolationExceptionを処理
+     * 
+     * <p>パフォーマンス考慮: ビジネスルール違反は意図的な例外のため、
+     * スタックトレースは出力しません。</p>
      */
     @ExceptionHandler(BusinessRuleViolationException.class)
     public ResponseEntity<ErrorResponse> handleBusinessRuleViolation(BusinessRuleViolationException e) {
+        // 意図的な例外のため、スタックトレースは出力しない
         log.warn("Business rule violation: {}", e.getMessage());
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
@@ -85,9 +101,13 @@ public class GlobalExceptionHandler {
     /**
      * バリデーションエラーのハンドリング
      * バリデーションエラーはユーザーに表示しても問題ないため、詳細メッセージを返す
+     * 
+     * <p>パフォーマンス考慮: バリデーションエラーは高頻度で発生する可能性があるため、
+     * スタックトレースは出力しません。</p>
      */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
+        // 高頻度で発生する可能性があるため、スタックトレースは出力しない
         log.warn("Validation error: {}", e.getMessage());
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
@@ -121,9 +141,13 @@ public class GlobalExceptionHandler {
 
     /**
      * ビジネスロジックエラーのハンドリング
+     * 
+     * <p>パフォーマンス考慮: ビジネスロジックエラーは意図的な例外のため、
+     * スタックトレースは出力しません。</p>
      */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException e) {
+        // 意図的な例外のため、スタックトレースは出力しない
         log.warn("Business logic error: {}", e.getMessage());
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
@@ -269,9 +293,13 @@ public class GlobalExceptionHandler {
 
     /**
      * リソース競合エラーのハンドリング
+     * 
+     * <p>パフォーマンス考慮: リソース競合は意図的な例外のため、
+     * スタックトレースは出力しません。</p>
      */
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ErrorResponse> handleConflict(ConflictException e) {
+        // 意図的な例外のため、スタックトレースは出力しない
         log.warn("Resource conflict: {}", e.getMessage());
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
@@ -280,9 +308,13 @@ public class GlobalExceptionHandler {
 
     /**
      * ファイルサイズ超過エラーのハンドリング
+     * 
+     * <p>パフォーマンス考慮: ファイルサイズ超過はクライアントの入力ミスに近いため、
+     * スタックトレースは出力しません。</p>
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e) {
+        // クライアントの入力ミスに近いため、スタックトレースは出力しない
         log.warn("File size exceeds maximum: {}", e.getMessage());
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
@@ -301,12 +333,25 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 予期しないRuntimeExceptionのハンドリング
-     * 注意: より具体的な例外ハンドラーの後に配置する必要がある
+     * 予期しないExceptionのハンドリング（フォールバック）
+     * 
+     * <p>注意: このハンドラーは、より具体的な例外ハンドラーで処理されなかった例外をキャッチします。
+     * 例外ハンドラーの順序により、以下の例外は既に処理されているため、このハンドラーには到達しません：
+     * - IllegalArgumentException, IllegalStateException（既にハンドリング済み）
+     * - カスタム例外（InvalidRequestException、BusinessRuleViolationExceptionなど）
+     * - Spring Framework例外（ConstraintViolationException、MethodArgumentNotValidExceptionなど）</p>
+     * 
+     * <p>このハンドラーは、予期しないシステムエラーをキャッチする最終防衛線として機能します。</p>
      */
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException e) {
-        log.error("Runtime error: {}", e.getMessage(), e);
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleException(Exception e) {
+        // RuntimeExceptionの場合は、より具体的な例外として扱う
+        if (e instanceof RuntimeException) {
+            log.error("Unexpected runtime error: {}", e.getMessage(), e);
+        } else {
+            // チェック例外（Checked Exception）の場合は、システムエラーとして扱う
+            log.error("Unexpected checked exception: {}", e.getMessage(), e);
+        }
         return ResponseEntity
             .status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(new ErrorResponse("INTERNAL_ERROR", "An internal error occurred"));
@@ -315,8 +360,23 @@ public class GlobalExceptionHandler {
     /**
      * メールアドレスの機密情報をマスク
      * 
+     * <p>セキュリティ強化: ローカル部分（@の前）とドメイン部分（@の後）の両方を部分的にマスクします。
+     * これにより、メールアドレスの完全な露出を防ぎます。</p>
+     * 
+     * <p>マスク方法:</p>
+     * <ul>
+     *   <li>ローカル部分: 最初の2文字のみ表示、残りは***</li>
+     *   <li>ドメイン部分: 最初のドメイン名の最初の2文字のみ表示、残りは***</li>
+     * </ul>
+     * 
+     * <p>例:</p>
+     * <ul>
+     *   <li>"user@example.com" → "us***@ex***.com"</li>
+     *   <li>"ab@test.co.jp" → "ab***@te***.co.jp"</li>
+     * </ul>
+     * 
      * @param email マスクするメールアドレス
-     * @return マスクされたメールアドレス（例: "ab***@example.com"）
+     * @return マスクされたメールアドレス
      */
     private String maskEmail(String email) {
         if (email == null || !email.contains("@")) {
@@ -326,9 +386,34 @@ public class GlobalExceptionHandler {
         if (parts.length != 2) {
             return email;
         }
-        if (parts[0].length() <= 2) {
-            return "***@" + parts[1];
+        
+        String localPart = parts[0];
+        String domain = parts[1];
+        
+        // ローカル部分のマスク（最初の2文字のみ表示、残りは***）
+        String maskedLocal;
+        if (localPart.length() <= 2) {
+            maskedLocal = "***";
+        } else {
+            maskedLocal = localPart.substring(0, 2) + "***";
         }
-        return parts[0].substring(0, 2) + "***@" + parts[1];
+        
+        // ドメイン部分のマスク（最初のドメイン名の最初の2文字のみ表示）
+        int dotIndex = domain.indexOf('.');
+        String maskedDomain;
+        if (dotIndex > 0) {
+            // ドメイン名の最初の2文字のみ表示
+            String domainName = domain.substring(0, dotIndex);
+            String domainSuffix = domain.substring(dotIndex); // .com, .co.jp など
+            String maskedDomainName = domainName.length() <= 2 
+                ? "***" 
+                : domainName.substring(0, 2) + "***";
+            maskedDomain = maskedDomainName + domainSuffix;
+        } else {
+            // ドットがない場合は、全体をマスク
+            maskedDomain = domain.length() <= 2 ? "***" : domain.substring(0, 2) + "***";
+        }
+        
+        return maskedLocal + "@" + maskedDomain;
     }
 }

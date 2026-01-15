@@ -6,6 +6,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 /**
  * エンティティが見つからない場合にスローされる例外
  * HTTPステータスコード404 Not Foundに対応
+ * 
+ * <p>注意: {@code @ResponseStatus}アノテーションは、{@link GlobalExceptionHandler}が
+ * 設定されていない場合のフォールバックとして機能します。
+ * 通常は{@link GlobalExceptionHandler}がHTTPステータスコードを設定するため、
+ * このアノテーションは実質的に使用されませんが、明示的なドキュメントとして残しています。</p>
  */
 @ResponseStatus(HttpStatus.NOT_FOUND)
 public class EntityNotFoundException extends RuntimeException {
