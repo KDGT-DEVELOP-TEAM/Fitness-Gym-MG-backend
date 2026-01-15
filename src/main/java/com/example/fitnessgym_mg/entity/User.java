@@ -9,6 +9,7 @@ import java.util.UUID;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
@@ -37,7 +38,7 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @Data
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@EqualsAndHashCode(onlyExplicitlyIncluded = true, exclude = { "password" })
 @ToString(exclude = { "stores", "password" })
 public class User {
 
@@ -94,12 +95,20 @@ public class User {
 	 * このメソッドは既にハッシュ化されたパスワードを受け取ることを前提とします。</p>
 	 * 
 	 * @param passwordHash BCryptハッシュ化済みパスワード
-	 * @throws IllegalArgumentException パスワードハッシュが255文字を超える場合
+	 * @throws IllegalArgumentException パスワードハッシュがnull、空文字、または255文字を超える場合、または無効な形式の場合
 	 */
 	public void setPassword(String passwordHash) {
-		// ハッシュ化済みパスワードの長さチェックのみ
-		if (passwordHash != null && passwordHash.length() > 255) {
+		// nullチェック
+		if (passwordHash == null || passwordHash.isBlank()) {
+			throw new IllegalArgumentException("パスワードハッシュは必須です");
+		}
+		// 長さチェック
+		if (passwordHash.length() > 255) {
 			throw new IllegalArgumentException("パスワードハッシュは255文字以内で入力してください");
+		}
+		// BCryptハッシュの形式チェック（$2a$または$2b$で始まることを確認）
+		if (!passwordHash.startsWith("$2a$") && !passwordHash.startsWith("$2b$") && !passwordHash.startsWith("$2y$")) {
+			throw new IllegalArgumentException("無効なパスワードハッシュ形式です。BCryptハッシュである必要があります。");
 		}
 		this.password = passwordHash;
 	}
@@ -132,7 +141,7 @@ public class User {
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
-	@ManyToMany
+	@ManyToMany(fetch = FetchType.LAZY)
 	@JoinTable(name = "user_stores", // 中間テーブル名
 			joinColumns = @JoinColumn(name = "user_id", nullable = false), // User側のFK
 			inverseJoinColumns = @JoinColumn(name = "store_id", nullable = false), // Store側のFK
@@ -148,6 +157,7 @@ public class User {
 	 * アカウントが期限切れかどうかを判定
 	 * 
 	 * <p>現時点では常にfalseを返す。将来の拡張に対応するため、メソッドとして定義。</p>
+	 * <p>実装が必要になった時点で、accountExpiredAtフィールドを追加し、このメソッドを実装してください。</p>
 	 * 
 	 * @return アカウントが期限切れの場合 true
 	 */
@@ -160,6 +170,7 @@ public class User {
 	 * パスワードが期限切れかどうかを判定
 	 * 
 	 * <p>現時点では常にfalseを返す。将来の拡張に対応するため、メソッドとして定義。</p>
+	 * <p>実装が必要になった時点で、passwordExpiredAtフィールドを追加し、このメソッドを実装してください。</p>
 	 * 
 	 * @return パスワードが期限切れの場合 true
 	 */
@@ -172,6 +183,7 @@ public class User {
 	 * アカウントがロックされているかどうかを判定
 	 * 
 	 * <p>現時点では常にfalseを返す。将来の拡張に対応するため、メソッドとして定義。</p>
+	 * <p>実装が必要になった時点で、lockedAtフィールドを追加し、このメソッドを実装してください。</p>
 	 * 
 	 * @return アカウントがロックされている場合 true
 	 */

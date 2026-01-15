@@ -11,6 +11,7 @@ import java.util.UUID;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
@@ -40,7 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@EqualsAndHashCode(onlyExplicitlyIncluded = true, exclude = {"email", "phone", "medical", "taboo", "memo"}) // セキュリティ: 個人情報・機密情報をequals/hashCodeから除外
 @ToString(exclude = {"stores", "email", "phone", "medical", "taboo", "memo"}) // セキュリティ: リレーションと個人情報・機密情報をログに出力しない
 @Slf4j
 public class Customer {
@@ -137,12 +138,6 @@ public class Customer {
 	private boolean active = true;
 
 	/**
-	 * 楽観ロック用バージョンフィールド
-	 */
-	@jakarta.persistence.Transient
-	private Long version;
-
-	/**
 	 * 論理削除日時（nullの場合は削除されていない）
 	 */
 	@Column(name = "deleted_at")
@@ -153,7 +148,7 @@ public class Customer {
 		this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
 	}
 
-	@ManyToMany
+	@ManyToMany(fetch = FetchType.LAZY)
 	@JoinTable(name = "store_customers", // 中間テーブル名
 			joinColumns = @JoinColumn(name = "customer_id", nullable = false), // Customer側のFK
 			inverseJoinColumns = @JoinColumn(name = "store_id", nullable = false), // Store側のFK
@@ -180,20 +175,5 @@ public class Customer {
 			this.stores = new java.util.HashSet<>();
 		}
 		this.stores.add(store);
-	}
-
-	/**
-	 * 削除可能かどうかを検証
-	 * 
-	 * <p>有効（active=true）の顧客は削除できない。</p>
-	 * 
-	 * @throws InvalidRequestException 削除不可の場合
-	 */
-	public void validateDeletable() {
-		if (this.isActive()) {
-			log.warn("削除不可: 顧客が有効な状態です。customerId={}, active={}", this.getId(), this.isActive());
-			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("有効な顧客は削除できません。先に無効化してください。");
-		}
-		log.debug("削除可能: 顧客は無効な状態です。customerId={}, active={}", this.getId(), this.isActive());
 	}
 }

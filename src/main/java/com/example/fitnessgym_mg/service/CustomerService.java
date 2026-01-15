@@ -215,8 +215,8 @@ public class CustomerService {
 		log.debug("顧客削除リクエスト: customerId={}, active={}, deletedAt={}", 
 			id, customer.isActive(), customer.getDeletedAt());
 
-		// ドメイン制約の検証
-		customer.validateDeletable();
+		// ドメイン制約の検証（ビジネスロジックはサービス層で実施）
+		validateDeletable(customer);
 
 		// 論理削除を実行（物理削除は行わない）
 		// 注意: hasRelatedDataチェックは削除（論理削除のため、レッスンデータは統計に表示される）
@@ -409,6 +409,23 @@ public class CustomerService {
 		customer.setEmail(req.getEmail());
 		customer.setPhone(req.getPhone());
 		customer.setAddress(req.getAddress());
+	}
+
+	/**
+	 * 顧客が削除可能かどうかを検証
+	 * 
+	 * <p>ビジネスルール: 有効（active=true）の顧客は削除できない。</p>
+	 * <p>このメソッドはサービス層に配置することで、ビジネスロジックとエンティティ層の責務を分離しています。</p>
+	 * 
+	 * @param customer 検証対象の顧客エンティティ
+	 * @throws InvalidRequestException 削除不可の場合
+	 */
+	private void validateDeletable(Customer customer) {
+		if (customer.isActive()) {
+			log.warn("削除不可: 顧客が有効な状態です。customerId={}, active={}", customer.getId(), customer.isActive());
+			throw new InvalidRequestException("有効な顧客は削除できません。先に無効化してください。");
+		}
+		log.debug("削除可能: 顧客は無効な状態です。customerId={}, active={}", customer.getId(), customer.isActive());
 	}
 
 }

@@ -19,7 +19,12 @@ import com.example.fitnessgym_mg.entity.enums.Gender;
 
 /**
  * PostgreSQL ENUM型（customer_gender）をGender Enumにマッピングするカスタム型
- * <p>日本語ラベル（「男」「女」）を使用してPostgreSQL ENUM型とマッピングします。</p>
+ * 
+ * <p>マッピング方法: 日本語ラベル（「男」「女」）を使用してPostgreSQL ENUM型とマッピングします。</p>
+ * 
+ * <p>注意: 他のカスタム型（UserRoleType、PostureImagePositionType）はcode値を使用していますが、
+ * このクラスは日本語ラベルを使用しています。これは既存データとの互換性のためです。
+ * 将来的にはcode値への統一を検討してください。</p>
  */
 public class GenderType implements JdbcType {
 

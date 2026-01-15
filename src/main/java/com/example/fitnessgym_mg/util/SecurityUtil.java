@@ -19,12 +19,29 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * セキュリティユーティリティクラス
  * 現在ログイン中のユーザー情報取得や権限チェックを提供
+ * 
+ * <p><b>設計上の注意:</b></p>
+ * <ul>
+ *   <li>このクラスはUserRepositoryに依存していますが、現状の設計では必要です。</li>
+ *   <li>JWT認証フィルターでprincipalにemail（String）を格納する設計のため、Userエンティティを取得するにはDBアクセスが必要です。</li>
+ *   <li>将来的には、principalにuserId(UUID)を格納する設計に変更することで、Repository依存を削減できます。</li>
+ *   <li>ただし、その変更はアーキテクチャレベルの変更が必要であり、JwtAuthenticationFilterの修正も必要です。</li>
+ * </ul>
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class SecurityUtil {
 
+    /**
+     * UserRepositoryへの依存
+     * 
+     * <p>現状の設計では、principalにemail（String）を格納するため、
+     * Userエンティティを取得するにはDBアクセスが必要です。</p>
+     * 
+     * <p>将来的な改善: principalにuserId(UUID)を格納する設計に変更することで、
+     * Repository依存を削減できます。ただし、アーキテクチャレベルの変更が必要です。</p>
+     */
     private final UserRepository userRepository;
 
     /**
@@ -161,6 +178,18 @@ public class SecurityUtil {
     /**
      * 現在ログイン中のユーザーIDを取得（認証されていない場合は例外をスロー）
      * 
+     * <p><b>パフォーマンス注意事項:</b>
+     * このメソッドは内部で{@link #getCurrentUserOrThrow()}を呼び出すため、
+     * DBアクセスが発生します。</p>
+     * 
+     * <p>同じリクエスト内でユーザーIDとUserエンティティの両方が必要な場合は、
+     * 以下のように先にUserエンティティを取得して使い回すことを推奨します:</p>
+     * <pre>{@code
+     * User currentUser = securityUtil.getCurrentUserOrThrow();
+     * UUID userId = currentUser.getId();
+     * // 以降、currentUserとuserIdを再利用
+     * }</pre>
+     * 
      * @return 現在ログイン中のユーザーID
      * @throws AuthenticationException 認証されていない場合
      */
@@ -220,28 +249,75 @@ public class SecurityUtil {
      * で email として設定されるため、String の場合は email として扱う。</p>
      * 
      * <p><b>防御的プログラミング:</b>
-     * String型のprincipalに対して、email形式（@を含む）の検証を実施します。
-     * これにより、Spring Security設定変更やOAuth2/OIDC導入時の予期しない動作を早期に検出できます。</p>
+     * String型のprincipalに対して、email形式の検証を実施します。
+     * より厳密な検証（正規表現など）も可能ですが、パフォーマンスとのトレードオフを考慮し、
+     * 最小限の検証（@を含む、空でない、適切な長さ）を実施しています。</p>
      * 
      * @param principal Authentication の principal
      * @return メールアドレス、取得できない場合は null
      */
     private String extractEmailFromPrincipal(Object principal) {
         if (principal instanceof UserDetails userDetails) {
-            return userDetails.getUsername();
+            String username = userDetails.getUsername();
+            // UserDetailsのusernameがemail形式か検証
+            if (isValidEmailFormat(username)) {
+                return username;
+            } else {
+                log.warn("UserDetails username does not appear to be an email: {}", username);
+                return null;
+            }
         } else if (principal instanceof String s) {
             // JWT認証時は principal に email (String) を格納する設計
-            // 最小限の防御: @を含むかチェック
-            if (s.contains("@")) {
+            if (isValidEmailFormat(s)) {
                 return s;
             } else {
                 // 予期しないString型のprincipal（email形式でない）
                 // Spring Security設定変更、OAuth2/OIDC導入、principalを独自クラスに変更した場合に発生する可能性
-                log.warn("Principal is String but does not appear to be an email (does not contain '@'): {}", s);
+                log.warn("Principal is String but does not appear to be an email: {}", s);
                 return null;
             }
         }
         return null;
+    }
+
+    /**
+     * メールアドレス形式の簡易検証
+     * 
+     * <p>パフォーマンスとのトレードオフを考慮し、最小限の検証を実施します:</p>
+     * <ul>
+     *   <li>nullまたは空文字でない</li>
+     *   <li>@を含む</li>
+     *   <li>@の前に少なくとも1文字、@の後に少なくとも1文字（ドメイン部分）</li>
+     *   <li>最大長255文字（RFC 5321準拠）</li>
+     * </ul>
+     * 
+     * <p>より厳密な検証が必要な場合は、正規表現やApache Commons Validatorなどを使用できますが、
+     * パフォーマンスへの影響を考慮する必要があります。</p>
+     * 
+     * @param email 検証対象の文字列
+     * @return メールアドレス形式として有効な場合 true
+     */
+    private boolean isValidEmailFormat(String email) {
+        if (email == null || email.isBlank()) {
+            return false;
+        }
+        
+        // 長さチェック（RFC 5321準拠: 最大255文字）
+        if (email.length() > 255) {
+            return false;
+        }
+        
+        // @を含むかチェック
+        int atIndex = email.indexOf('@');
+        if (atIndex <= 0 || atIndex >= email.length() - 1) {
+            // @が先頭、末尾、または存在しない場合は無効
+            return false;
+        }
+        
+        // @の前後に少なくとも1文字ずつあることを確認
+        // より厳密な検証（ドットの存在、ドメイン部分の形式など）は必要に応じて追加可能
+        
+        return true;
     }
 }
 

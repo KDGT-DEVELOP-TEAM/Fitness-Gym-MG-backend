@@ -9,8 +9,15 @@ import java.math.RoundingMode;
  * <p>BMI（Body Mass Index）を計算するためのユーティリティです。</p>
  * <p>計算式: BMI = 体重(kg) / (身長(m))²</p>
  * <p>身長はcm単位で受け取り、内部でm単位に変換します。</p>
+ * 
+ * <p>このクラスは静的メソッドのみを提供するユーティリティクラスです。
+ * インスタンス化を防ぐため、finalクラスとして定義されています。</p>
  */
-public class BmiCalculator {
+public final class BmiCalculator {
+    
+    private BmiCalculator() {
+        // インスタンス化を防ぐ
+    }
     
     /**
      * cmからmへの変換係数

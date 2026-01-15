@@ -332,11 +332,38 @@ public class JwtTokenUtil {
 	}
 
 	/**
+	 * Claimsから有効期限を取得
+	 * 
+	 * <p>再パースを避けるため、既にパース済みのClaimsを使用します。</p>
+	 * 
+	 * @param claims JWT Claims
+	 * @return 有効期限
+	 */
+	public Date getExpirationFromClaims(Claims claims) {
+		return claims.getExpiration();
+	}
+
+	/**
+	 * Claimsから期限切れかどうかを確認
+	 * 
+	 * <p>再パースを避けるため、既にパース済みのClaimsを使用します。</p>
+	 * 
+	 * @param claims JWT Claims
+	 * @return 期限切れの場合true
+	 */
+	public boolean isTokenExpiredFromClaims(Claims claims) {
+		Date expiration = claims.getExpiration();
+		return expiration != null && expiration.before(new Date());
+	}
+
+	/**
 	 * トークンの有効期限を取得
 	 * 
 	 * @param token JWTトークン
 	 * @return 有効期限
+	 * @deprecated このメソッドは再パースを引き起こします。{@link #parseAndValidate(String)} で取得したClaimsを {@link #getExpirationFromClaims(Claims)} に渡してください。
 	 */
+	@Deprecated
 	public Date getExpirationFromToken(String token) {
 		return getClaims(token).getExpiration();
 	}
@@ -346,7 +373,9 @@ public class JwtTokenUtil {
 	 * 
 	 * @param token JWTトークン
 	 * @return 期限切れの場合true
+	 * @deprecated このメソッドは再パースを引き起こします。{@link #parseAndValidate(String)} で取得したClaimsを {@link #isTokenExpiredFromClaims(Claims)} に渡してください。
 	 */
+	@Deprecated
 	public boolean isTokenExpired(String token) {
 		try {
 			Date expiration = getExpirationFromToken(token);
