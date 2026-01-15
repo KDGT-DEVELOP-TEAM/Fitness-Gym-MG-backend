@@ -117,7 +117,8 @@ public class SupabaseAuthService {
         // APIキーが設定されているか確認（値は出力しない）
         if (properties.getServiceKey() == null || properties.getServiceKey().trim().isEmpty()) {
             log.error("Supabase Auth Service Key is not configured");
-            throw new RuntimeException("Supabase Auth Service Key is not configured. Please set SUPABASE_SERVICE_KEY environment variable.");
+            throw new com.example.fitnessgym_mg.exception.ConfigurationException(
+                "Supabase Auth Service Key is not configured. Please set SUPABASE_SERVICE_KEY environment variable.");
         }
         log.debug("Supabase Auth Service Key is configured (length: {})", properties.getServiceKey().length());
         
@@ -180,19 +181,20 @@ public class SupabaseAuthService {
                     return authUserId;
                 } else {
                     log.error("Unexpected id type in Supabase Auth response: {}", idObj != null ? idObj.getClass() : "null");
-                    throw new RuntimeException("Failed to parse auth user ID from Supabase Auth response");
+                    throw new com.example.fitnessgym_mg.exception.SystemException("Failed to parse auth user ID from Supabase Auth response");
                 }
             }
             
             log.error("Failed to create user in Supabase Auth: status={}, body={}", 
                 response.getStatusCode(), response.getBody());
-            throw new RuntimeException("Failed to create user in Supabase Auth: " + response.getStatusCode());
+            throw new com.example.fitnessgym_mg.exception.SystemException(
+                "Failed to create user in Supabase Auth: " + response.getStatusCode());
             
         } catch (HttpClientErrorException.Unauthorized e) {
             String errorBody = e.getResponseBodyAsString();
             log.error("Unauthorized error calling Supabase Auth API: email={}, status={}, url={}, response={}", 
                 email, e.getStatusCode(), url, errorBody);
-            throw new RuntimeException(
+            throw new com.example.fitnessgym_mg.exception.ConfigurationException(
                 "Supabase Auth API認証に失敗しました。Service Role Keyが正しく設定されているか確認してください。", e);
         } catch (HttpClientErrorException e) {
             String errorBody = e.getResponseBodyAsString();
@@ -202,15 +204,15 @@ public class SupabaseAuthService {
             // 400 Bad Requestの場合、より詳細なエラーメッセージを提供
             if (e.getStatusCode().value() == 400) {
                 if (errorBody != null && errorBody.contains("already registered")) {
-                    throw new RuntimeException(
+                    throw new com.example.fitnessgym_mg.exception.ConflictException(
                         "このメールアドレスは既にSupabase Authに登録されています", e);
                 }
-                throw new RuntimeException(
+                throw new com.example.fitnessgym_mg.exception.SystemException(
                     String.format("Supabase Auth APIリクエストが無効です: %s - %s", 
                         e.getStatusCode(), errorBody), e);
             }
             
-            throw new RuntimeException(
+            throw new com.example.fitnessgym_mg.exception.SystemException(
                 String.format("Supabase Auth API呼び出しに失敗しました: %s - %s", e.getStatusCode(), errorBody), e);
         } catch (HttpServerErrorException e) {
             String errorBody = e.getResponseBodyAsString();
@@ -248,15 +250,17 @@ public class SupabaseAuthService {
                 }
             }
             
-            throw new RuntimeException(errorMessage + " (詳細: " + errorBody + ")", e);
+            throw new com.example.fitnessgym_mg.exception.SystemException(errorMessage + " (詳細: " + errorBody + ")", e);
         } catch (RestClientException e) {
             log.error("Error calling Supabase Auth API to create user: email={}, url={}, error={}", 
                 email, url, e.getMessage(), e);
-            throw new RuntimeException("Supabase Auth APIへの接続に失敗しました: " + e.getMessage(), e);
+            throw new com.example.fitnessgym_mg.exception.SystemException(
+                "Supabase Auth APIへの接続に失敗しました: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Unexpected error creating user in Supabase Auth: email={}, url={}, error={}", 
                 email, url, e.getMessage(), e);
-            throw new RuntimeException("Supabase Authでのユーザー作成中に予期しないエラーが発生しました", e);
+            throw new com.example.fitnessgym_mg.exception.SystemException(
+                "Supabase Authでのユーザー作成中に予期しないエラーが発生しました", e);
         }
     }
 }

@@ -333,6 +333,43 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * システム内部エラーのハンドリング
+     * Service層で発生したシステムエラー（API呼び出し失敗、データベースエラーなど）を処理
+     */
+    @ExceptionHandler(SystemException.class)
+    public ResponseEntity<ErrorResponse> handleSystemException(SystemException e) {
+        log.error("System error: {}", e.getMessage(), e);
+        return ResponseEntity
+            .status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(new ErrorResponse("SYSTEM_ERROR", "システムエラーが発生しました"));
+    }
+
+    /**
+     * 設定エラーのハンドリング
+     * アプリケーションの設定が不正または不足している場合に使用
+     */
+    @ExceptionHandler(ConfigurationException.class)
+    public ResponseEntity<ErrorResponse> handleConfigurationException(ConfigurationException e) {
+        log.error("Configuration error: {}", e.getMessage(), e);
+        return ResponseEntity
+            .status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(new ErrorResponse("CONFIGURATION_ERROR", "設定エラーが発生しました"));
+    }
+
+    /**
+     * 実装エラーのハンドリング
+     * コードの実装上の問題（インターフェースの実装不足など）を処理
+     * 通常、この例外は開発時に発見され、本番環境では発生しないはずです
+     */
+    @ExceptionHandler(ImplementationException.class)
+    public ResponseEntity<ErrorResponse> handleImplementationException(ImplementationException e) {
+        log.error("Implementation error: {}", e.getMessage(), e);
+        return ResponseEntity
+            .status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(new ErrorResponse("IMPLEMENTATION_ERROR", "実装エラーが発生しました"));
+    }
+
+    /**
      * 予期しないExceptionのハンドリング（フォールバック）
      * 
      * <p>注意: このハンドラーは、より具体的な例外ハンドラーで処理されなかった例外をキャッチします。

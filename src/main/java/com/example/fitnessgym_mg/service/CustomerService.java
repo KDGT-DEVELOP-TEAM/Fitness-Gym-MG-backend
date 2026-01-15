@@ -164,7 +164,8 @@ public class CustomerService {
 					throw new com.example.fitnessgym_mg.exception.InvalidRequestException("このメールアドレスは既に登録されています");
 				}
 			} else {
-				throw new RuntimeException("CustomerRepository does not implement CustomerRepositoryCustom");
+				throw new com.example.fitnessgym_mg.exception.ImplementationException(
+					"CustomerRepository does not implement CustomerRepositoryCustom");
 			}
 		}
 
@@ -259,7 +260,8 @@ public class CustomerService {
 						return new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません: " + id);
 					});
 		} else {
-			throw new RuntimeException("CustomerRepository does not implement CustomerRepositoryCustom");
+			throw new com.example.fitnessgym_mg.exception.ImplementationException(
+				"CustomerRepository does not implement CustomerRepositoryCustom");
 		}
 
 		// 2. 状態検証: 論理削除チェック
@@ -376,7 +378,8 @@ public class CustomerService {
 				throw new com.example.fitnessgym_mg.exception.InvalidRequestException("このメールアドレスは既に登録されています");
 			}
 		} else {
-			throw new RuntimeException("CustomerRepository does not implement CustomerRepositoryCustom");
+			throw new com.example.fitnessgym_mg.exception.ImplementationException(
+				"CustomerRepository does not implement CustomerRepositoryCustom");
 		}
 	}
 

@@ -313,11 +313,13 @@ public class AccountService {
 			}
 			log.error("Failed to create user in Supabase Auth: email={}, userExists={}, customerExists={}, supabaseUserExists={}, error={}", 
 				normalizedEmail, userExists, customerExists, supabaseUserExists, e.getMessage(), e);
-			throw new RuntimeException("Supabase Authでのユーザー作成に失敗しました: " + e.getMessage(), e);
+			throw new com.example.fitnessgym_mg.exception.SystemException(
+				"Supabase Authでのユーザー作成に失敗しました: " + e.getMessage(), e);
 		} catch (Exception e) {
 			log.error("Unexpected error creating user in Supabase Auth: email={}, userExists={}, customerExists={}, supabaseUserExists={}, error={}", 
 				normalizedEmail, userExists, customerExists, supabaseUserExists, e.getMessage(), e);
-			throw new RuntimeException("Supabase Authでのユーザー作成に失敗しました: " + e.getMessage(), e);
+			throw new com.example.fitnessgym_mg.exception.SystemException(
+				"Supabase Authでのユーザー作成に失敗しました: " + e.getMessage(), e);
 		}
 
 		// ユーザーの基本情報設定

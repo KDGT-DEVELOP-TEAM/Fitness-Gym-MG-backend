@@ -187,7 +187,8 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 			
 			// version はデータベースに存在しないため、null のままにする
 		} catch (Exception mappingException) {
-			throw new RuntimeException("Customerエンティティのマッピングに失敗しました: customerId=" + customerId, mappingException);
+			throw new com.example.fitnessgym_mg.exception.SystemException(
+				"Customerエンティティのマッピングに失敗しました: customerId=" + customerId, mappingException);
 		}
 		
 		// storesを別途ネイティブSQLクエリで取得

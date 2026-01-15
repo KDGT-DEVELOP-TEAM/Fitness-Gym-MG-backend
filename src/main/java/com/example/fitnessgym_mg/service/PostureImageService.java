@@ -206,7 +206,7 @@ public class PostureImageService {
 						uploadedStorageKey);
 				// 削除に失敗しても例外を再スローしない（不整合は定期ジョブで解消）
 			}
-			throw new RuntimeException("Failed to save image metadata", e);
+			throw new com.example.fitnessgym_mg.exception.SystemException("Failed to save image metadata", e);
 		}
 
 		// 8. 署名付きURL生成
