@@ -84,12 +84,13 @@ public class CustomerApiController {
 	public ResponseEntity<Page<CustomerResponse>> getAdminCustomers(
 			@RequestParam(required = false) @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") String name,
 			@RequestParam(defaultValue = "created") String sort,
+			@RequestParam(required = false) UUID storeId,
 			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
 			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
 
 		Pageable pageable = PageRequest.of(page, size);
 		CustomerSort sortEnum = CustomerSort.fromString(sort);
-		Page<CustomerResponse> customerPage = service.searchCustomers(name, sortEnum, null, pageable);
+		Page<CustomerResponse> customerPage = service.searchCustomers(name, sortEnum, storeId, pageable);
 		return ResponseEntity.ok(customerPage);
 	}
 

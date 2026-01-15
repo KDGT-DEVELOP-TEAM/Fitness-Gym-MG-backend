@@ -65,7 +65,13 @@ public class AccountService {
 		log.debug("searchUsers called: keyword={}, role={}, sort={}, storeId={}, page={}, size={}", keyword, role, sort, storeId, pageable.getPageNumber(), pageable.getPageSize());
 		Specification<User> spec = (root, query, cb) -> null;
 
-		// 店舗フィルタリングは適用しない（全てのユーザーを表示）
+		// --- 1-1. 店舗IDによる絞り込み (中間テーブル user_stores 経由) ---
+		if (storeId != null) {
+			spec = spec.and((root, query, cb) -> {
+				var userStoresJoin = root.join("stores", jakarta.persistence.criteria.JoinType.INNER);
+				return cb.equal(userStoresJoin.get("id"), storeId);
+			});
+		}
 
 		// --- 1-2. キーワードによる絞り込み ---
 		if (keyword != null && !keyword.isEmpty()) {
@@ -74,14 +80,46 @@ public class AccountService {
 			Sort sortObj = createSort(sort);
 			Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sortObj);
 			
-			// 店舗フィルタリングは適用しないため、storeIdはnullを渡す
-			return userRepository.searchByFullText(keyword, role, null, sortedPageable)
-				.map(UserResponse::fromEntity);
+			// 全文検索を実行（storeIdを渡すことで、店舗フィルタリングとADMINユーザー除外が行われる）
+			Page<User> userPage = userRepository.searchByFullText(keyword, role, storeId, sortedPageable);
+			
+			// Managerからのアクセスの場合、ADMINユーザーを除外（念のため、店舗フィルタリングは既にSQLレベルで実装済み）
+			if (storeId != null) {
+				List<User> filteredContent = userPage.getContent().stream()
+					.filter(user -> {
+						// ADMINユーザーを除外
+						if (user.getRole() == com.example.fitnessgym_mg.entity.enums.UserRole.ADMIN) {
+							return false;
+						}
+						// 念のため、指定された店舗に所属するユーザーのみを返す（SQLレベルで既にフィルタリング済みだが、二重チェック）
+						if (user.getStores() != null) {
+							return user.getStores().stream()
+								.anyMatch(store -> store.getId().equals(storeId));
+						}
+						return false;
+					})
+					.collect(java.util.stream.Collectors.toList());
+				
+				// フィルタリング後のページネーション情報を再計算
+				long totalElements = filteredContent.size();
+				
+				return new org.springframework.data.domain.PageImpl<>(filteredContent, sortedPageable, totalElements)
+					.map(UserResponse::fromEntity);
+			}
+			
+			return userPage.map(UserResponse::fromEntity);
 		}
 
 		// --- 1-3. ロールによる絞り込み ---
 		if (role != null) {
 			spec = spec.and((root, query, cb) -> cb.equal(root.get("role"), role));
+		}
+
+		// --- 1-4. Managerからのアクセスの場合、ADMINユーザーを除外 ---
+		if (storeId != null) {
+			// storeIdが指定されている場合、これはManagerからのアクセス
+			// ADMINロールのユーザーを除外する
+			spec = spec.and((root, query, cb) -> cb.notEqual(root.get("role"), com.example.fitnessgym_mg.entity.enums.UserRole.ADMIN));
 		}
 
 		// 2. ソートオブジェクトの生成 (グルーピングソート対応)
@@ -171,8 +209,10 @@ public class AccountService {
 		}
 		
 		if (req.getRole() == UserRole.TRAINER) {
-			// トレーナーの場合、店舗は0個以上でOK
-			// storeIdsはそのまま使用
+			// トレーナーの場合、店舗は1つ以上必須
+			if (storeIds == null || storeIds.isEmpty()) {
+				throw new com.example.fitnessgym_mg.exception.BusinessRuleViolationException("トレーナーユーザーには、割り当てる店舗を1つ以上選択する必要があります。");
+			}
 		} else if (req.getRole() == UserRole.MANAGER) {
 			// 店長ロールのバリデーション (単一の店舗必須)
 			validateManagerRole(req.getRole(), storeIds);

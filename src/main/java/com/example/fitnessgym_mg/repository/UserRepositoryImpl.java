@@ -48,9 +48,20 @@ public class UserRepositoryImpl implements UserRepositoryCustom {
 		StringBuilder whereClause = new StringBuilder();
 		boolean hasCondition = false;
 
-		if (useFullTextSearch) {
-			whereClause.append(" WHERE u.search_vector @@ plainto_tsquery('simple', :keyword)");
+		// --- 店舗IDによる絞り込み (中間テーブル user_stores 経由) ---
+		if (storeId != null) {
+			sql.append(" INNER JOIN user_stores us ON u.id = us.user_id");
+			whereClause.append(" WHERE us.store_id = :storeId");
 			hasCondition = true;
+		}
+
+		if (useFullTextSearch) {
+			if (hasCondition) {
+				whereClause.append(" AND u.search_vector @@ plainto_tsquery('simple', :keyword)");
+			} else {
+				whereClause.append(" WHERE u.search_vector @@ plainto_tsquery('simple', :keyword)");
+				hasCondition = true;
+			}
 		}
 
 		if (role != null) {
@@ -62,18 +73,26 @@ public class UserRepositoryImpl implements UserRepositoryCustom {
 			}
 		}
 
-		// 店舗フィルタリングは適用しない（全てのユーザーを表示）
-
 		sql.append(whereClause);
 		sql.append(" ORDER BY u.created_at DESC");
 
-		// カウントクエリ
-		String countSql = "SELECT COUNT(*) FROM users u" + whereClause.toString();
+		// カウントクエリ（JOINも含める）
+		StringBuilder countSqlBuilder = new StringBuilder();
+		countSqlBuilder.append("SELECT COUNT(DISTINCT u.id) FROM users u");
+		if (storeId != null) {
+			countSqlBuilder.append(" INNER JOIN user_stores us ON u.id = us.user_id");
+		}
+		countSqlBuilder.append(whereClause.toString());
+		String countSql = countSqlBuilder.toString();
 
 		// データ取得クエリ
 		Query query = entityManager.createNativeQuery(sql.toString(), User.class);
 		Query countQuery = entityManager.createNativeQuery(countSql);
 
+		if (storeId != null) {
+			query.setParameter("storeId", storeId);
+			countQuery.setParameter("storeId", storeId);
+		}
 		if (useFullTextSearch) {
 			query.setParameter("keyword", keyword.trim());
 			countQuery.setParameter("keyword", keyword.trim());
@@ -82,7 +101,6 @@ public class UserRepositoryImpl implements UserRepositoryCustom {
 			query.setParameter("role", role.name());
 			countQuery.setParameter("role", role.name());
 		}
-		// 店舗フィルタリングは適用しないため、storeIdパラメータは設定しない
 
 		query.setFirstResult((int) pageable.getOffset());
 		query.setMaxResults(pageable.getPageSize());
