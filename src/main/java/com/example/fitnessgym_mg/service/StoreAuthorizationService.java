@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.fitnessgym_mg.entity.User;
+import com.example.fitnessgym_mg.entity.enums.UserRole;
 import com.example.fitnessgym_mg.service.policy.RolePolicy;
 
 import lombok.RequiredArgsConstructor;
@@ -51,10 +52,13 @@ public class StoreAuthorizationService {
             return false;
         }
         
-        // スーパーユーザー（ADMIN）は全店舗にアクセス可能
-        if (rolePolicy.isSuperUser(currentUser)) {
+        // ADMINとMANAGERは全店舗にアクセス可能
+        if (rolePolicy.isSuperUser(currentUser) || 
+            currentUser.getRole() == UserRole.MANAGER) {
             return true;
         }
+        
+        // その他のロールは所属店舗のみ
         if (currentUser.getStores() == null || currentUser.getStores().isEmpty()) {
             return false;
         }

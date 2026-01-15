@@ -254,17 +254,18 @@ public class AuthorizationFacade {
     /**
      * 顧客検索の認可チェック
      * 
-     * <p>storeIdがnullの場合はADMINのみ許可、storeIdが指定されている場合は店舗へのアクセス権を検証する。</p>
+     * <p>storeIdがnullの場合はADMINとMANAGERのみ許可、storeIdが指定されている場合は店舗へのアクセス権を検証する。</p>
      * 
      * @param currentUser 現在のユーザー
      * @param storeId 店舗ID（nullの場合は全店舗検索）
      * @throws AccessDeniedException 認可不可の場合
      */
     public void checkCanSearchCustomers(User currentUser, UUID storeId) {
-        // storeIdがnullの場合はADMINのみ許可
+        // storeIdがnullの場合はADMINとMANAGERのみ許可
         if (storeId == null) {
-            if (currentUser.getRole() != com.example.fitnessgym_mg.entity.enums.UserRole.ADMIN) {
-                throw new com.example.fitnessgym_mg.exception.AccessDeniedException("全店舗の顧客を取得できるのはADMINのみです");
+            if (currentUser.getRole() != com.example.fitnessgym_mg.entity.enums.UserRole.ADMIN && 
+                currentUser.getRole() != com.example.fitnessgym_mg.entity.enums.UserRole.MANAGER) {
+                throw new com.example.fitnessgym_mg.exception.AccessDeniedException("全店舗の顧客を取得できるのはADMINとMANAGERのみです");
             }
         } else {
             // storeIdが指定されている場合、その店舗へのアクセス権を検証

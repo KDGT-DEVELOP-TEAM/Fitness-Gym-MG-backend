@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.fitnessgym_mg.dto.request.LoginRequest;
 import com.example.fitnessgym_mg.dto.response.LoginResponse;
+import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.exception.AuthenticationStateException;
 import com.example.fitnessgym_mg.repository.UserRepository;
@@ -26,6 +27,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 認証・認可REST APIコントローラー
@@ -52,8 +56,14 @@ public class AuthApiController {
     @GetMapping("/login")
     public ResponseEntity<?> getLogin() {
         // 既に認証されている場合はユーザー情報を返す
+        // storesも一緒に取得するため、emailで再取得
         return securityUtil.getCurrentUser()
-                .map(user -> ResponseEntity.ok(createLoginResponse(user, null)))
+                .map(user -> {
+                    // storesを読み込むために再取得
+                    User userWithStores = userRepository.findByEmailWithStores(user.getEmail())
+                            .orElse(user); // 取得できない場合は元のuserを使用
+                    return ResponseEntity.ok(createLoginResponse(userWithStores, null));
+                })
                 .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
 
@@ -90,7 +100,8 @@ public class AuthApiController {
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             // ユーザー情報を取得（認証成功後なので必ず存在するはず、active条件を適用）
-            User user = userRepository.findByEmailAndActiveTrue(request.getEmail())
+            // storesも一緒に取得するため、findByEmailWithStoresを使用
+            User user = userRepository.findByEmailWithStores(request.getEmail())
                 .orElseThrow(() -> {
                     log.error("認証成功後にユーザーが見つからない異常事態を検出");
                     return new AuthenticationStateException("ユーザー情報の取得に失敗しました");
@@ -141,11 +152,20 @@ public class AuthApiController {
      * LoginResponseを作成
      */
     private LoginResponse createLoginResponse(User user, String token) {
+        // stores関係が設定されているかチェック
+        Set<UUID> storeIds = Set.of();
+        if (user.getStores() != null && !user.getStores().isEmpty()) {
+            storeIds = user.getStores().stream()
+                    .map(Store::getId)
+                    .collect(Collectors.toSet());
+        }
+        
         return LoginResponse.builder()
                 .userId(user.getId())
                 .email(user.getEmail())
                 .name(user.getName())
                 .role(user.getRole())
+                .storeIds(storeIds)
                 .token(token)
                 .build();
     }

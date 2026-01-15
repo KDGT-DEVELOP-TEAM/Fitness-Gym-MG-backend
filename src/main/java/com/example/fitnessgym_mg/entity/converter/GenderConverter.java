@@ -4,7 +4,7 @@ import com.example.fitnessgym_mg.entity.enums.Gender;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 
-@Converter
+@Converter(autoApply = false)
 public class GenderConverter implements AttributeConverter<Gender, String> {
 
     @Override
