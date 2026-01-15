@@ -28,6 +28,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 顧客エンティティ
@@ -41,6 +42,7 @@ import lombok.ToString;
 @AllArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString(exclude = {"stores", "email", "phone", "medical", "taboo", "memo"}) // セキュリティ: リレーションと個人情報・機密情報をログに出力しない
+@Slf4j
 public class Customer {
 
 	@EqualsAndHashCode.Include
@@ -143,7 +145,7 @@ public class Customer {
 	/**
 	 * 論理削除日時（nullの場合は削除されていない）
 	 */
-	@jakarta.persistence.Transient
+	@Column(name = "deleted_at")
 	private OffsetDateTime deletedAt;
 
 	@PrePersist
@@ -189,7 +191,9 @@ public class Customer {
 	 */
 	public void validateDeletable() {
 		if (this.isActive()) {
-			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("有効な顧客は削除できません");
+			log.warn("削除不可: 顧客が有効な状態です。customerId={}, active={}", this.getId(), this.isActive());
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("有効な顧客は削除できません。先に無効化してください。");
 		}
+		log.debug("削除可能: 顧客は無効な状態です。customerId={}, active={}", this.getId(), this.isActive());
 	}
 }

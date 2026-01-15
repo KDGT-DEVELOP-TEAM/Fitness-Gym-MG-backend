@@ -181,7 +181,12 @@ public class CustomerService {
 
 		// バリデーション: 更新時のビジネスルールチェック
 		validateForUpdate(req);
-		customer.setFirstPostureGroupId(req.getFirstPostureGroupId());
+		
+		// firstPostureGroupIdの更新（nullの場合は既存の値を保持）
+		if (req.getFirstPostureGroupId() != null) {
+			customer.setFirstPostureGroupId(req.getFirstPostureGroupId());
+		}
+		// req.getFirstPostureGroupId()がnullの場合は、既存のfirstPostureGroupIdを保持（変更しない）
 
 		customerRepository.save(customer);
 	}
@@ -205,6 +210,10 @@ public class CustomerService {
 	public void delete(UUID id) {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		Customer customer = getAuthorizedCustomer(id, currentUser);
+		
+		// デバッグ: 顧客の状態をログに出力
+		log.debug("顧客削除リクエスト: customerId={}, active={}, deletedAt={}", 
+			id, customer.isActive(), customer.getDeletedAt());
 
 		// ドメイン制約の検証
 		customer.validateDeletable();
@@ -213,6 +222,7 @@ public class CustomerService {
 		// 注意: hasRelatedDataチェックは削除（論理削除のため、レッスンデータは統計に表示される）
 		customer.setDeletedAt(java.time.OffsetDateTime.now(ZoneOffset.UTC));
 		customerRepository.save(customer);
+		log.info("顧客削除成功: customerId={}", id);
 	}
 
 	// IDでエンティティを取得する（編集モーダル初期表示用など）
@@ -373,16 +383,15 @@ public class CustomerService {
 	/**
 	 * 顧客更新時のバリデーション
 	 * 
-	 * <p>更新時はfirstPostureGroupIdは必須。</p>
-	 * <p>既存顧客には必ず初回姿勢画像が登録されている必要があるため。</p>
+	 * <p>更新時はfirstPostureGroupIdは任意（null許容）。</p>
+	 * <p>初回姿勢画像は後から登録可能なため。</p>
 	 * 
 	 * @param req 顧客リクエストDTO
 	 * @throws InvalidRequestException バリデーションエラーの場合
 	 */
 	private void validateForUpdate(CustomerRequest req) {
-		if (req.getFirstPostureGroupId() == null) {
-			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("初回姿勢画像は必須です");
-		}
+		// firstPostureGroupIdは任意のため、バリデーションは不要
+		// 必要に応じて他のバリデーションを追加可能
 	}
 
 	/**

@@ -87,7 +87,7 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 		// Hibernateのエンティティマッピングと@SQLRestrictionの適用を完全に回避
 		String customerQuery = """
 				SELECT id, kana, name, gender, birthday, height, email, phone, address,
-				       medical, taboo, first_posture_group_id, memo, created_at, is_active
+				       medical, taboo, first_posture_group_id, memo, created_at, is_active, deleted_at
 				FROM customers
 				WHERE id = :customerId
 				""";
@@ -157,9 +157,35 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 				}
 			}
 			
-			customer.setActive(row[14] != null && Boolean.TRUE.equals(row[14]));
+			// is_active: PostgreSQLのboolean型をBooleanオブジェクトとして取得
+			// 様々な型に対応する堅牢な型変換を実装
+			boolean isActive = false;
+			if (row[14] != null) {
+				if (row[14] instanceof Boolean) {
+					isActive = (Boolean) row[14];
+				} else if (row[14] instanceof Number) {
+					// 数値型の場合（0=false, 1=true）
+					isActive = ((Number) row[14]).intValue() != 0;
+				} else if (row[14] instanceof String) {
+					// 文字列型の場合（"true"/"false"）
+					isActive = Boolean.parseBoolean(row[14].toString());
+				}
+			}
+			customer.setActive(isActive);
 			
-			// deleted_at と version はデータベースに存在しないため、null のままにする
+			// deleted_at: OffsetDateTime型として取得
+			if (row[15] != null) {
+				if (row[15] instanceof java.sql.Timestamp) {
+					customer.setDeletedAt(((java.sql.Timestamp) row[15]).toInstant()
+						.atOffset(java.time.ZoneOffset.UTC));
+				} else if (row[15] instanceof java.time.OffsetDateTime) {
+					customer.setDeletedAt((java.time.OffsetDateTime) row[15]);
+				} else if (row[15] instanceof java.time.ZonedDateTime) {
+					customer.setDeletedAt(((java.time.ZonedDateTime) row[15]).toOffsetDateTime());
+				}
+			}
+			
+			// version はデータベースに存在しないため、null のままにする
 		} catch (Exception mappingException) {
 			throw new RuntimeException("Customerエンティティのマッピングに失敗しました: customerId=" + customerId, mappingException);
 		}
