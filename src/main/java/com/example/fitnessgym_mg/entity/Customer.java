@@ -29,7 +29,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * 顧客エンティティ
@@ -43,7 +42,6 @@ import lombok.extern.slf4j.Slf4j;
 @AllArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true) // セキュリティ: 個人情報・機密情報は@EqualsAndHashCode.Excludeで個別に除外
 @ToString(exclude = {"stores", "email", "phone", "medical", "taboo", "memo"}) // セキュリティ: リレーションと個人情報・機密情報をログに出力しない
-@Slf4j
 public class Customer {
 
 	@EqualsAndHashCode.Include
