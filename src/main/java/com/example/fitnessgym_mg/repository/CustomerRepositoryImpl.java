@@ -18,6 +18,8 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.UUID;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Customerリポジトリのカスタム実装
  * 論理削除条件を自動的に適用する機能を提供
@@ -26,8 +28,11 @@ import java.util.UUID;
  * @SQLRestrictionを回避するためにネイティブSQLクエリを使用します。</p>
  * 
  * <p>注意: Spring Data JPAの命名規則により、このクラスは自動的にCustomerRepositoryの実装として認識されます。
- * @Repositoryアノテーションは不要です（付けると独立したBeanとして登録され、競合が発生します）。</p>
+ * @Repositoryアノテーションは不要です（付けると独立したBeanとして登録され、競合が発生します）。
+ * これはSimpleJpaRepositoryを継承しているためです。UserRepositoryImplとは異なり、@PersistenceContextを使用していないため、
+ * @Repositoryアノテーションは不要です。</p>
  */
+@Slf4j
 public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.util.UUID> 
 		implements CustomerRepositoryCustom {
 	
@@ -56,10 +61,12 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 	@Override
 	public List<Customer> findAllNotDeleted() {
 		// @SQLRestriction("deleted_at IS NULL")を回避するためにネイティブSQLクエリを使用
+		// ただし、論理削除条件は明示的に適用する必要がある
 		// データベースのcustomersテーブルにdeleted_atカラムが存在しないため、
 		// Hibernateの自動的な@SQLRestrictionの適用を回避する必要がある
 		// ネイティブクエリを使用してCustomerエンティティを直接取得
-		String nativeQuery = "SELECT * FROM customers";
+		// 重要: 論理削除条件（WHERE deleted_at IS NULL）を必ず含めること
+		String nativeQuery = "SELECT * FROM customers WHERE deleted_at IS NULL";
 		
 		@SuppressWarnings("unchecked")
 		List<Customer> results = entityManager.createNativeQuery(nativeQuery, Customer.class).getResultList();
@@ -72,7 +79,8 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 		// @SQLRestriction("deleted_at IS NULL")を完全に回避するためにネイティブSQLクエリを使用
 		// Object[]を返すことで、Hibernateのエンティティマッピングを完全に回避
 		// オプション選択用なので、idとnameのみを取得
-		String nativeQuery = "SELECT id, name FROM customers";
+		// 重要: 論理削除条件（WHERE deleted_at IS NULL）を必ず含めること
+		String nativeQuery = "SELECT id, name FROM customers WHERE deleted_at IS NULL";
 		
 		@SuppressWarnings("unchecked")
 		List<Object[]> results = entityManager.createNativeQuery(nativeQuery).getResultList();
@@ -85,11 +93,16 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 		// @SQLRestriction("deleted_at IS NULL")を回避するためにネイティブSQLクエリを使用
 		// Object[]として取得し、手動でCustomerエンティティを構築することで、
 		// Hibernateのエンティティマッピングと@SQLRestrictionの適用を完全に回避
+		// 
+		// 注意: このメソッドは手動でエンティティマッピングを行っているため、保守性が低い。
+		// 将来的には、DTO Projectionや専用のマッピングライブラリ（MapStructなど）の導入を検討すること。
+		// または、@SQLRestrictionを回避する別の方法を検討すること。
 		String customerQuery = """
 				SELECT id, kana, name, gender, birthday, height, email, phone, address,
 				       medical, taboo, first_posture_group_id, memo, created_at, is_active, deleted_at
 				FROM customers
 				WHERE id = :customerId
+				  AND deleted_at IS NULL
 				""";
 		
 		@SuppressWarnings("unchecked")
@@ -260,25 +273,28 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 					.setParameter("customerId", customerId)
 					.getSingleResult();
 			
-			// PostgreSQLではEXISTSの結果はboolean型だが、JPAのcreateNativeQueryでは様々な型で返される可能性がある
-			if (result instanceof Boolean) {
-				return (Boolean) result;
-			} else if (result instanceof Number) {
-				return ((Number) result).intValue() != 0;
-			} else if (result instanceof String) {
-				String str = ((String) result).trim().toLowerCase();
-				return "true".equals(str) || "t".equals(str) || "1".equals(str);
-			}
-			// 予期しない型の場合はfalseを返す
-			System.err.println("Warning: existsManagerCustomerInSameStoreNative returned unexpected type: " + (result != null ? result.getClass().getName() : "null"));
-			return false;
-		} catch (jakarta.persistence.NoResultException e) {
-			return false;
-		} catch (Exception e) {
-			System.err.println("Error in existsManagerCustomerInSameStoreNative: managerId=" + managerId + ", customerId=" + customerId + ", error=" + e.getMessage());
-			e.printStackTrace();
-			return false;
+		// PostgreSQLではEXISTSの結果はboolean型だが、JPAのcreateNativeQueryでは様々な型で返される可能性がある
+		if (result instanceof Boolean) {
+			return (Boolean) result;
+		} else if (result instanceof Number) {
+			return ((Number) result).intValue() != 0;
+		} else if (result instanceof String) {
+			String str = ((String) result).trim().toLowerCase();
+			return "true".equals(str) || "t".equals(str) || "1".equals(str);
 		}
+		// 予期しない型の場合は警告ログを出力してfalseを返す
+		// これにより、データベースの変更や設定ミスを検出できる
+		log.warn("existsManagerCustomerInSameStoreNative returned unexpected type: {}", 
+			result != null ? result.getClass().getName() : "null");
+		return false;
+	} catch (jakarta.persistence.NoResultException e) {
+		return false;
+	} catch (Exception e) {
+		// エラーをログに記録（スタックトレースは自動出力される）
+		log.error("Error in existsManagerCustomerInSameStoreNative: managerId={}, customerId={}", 
+			managerId, customerId, e);
+		return false;
+	}
 	}
 
 	@Override
@@ -303,32 +319,36 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 					.setParameter("customerId", customerId)
 					.getSingleResult();
 			
-			// PostgreSQLではEXISTSの結果はboolean型だが、JPAのcreateNativeQueryでは様々な型で返される可能性がある
-			if (result instanceof Boolean) {
-				return (Boolean) result;
-			} else if (result instanceof Number) {
-				return ((Number) result).intValue() != 0;
-			} else if (result instanceof String) {
-				String str = ((String) result).trim().toLowerCase();
-				return "true".equals(str) || "t".equals(str) || "1".equals(str);
-			}
-			// 予期しない型の場合はfalseを返す
-			System.err.println("Warning: existsTrainerCustomerInSameStoreNative returned unexpected type: " + (result != null ? result.getClass().getName() : "null"));
-			return false;
-		} catch (jakarta.persistence.NoResultException e) {
-			return false;
-		} catch (Exception e) {
-			System.err.println("Error in existsTrainerCustomerInSameStoreNative: trainerId=" + trainerId + ", customerId=" + customerId + ", error=" + e.getMessage());
-			e.printStackTrace();
-			return false;
+		// PostgreSQLではEXISTSの結果はboolean型だが、JPAのcreateNativeQueryでは様々な型で返される可能性がある
+		if (result instanceof Boolean) {
+			return (Boolean) result;
+		} else if (result instanceof Number) {
+			return ((Number) result).intValue() != 0;
+		} else if (result instanceof String) {
+			String str = ((String) result).trim().toLowerCase();
+			return "true".equals(str) || "t".equals(str) || "1".equals(str);
 		}
+		// 予期しない型の場合は警告ログを出力してfalseを返す
+		// これにより、データベースの変更や設定ミスを検出できる
+		log.warn("existsTrainerCustomerInSameStoreNative returned unexpected type: {}", 
+			result != null ? result.getClass().getName() : "null");
+		return false;
+	} catch (jakarta.persistence.NoResultException e) {
+		return false;
+	} catch (Exception e) {
+		// エラーをログに記録（スタックトレースは自動出力される）
+		log.error("Error in existsTrainerCustomerInSameStoreNative: trainerId={}, customerId={}", 
+			trainerId, customerId, e);
+		return false;
+	}
 	}
 
 	@Override
 	public boolean existsByEmailNative(String email) {
 		// @SQLRestriction("deleted_at IS NULL")を回避するためにネイティブSQLクエリを使用
 		// メールアドレスの存在確認
-		String query = "SELECT EXISTS (SELECT 1 FROM customers WHERE email = :email)";
+		// 重要: 論理削除条件（AND deleted_at IS NULL）を必ず含めること
+		String query = "SELECT EXISTS (SELECT 1 FROM customers WHERE email = :email AND deleted_at IS NULL)";
 		
 		try {
 			Object result = entityManager
@@ -353,7 +373,8 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 	public boolean existsByEmailAndIdNotNative(String email, UUID id) {
 		// @SQLRestriction("deleted_at IS NULL")を回避するためにネイティブSQLクエリを使用
 		// メールアドレスの存在確認（指定ID以外）
-		String query = "SELECT EXISTS (SELECT 1 FROM customers WHERE email = :email AND id != :id)";
+		// 重要: 論理削除条件（AND deleted_at IS NULL）を必ず含めること
+		String query = "SELECT EXISTS (SELECT 1 FROM customers WHERE email = :email AND id != :id AND deleted_at IS NULL)";
 		
 		try {
 			Object result = entityManager

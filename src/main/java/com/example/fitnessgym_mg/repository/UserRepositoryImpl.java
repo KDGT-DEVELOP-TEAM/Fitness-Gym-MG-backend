@@ -111,6 +111,10 @@ public class UserRepositoryImpl implements UserRepositoryCustom {
 		// stores関係を明示的にロード（LazyInitializationExceptionを防ぐ）
 		// ネイティブクエリで取得したエンティティは管理外の可能性があるため、
 		// 別途storesを取得して設定する
+		// 
+		// 注意: この実装はN+1問題を回避するために、全ユーザーのstoresを一度のクエリで取得している。
+		// 現状は適切な実装だが、将来的に大量のユーザーを取得する場合、メモリ使用量が増加する可能性がある。
+		// パフォーマンス問題が発生した場合は、DTO Projectionへの切り替えを検討すること。
 		if (!users.isEmpty()) {
 			// 全ユーザーIDを取得
 			List<UUID> userIds = users.stream().map(User::getId).toList();

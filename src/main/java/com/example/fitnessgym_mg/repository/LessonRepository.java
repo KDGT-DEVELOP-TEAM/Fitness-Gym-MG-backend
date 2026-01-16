@@ -311,11 +311,12 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	 * 
 	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
 	 * <p>データベースに`deleted_at`カラムが存在しない場合でも、エラーが発生しません。</p>
+	 * <p>重要: 論理削除条件（AND c.deleted_at IS NULL）を必ず含めること。</p>
 	 * 
 	 * @param lessonId レッスンID
 	 * @return CustomerのIDと名前のペア（存在しない場合はnull）
 	 */
-	@Query(nativeQuery = true, value = "SELECT c.id, c.name FROM lessons l JOIN customers c ON l.customer_id = c.id WHERE l.id = :lessonId")
+	@Query(nativeQuery = true, value = "SELECT c.id, c.name FROM lessons l JOIN customers c ON l.customer_id = c.id WHERE l.id = :lessonId AND c.deleted_at IS NULL")
 	java.util.Optional<Object[]> findCustomerIdAndNameByLessonId(@Param("lessonId") UUID lessonId);
 
 	/**
@@ -323,11 +324,12 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	 * 
 	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
 	 * <p>N+1問題を回避するため、複数のレッスンIDに対して一度のクエリでCustomer情報を取得します。</p>
+	 * <p>重要: 論理削除条件（AND c.deleted_at IS NULL）を必ず含めること。</p>
 	 * 
 	 * @param lessonIds レッスンIDのリスト
 	 * @return レッスンIDとCustomerのID、名前のマッピング（レッスンID -> [Customer ID, Customer Name]）
 	 */
-	@Query(nativeQuery = true, value = "SELECT l.id as lesson_id, c.id as customer_id, c.name as customer_name FROM lessons l JOIN customers c ON l.customer_id = c.id WHERE l.id IN :lessonIds")
+	@Query(nativeQuery = true, value = "SELECT l.id as lesson_id, c.id as customer_id, c.name as customer_name FROM lessons l JOIN customers c ON l.customer_id = c.id WHERE l.id IN :lessonIds AND c.deleted_at IS NULL")
 	java.util.List<Object[]> findCustomerIdAndNameByLessonIds(@Param("lessonIds") java.util.List<UUID> lessonIds);
 
 	/**
