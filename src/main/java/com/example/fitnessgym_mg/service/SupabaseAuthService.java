@@ -15,14 +15,14 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
+import com.example.fitnessgym_mg.util.EmailHashUtil;
 
 /**
  * Supabase Auth APIとの通信を担当するサービス
@@ -87,7 +87,7 @@ public class SupabaseAuthService {
                     // 結果が1件以上返された場合、ユーザーが存在する
                     boolean exists = !users.isEmpty();
                     log.debug("User existence check in Supabase Auth: emailHash={}, exists={}", 
-                        hashEmail(email), exists);
+                        EmailHashUtil.hashEmail(email), exists);
                     return exists;
                 }
             }
@@ -95,12 +95,12 @@ public class SupabaseAuthService {
             return false;
         } catch (HttpClientErrorException.NotFound e) {
             // 404はユーザーが存在しないことを意味する
-            log.debug("User not found in Supabase Auth: emailHash={}", hashEmail(email));
+            log.debug("User not found in Supabase Auth: emailHash={}", EmailHashUtil.hashEmail(email));
             return false;
         } catch (Exception e) {
             // エラーが発生した場合は、存在チェックに失敗したとみなす
             log.warn("Failed to check user existence in Supabase Auth: emailHash={}, error={}", 
-                hashEmail(email), e.getMessage());
+                EmailHashUtil.hashEmail(email), e.getMessage());
             // エラーが発生しても、ユーザー作成を試みる（既存ユーザーの場合はSupabase側でエラーになる）
             return false;
         }
@@ -157,16 +157,16 @@ public class SupabaseAuthService {
             body.put("email_confirm", true); // メール確認をスキップ
             // 注意: user_metadataとapp_metadataは、Supabase側のデータベースエラーを引き起こす可能性があるため、送信しない
             
-            log.info("Supabase Auth API request: url={}, emailHash={}, email_confirm=true", url, hashEmail(email));
+            log.info("Supabase Auth API request: url={}, emailHash={}, email_confirm=true", url, EmailHashUtil.hashEmail(email));
             
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
             
-            log.info("Sending POST request to Supabase Auth API: url={}, emailHash={}", url, hashEmail(email));
+            log.info("Sending POST request to Supabase Auth API: url={}, emailHash={}", url, EmailHashUtil.hashEmail(email));
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 url, HttpMethod.POST, entity, new ParameterizedTypeReference<Map<String, Object>>() {}
             );
             
-            log.info("Received response from Supabase Auth API: status={}, emailHash={}", response.getStatusCode(), hashEmail(email));
+            log.info("Received response from Supabase Auth API: status={}, emailHash={}", response.getStatusCode(), EmailHashUtil.hashEmail(email));
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Map<String, Object> responseBody = response.getBody();
@@ -174,11 +174,11 @@ public class SupabaseAuthService {
                 
                 if (idObj instanceof String) {
                     UUID authUserId = UUID.fromString((String) idObj);
-                    log.info("Successfully created user in Supabase Auth: emailHash={}, authUserId={}", hashEmail(email), authUserId);
+                    log.info("Successfully created user in Supabase Auth: emailHash={}, authUserId={}", EmailHashUtil.hashEmail(email), authUserId);
                     return authUserId;
                 } else if (idObj instanceof UUID) {
                     UUID authUserId = (UUID) idObj;
-                    log.info("Successfully created user in Supabase Auth: emailHash={}, authUserId={}", hashEmail(email), authUserId);
+                    log.info("Successfully created user in Supabase Auth: emailHash={}, authUserId={}", EmailHashUtil.hashEmail(email), authUserId);
                     return authUserId;
                 } else {
                     log.error("Unexpected id type in Supabase Auth response: {}", idObj != null ? idObj.getClass() : "null");
@@ -194,13 +194,13 @@ public class SupabaseAuthService {
         } catch (HttpClientErrorException.Unauthorized e) {
             String errorBody = e.getResponseBodyAsString();
             log.error("Unauthorized error calling Supabase Auth API: emailHash={}, status={}, url={}, response={}", 
-                hashEmail(email), e.getStatusCode(), url, errorBody);
+                EmailHashUtil.hashEmail(email), e.getStatusCode(), url, errorBody);
             throw new com.example.fitnessgym_mg.exception.ConfigurationException(
                 "Supabase Auth API認証に失敗しました。Service Role Keyが正しく設定されているか確認してください。", e);
         } catch (HttpClientErrorException e) {
             String errorBody = e.getResponseBodyAsString();
             log.error("HTTP client error calling Supabase Auth API: emailHash={}, status={}, url={}, response={}", 
-                hashEmail(email), e.getStatusCode(), url, errorBody);
+                EmailHashUtil.hashEmail(email), e.getStatusCode(), url, errorBody);
             
             // 400 Bad Requestの場合、より詳細なエラーメッセージを提供
             if (e.getStatusCode().value() == 400) {
@@ -218,7 +218,7 @@ public class SupabaseAuthService {
         } catch (HttpServerErrorException e) {
             String errorBody = e.getResponseBodyAsString();
             log.error("HTTP server error calling Supabase Auth API: emailHash={}, status={}, url={}, response={}", 
-                hashEmail(email), e.getStatusCode(), url, errorBody);
+                EmailHashUtil.hashEmail(email), e.getStatusCode(), url, errorBody);
             
             // エラーメッセージを解析して、より詳細な情報を提供
             String errorMessage = "Supabase Auth APIサーバーエラー";
@@ -254,45 +254,15 @@ public class SupabaseAuthService {
             throw new com.example.fitnessgym_mg.exception.SystemException(errorMessage + " (詳細: " + errorBody + ")", e);
         } catch (RestClientException e) {
             log.error("Error calling Supabase Auth API to create user: emailHash={}, url={}, error={}", 
-                hashEmail(email), url, e.getMessage(), e);
+                EmailHashUtil.hashEmail(email), url, e.getMessage(), e);
             throw new com.example.fitnessgym_mg.exception.SystemException(
                 "Supabase Auth APIへの接続に失敗しました: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Unexpected error creating user in Supabase Auth: emailHash={}, url={}, error={}", 
-                hashEmail(email), url, e.getMessage(), e);
+                EmailHashUtil.hashEmail(email), url, e.getMessage(), e);
             throw new com.example.fitnessgym_mg.exception.SystemException(
                 "Supabase Authでのユーザー作成中に予期しないエラーが発生しました", e);
         }
     }
     
-    /**
-     * メールアドレスをSHA-256ハッシュ化（ログ出力用）
-     * 
-     * <p>個人情報保護のため、ログにはメールアドレスを直接出力せず、ハッシュ値を出力する。</p>
-     * 
-     * @param email メールアドレス
-     * @return SHA-256ハッシュ値（16進数文字列）
-     */
-    private String hashEmail(String email) {
-        if (email == null) {
-            return "null";
-        }
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(email.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hash) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) {
-                    hexString.append('0');
-                }
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
-            // SHA-256は標準アルゴリズムなので、この例外は発生しないはず
-            log.error("SHA-256 algorithm not found", e);
-            return "hash_error";
-        }
-    }
 }

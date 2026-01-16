@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -58,6 +59,7 @@ public class PostureImageApiController {
      * <p>positionパラメータ: フロントエンドから小文字コード（front/right/back/left）を受け取り、
      * PostureImagePosition.fromCode()でEnumに変換します。不正な値の場合は400エラーを返します。</p>
      */
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<PostureImageUploadResponse> uploadImage(
         @RequestParam MultipartFile file,
@@ -100,6 +102,7 @@ public class PostureImageApiController {
      * <p>Controllerの責務: HTTPリクエスト/レスポンスの制御のみ。
      * 認可チェックはService層で実施される。</p>
      */
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
     @GetMapping("/{imageId}/signed-url")
     public ResponseEntity<SignedUrlResponse> getSignedUrl(
         @PathVariable UUID imageId,
@@ -128,6 +131,7 @@ public class PostureImageApiController {
      * <p>Controllerの責務: HTTPリクエスト/レスポンスの制御のみ。
      * 認可チェックはService層で実施される。</p>
      */
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
     @PostMapping("/signed-urls")
     public ResponseEntity<BatchSignedUrlResponse> getBatchSignedUrls(
         @RequestBody @Valid BatchSignedUrlRequest request
@@ -154,6 +158,7 @@ public class PostureImageApiController {
      * <p>Controllerの責務: HTTPリクエスト/レスポンスの制御のみ。
      * 認可チェックはService層で実施される。</p>
      */
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
     @DeleteMapping("/{imageId}")
     public ResponseEntity<Void> deleteImage(@PathVariable UUID imageId) {
         log.debug("Delete image request: imageId={}", imageId);

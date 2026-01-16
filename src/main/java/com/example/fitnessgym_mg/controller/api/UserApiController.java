@@ -27,7 +27,6 @@ import com.example.fitnessgym_mg.dto.response.UserResponse;
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.UserRole;
 import com.example.fitnessgym_mg.entity.enums.UserSortType;
-import com.example.fitnessgym_mg.exception.InvalidRequestException;
 import com.example.fitnessgym_mg.service.AccountAuthorizationService;
 import com.example.fitnessgym_mg.service.AccountService;
 import com.example.fitnessgym_mg.util.SecurityUtil;

@@ -22,7 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.HttpStatus;
 
 import com.example.fitnessgym_mg.dto.response.LessonResponse;
-import com.example.fitnessgym_mg.service.AuthorizationFacade;
 import com.example.fitnessgym_mg.service.LessonService;
 
 import lombok.RequiredArgsConstructor;
@@ -39,8 +38,6 @@ import lombok.extern.slf4j.Slf4j;
 public class LessonApiController {
 
 	private final LessonService lessonService;
-	@SuppressWarnings("unused")
-	private final AuthorizationFacade authorizationFacade;
 
 	// ========== REST API エンドポイント ==========
 

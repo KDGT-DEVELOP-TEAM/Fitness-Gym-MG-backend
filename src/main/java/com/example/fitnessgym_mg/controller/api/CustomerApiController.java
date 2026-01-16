@@ -1,8 +1,5 @@
 package com.example.fitnessgym_mg.controller.api;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,8 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.fitnessgym_mg.dto.request.CustomerRequest;
 import com.example.fitnessgym_mg.dto.response.CustomerResponse;
 import com.example.fitnessgym_mg.entity.enums.CustomerSort;
-import com.example.fitnessgym_mg.exception.EntityNotFoundException;
 import com.example.fitnessgym_mg.service.CustomerService;
+import com.example.fitnessgym_mg.util.EmailHashUtil;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -102,16 +99,11 @@ public class CustomerApiController {
 	@PreAuthorize("hasRole('ADMIN')")
 	@PostMapping("/admin/customers")
 	public ResponseEntity<Void> createAdminCustomer(@Valid @RequestBody CustomerRequest request) {
-		log.debug("顧客作成リクエスト受信: name={}, emailHash={}, storeId={}", request.getName(), hashEmail(request.getEmail()), request.getStoreId());
-		try {
-			// ADMINの場合、リクエストボディのstoreIdを使用（nullの場合は店舗に紐付けない）
-			service.create(request, request.getStoreId());
-			log.info("顧客作成成功: name={}, emailHash={}, storeId={}", request.getName(), hashEmail(request.getEmail()), request.getStoreId());
-			return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
-		} catch (Exception e) {
-			log.error("顧客作成失敗: name={}, emailHash={}, storeId={}, error={}", request.getName(), hashEmail(request.getEmail()), request.getStoreId(), e.getMessage(), e);
-			throw e; // 例外を再スローしてGlobalExceptionHandlerで処理
-		}
+		log.debug("顧客作成リクエスト受信: name={}, emailHash={}, storeId={}", request.getName(), EmailHashUtil.hashEmail(request.getEmail()), request.getStoreId());
+		// ADMINの場合、リクエストボディのstoreIdを使用（nullの場合は店舗に紐付けない）
+		service.create(request, request.getStoreId());
+		log.info("顧客作成成功: name={}, emailHash={}, storeId={}", request.getName(), EmailHashUtil.hashEmail(request.getEmail()), request.getStoreId());
+		return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
 	}
 
 	/**
@@ -182,17 +174,12 @@ public class CustomerApiController {
 	@PostMapping("/manager/customers")
 	public ResponseEntity<Void> createManagerCustomer(
 			@Valid @RequestBody CustomerRequest request) {
-		log.debug("顧客作成リクエスト受信: name={}, emailHash={}, storeId={}", request.getName(), hashEmail(request.getEmail()), request.getStoreId());
-		try {
-			// MANAGERの場合、リクエストボディのstoreIdを使用（nullの場合は店舗に紐付けない）
-			// 認可チェックはCustomerService内で実施
-			service.create(request, request.getStoreId());
-			log.info("顧客作成成功: name={}, emailHash={}, storeId={}", request.getName(), hashEmail(request.getEmail()), request.getStoreId());
-			return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
-		} catch (Exception e) {
-			log.error("顧客作成失敗: name={}, emailHash={}, storeId={}, error={}", request.getName(), hashEmail(request.getEmail()), request.getStoreId(), e.getMessage(), e);
-			throw e; // 例外を再スローしてGlobalExceptionHandlerで処理
-		}
+		log.debug("顧客作成リクエスト受信: name={}, emailHash={}, storeId={}", request.getName(), EmailHashUtil.hashEmail(request.getEmail()), request.getStoreId());
+		// MANAGERの場合、リクエストボディのstoreIdを使用（nullの場合は店舗に紐付けない）
+		// 認可チェックはCustomerService内で実施
+		service.create(request, request.getStoreId());
+		log.info("顧客作成成功: name={}, emailHash={}, storeId={}", request.getName(), EmailHashUtil.hashEmail(request.getEmail()), request.getStoreId());
+		return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
 	}
 
 	/**
@@ -253,18 +240,8 @@ public class CustomerApiController {
 	@PreAuthorize("@authorizationFacade.canAccessCustomer(authentication, #customerId)")
 	@GetMapping("/customers/{customer_id}/profile")
 	public ResponseEntity<CustomerResponse> getCustomerProfile(@PathVariable("customer_id") UUID customerId) {
-		try {
-			CustomerResponse customer = service.getCustomerById(customerId);
-			if (customer == null) {
-				return ResponseEntity.notFound().build();
-			}
-			return ResponseEntity.ok(customer);
-		} catch (EntityNotFoundException e) {
-			return ResponseEntity.notFound().build();
-		} catch (Exception e) {
-			log.error("顧客プロフィール取得エラー", e);
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-		}
+		CustomerResponse customer = service.getCustomerById(customerId);
+		return ResponseEntity.ok(customer);
 	}
 
 	/**
@@ -278,36 +255,5 @@ public class CustomerApiController {
 			@Valid @RequestBody CustomerRequest request) {
 		service.update(customerId, request);
 		return ResponseEntity.ok().build();
-	}
-
-	/**
-	 * メールアドレスをSHA-256ハッシュ化（ログ出力用）
-	 * 
-	 * <p>個人情報保護のため、ログにはメールアドレスを直接出力せず、ハッシュ値を出力する。</p>
-	 * 
-	 * @param email メールアドレス
-	 * @return SHA-256ハッシュ値（16進数文字列）
-	 */
-	private String hashEmail(String email) {
-		if (email == null) {
-			return "null";
-		}
-		try {
-			MessageDigest digest = MessageDigest.getInstance("SHA-256");
-			byte[] hash = digest.digest(email.getBytes(StandardCharsets.UTF_8));
-			StringBuilder hexString = new StringBuilder();
-			for (byte b : hash) {
-				String hex = Integer.toHexString(0xff & b);
-				if (hex.length() == 1) {
-					hexString.append('0');
-				}
-				hexString.append(hex);
-			}
-			return hexString.toString();
-		} catch (NoSuchAlgorithmException e) {
-			// SHA-256は標準アルゴリズムなので、この例外は発生しないはず
-			log.error("SHA-256 algorithm not found", e);
-			return "hash_error";
-		}
 	}
 }

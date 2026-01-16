@@ -3,9 +3,10 @@ package com.example.fitnessgym_mg.filter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import com.example.fitnessgym_mg.util.EmailHashUtil;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -104,7 +105,7 @@ public class LoginAttemptFilter extends OncePerRequestFilter {
             try {
                 AtomicInteger attemptsCounter = attemptsCache.get(cacheKey);
                 attempts = attemptsCounter.get();
-            } catch (com.google.common.cache.CacheException e) {
+            } catch (com.google.common.util.concurrent.UncheckedExecutionException e) {
                 // キャッシュの永続的なエラーの場合のみブロック
                 log.error("Rate limit check failed for cacheKey: {}", maskCacheKey(cacheKey), e);
                 sendRateLimitExceeded(response, timeWindowMinutes);
@@ -125,7 +126,7 @@ public class LoginAttemptFilter extends OncePerRequestFilter {
             // 試行回数をインクリメント（原子操作）
             try {
                 attemptsCache.get(cacheKey).incrementAndGet();
-            } catch (com.google.common.cache.CacheException e) {
+            } catch (com.google.common.util.concurrent.UncheckedExecutionException e) {
                 // キャッシュの永続的なエラーの場合のみブロック
                 log.error("Failed to increment attempts cache for cacheKey: {}", 
                     maskCacheKey(cacheKey), e);
@@ -260,7 +261,7 @@ public class LoginAttemptFilter extends OncePerRequestFilter {
     private String generateCacheKey(String clientIP, String email, ContentCachingRequestWrapper request) {
         if (email != null && !email.isEmpty()) {
             // emailが取得できる場合: ハッシュ化してから使用（PII保護）
-            String emailHash = hashEmail(email.toLowerCase());
+            String emailHash = EmailHashUtil.hashEmail(email.toLowerCase());
             return clientIP + ":" + emailHash;
         }
         
@@ -279,36 +280,6 @@ public class LoginAttemptFilter extends OncePerRequestFilter {
         return clientIP;
     }
     
-    /**
-     * メールアドレスをSHA-256ハッシュ化（キャッシュキー用）
-     * 
-     * <p>個人情報保護のため、キャッシュキーにはメールアドレスを直接使用せず、ハッシュ値を使用する。</p>
-     * 
-     * @param email メールアドレス
-     * @return SHA-256ハッシュ値（16進数文字列）
-     */
-    private String hashEmail(String email) {
-        if (email == null) {
-            return "null";
-        }
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(email.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hash) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) {
-                    hexString.append('0');
-                }
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
-            // SHA-256は標準アルゴリズムなので、この例外は発生しないはず
-            log.error("SHA-256 algorithm not found", e);
-            return "hash_error";
-        }
-    }
     
     /**
      * レートリミット超過エラーレスポンスを返す

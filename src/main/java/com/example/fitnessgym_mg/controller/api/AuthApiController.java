@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -53,6 +54,7 @@ public class AuthApiController {
      * 認証状態の確認
      * 既に認証されている場合はユーザー情報を返す
      */
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/login")
     public ResponseEntity<?> getLogin() {
         // 既に認証されている場合はユーザー情報を返す
@@ -139,6 +141,7 @@ public class AuthApiController {
      * JWTはステートレスなので、サーバー側では特に処理しない
      * クライアント側でlocalStorageからトークンを削除することでログアウトが完了する
      */
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/logout")
     public ResponseEntity<Void> logout() {
         // セキュリティコンテキストをクリア

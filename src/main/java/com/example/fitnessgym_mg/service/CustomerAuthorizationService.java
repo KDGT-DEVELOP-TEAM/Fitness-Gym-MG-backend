@@ -71,8 +71,8 @@ public class CustomerAuthorizationService {
 			return true;
 		}
 
-		// MANAGER: 自分の店舗に所属する顧客のみアクセス可能
-		// 顧客が存在しない、または店舗に所属していない場合はfalseを返す
+		// MANAGER: 全店舗の顧客にアクセス可能（トレーナーと同様のロジック）
+		// 顧客が存在し、論理削除されていない、かつ有効な場合にアクセス可能
 		if (currentUser.getRole() == UserRole.MANAGER) {
 			boolean result = canManagerAccessCustomer(currentUser, customerId);
 			log.debug("Authorization check: MANAGER access={} for customerId={}", result, customerId);
@@ -96,22 +96,33 @@ public class CustomerAuthorizationService {
 	/**
 	 * マネージャーが顧客にアクセス可能か確認
 	 * 
-	 * <p>N+1問題を回避するため、RepositoryレベルのEXISTSクエリを使用。</p>
+	 * <p>マネージャーは全店舗の顧客にアクセス可能（トレーナーと同様のロジック）</p>
+	 * <p>顧客が存在し、論理削除されていない、かつ有効な場合にアクセス可能</p>
 	 * 
 	 * @param manager マネージャー
 	 * @param customerId 顧客ID
 	 * @return アクセス可能な場合 true
 	 */
 	private boolean canManagerAccessCustomer(User manager, UUID customerId) {
-		// RepositoryレベルのEXISTSクエリで、マネージャーと顧客が同じ店舗に所属しているか確認
-		// @SQLRestrictionを回避するため、ネイティブSQLクエリを使用するexistsManagerCustomerInSameStoreNative()を使用
-		// CustomerRepositoryをCustomerRepositoryCustomにキャストして直接呼び出す
+		// マネージャーは全店舗の顧客にアクセス可能（トレーナーと同様のロジック）
+		// 顧客が存在し、論理削除されていない、かつ有効な場合にアクセス可能
 		try {
 			if (customerRepository instanceof CustomerRepositoryCustom) {
-				boolean result = ((CustomerRepositoryCustom) customerRepository)
-						.existsManagerCustomerInSameStoreNative(manager.getId(), customerId);
-				log.debug("canManagerAccessCustomer: managerId={}, customerId={}, result={}", 
-						manager.getId(), customerId, result);
+				// 顧客が存在し、論理削除されていない、かつ有効かを確認
+				java.util.Optional<Customer> customerOpt = ((CustomerRepositoryCustom) customerRepository)
+						.findByIdWithStoresNative(customerId);
+				
+				if (customerOpt.isEmpty()) {
+					log.debug("canManagerAccessCustomer: customer not found - managerId={}, customerId={}", 
+							manager.getId(), customerId);
+					return false;
+				}
+				
+				Customer customer = customerOpt.get();
+				// 顧客が有効で、論理削除されていない場合にアクセス可能
+				boolean result = customer.isActive() && !customer.isDeleted();
+				log.debug("canManagerAccessCustomer: managerId={}, customerId={}, active={}, deleted={}, result={}", 
+						manager.getId(), customerId, customer.isActive(), customer.isDeleted(), result);
 				return result;
 			} else {
 				log.error("CustomerRepository does not implement CustomerRepositoryCustom");

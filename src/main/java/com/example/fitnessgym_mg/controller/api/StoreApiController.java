@@ -1,7 +1,6 @@
 package com.example.fitnessgym_mg.controller.api;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -10,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.fitnessgym_mg.dto.response.StoreResponse;
-import com.example.fitnessgym_mg.repository.StoreRepository;
+import com.example.fitnessgym_mg.service.AccountService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class StoreApiController {
 
-	private final StoreRepository storeRepository;
+	private final AccountService accountService;
 
 	/**
 	 * GET /api/stores
@@ -40,9 +39,7 @@ public class StoreApiController {
 	public ResponseEntity<List<StoreResponse>> getStores() {
 		log.debug("店舗一覧取得リクエスト");
 		
-		List<StoreResponse> stores = storeRepository.findAll().stream()
-				.map(StoreResponse::fromEntity)
-				.collect(Collectors.toList());
+		List<StoreResponse> stores = accountService.getAllStoresForOptions();
 		
 		log.info("店舗一覧取得成功: count={}", stores.size());
 		return ResponseEntity.ok(stores);

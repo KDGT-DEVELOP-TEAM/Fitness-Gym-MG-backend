@@ -34,13 +34,10 @@ import com.example.fitnessgym_mg.repository.CustomerRepository;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.StoreRepository;
 import com.example.fitnessgym_mg.repository.UserRepository;
+import com.example.fitnessgym_mg.util.EmailHashUtil;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 
 @Slf4j
 @Service
@@ -233,6 +230,20 @@ public class AccountService {
 		return userRepository.findByEmailWithStores(email);
 	}
 
+	// --- 店舗一覧取得（オプション選択用） ---
+	/**
+	 * オプション選択用の全店舗一覧を取得
+	 * ページングなしで全店舗を返す
+	 * 
+	 * @return 全店舗のリスト（StoreResponse形式）
+	 */
+	@Transactional(readOnly = true)
+	public List<com.example.fitnessgym_mg.dto.response.StoreResponse> getAllStoresForOptions() {
+		return storeRepository.findAll().stream()
+				.map(com.example.fitnessgym_mg.dto.response.StoreResponse::fromEntity)
+				.collect(Collectors.toList());
+	}
+
 	// --- Admin用: ユーザー作成 ---
 	@Transactional
 	public void createByAdmin(UserRequest req, Set<UUID> storeIds) {
@@ -287,21 +298,21 @@ public class AccountService {
 
 		// メールアドレスの正規化
 		String normalizedEmail = req.getEmail().trim().toLowerCase();
-		log.info("Starting user creation process: emailHash={}", hashEmail(normalizedEmail));
+		log.info("Starting user creation process: emailHash={}", EmailHashUtil.hashEmail(normalizedEmail));
 		
 		// メールアドレスの重複チェック（ローカルDB - Userテーブル）
 		boolean userExists = userRepository.findByEmail(normalizedEmail).isPresent();
-		log.info("User table check: emailHash={}, exists={}", hashEmail(normalizedEmail), userExists);
+		log.info("User table check: emailHash={}, exists={}", EmailHashUtil.hashEmail(normalizedEmail), userExists);
 		if (userExists) {
-			log.warn("Email already exists in User table: emailHash={}", hashEmail(normalizedEmail));
+			log.warn("Email already exists in User table: emailHash={}", EmailHashUtil.hashEmail(normalizedEmail));
 			throw new com.example.fitnessgym_mg.exception.ConflictException("このメールアドレスは既に登録されています");
 		}
 		
 		// Customerテーブルのメールアドレス重複チェック
 		boolean customerExists = customerRepository.existsByEmailNative(normalizedEmail);
-		log.info("Customer table check: emailHash={}, exists={}", hashEmail(normalizedEmail), customerExists);
+		log.info("Customer table check: emailHash={}, exists={}", EmailHashUtil.hashEmail(normalizedEmail), customerExists);
 		if (customerExists) {
-			log.warn("Email already exists in Customer table: emailHash={}", hashEmail(normalizedEmail));
+			log.warn("Email already exists in Customer table: emailHash={}", EmailHashUtil.hashEmail(normalizedEmail));
 			throw new com.example.fitnessgym_mg.exception.ConflictException(
 				"このメールアドレスは既に顧客として登録されています。顧客とユーザーで同じメールアドレスは使用できません。");
 		}
@@ -309,11 +320,11 @@ public class AccountService {
 		// Supabase Auth側のユーザー存在チェック（オプション、エラーが発生しても続行）
 		boolean supabaseUserExists = false;
 		try {
-			log.info("Checking user existence in Supabase Auth: emailHash={}", hashEmail(normalizedEmail));
+			log.info("Checking user existence in Supabase Auth: emailHash={}", EmailHashUtil.hashEmail(normalizedEmail));
 			supabaseUserExists = supabaseAuthService.userExists(normalizedEmail);
-			log.info("Supabase Auth existence check: emailHash={}, exists={}", hashEmail(normalizedEmail), supabaseUserExists);
+			log.info("Supabase Auth existence check: emailHash={}, exists={}", EmailHashUtil.hashEmail(normalizedEmail), supabaseUserExists);
 			if (supabaseUserExists) {
-				log.warn("User already exists in Supabase Auth but not in local DB: emailHash={}", hashEmail(normalizedEmail));
+				log.warn("User already exists in Supabase Auth but not in local DB: emailHash={}", EmailHashUtil.hashEmail(normalizedEmail));
 				throw new com.example.fitnessgym_mg.exception.ConflictException(
 					"このメールアドレスは既にSupabase Authに登録されています。管理者に連絡してください。");
 			}
@@ -323,40 +334,40 @@ public class AccountService {
 		} catch (Exception e) {
 			// 存在チェックのエラーは無視して続行（Supabase側でエラーになる可能性があるが、試行する）
 			log.warn("Failed to check user existence in Supabase Auth: emailHash={}, error={}", 
-				hashEmail(normalizedEmail), e.getMessage());
+				EmailHashUtil.hashEmail(normalizedEmail), e.getMessage());
 		}
 
 		// Supabase Authにユーザーを作成
-		log.info("Attempting to create user in Supabase Auth: emailHash={}", hashEmail(normalizedEmail));
+		log.info("Attempting to create user in Supabase Auth: emailHash={}", EmailHashUtil.hashEmail(normalizedEmail));
 		UUID authUserId;
 		try {
 			authUserId = supabaseAuthService.createUser(normalizedEmail, req.getPass());
-			log.info("Successfully created user in Supabase Auth: emailHash={}, authUserId={}", hashEmail(normalizedEmail), authUserId);
+			log.info("Successfully created user in Supabase Auth: emailHash={}, authUserId={}", EmailHashUtil.hashEmail(normalizedEmail), authUserId);
 		} catch (IllegalArgumentException e) {
 			// バリデーションエラー
 			log.error("Invalid request for Supabase Auth user creation: emailHash={}, error={}, userExists={}, customerExists={}", 
-				hashEmail(normalizedEmail), e.getMessage(), userExists, customerExists, e);
+				EmailHashUtil.hashEmail(normalizedEmail), e.getMessage(), userExists, customerExists, e);
 			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(e.getMessage(), e);
 		} catch (RuntimeException e) {
 			// 既存ユーザーエラーの場合
 			if (e.getMessage() != null && e.getMessage().contains("既にSupabase Authに登録されています")) {
 				log.warn("User already exists in Supabase Auth: emailHash={}, userExists={}, customerExists={}", 
-					hashEmail(normalizedEmail), userExists, customerExists);
+					EmailHashUtil.hashEmail(normalizedEmail), userExists, customerExists);
 				throw new com.example.fitnessgym_mg.exception.ConflictException(e.getMessage(), e);
 			}
 			log.error("Failed to create user in Supabase Auth: emailHash={}, userExists={}, customerExists={}, supabaseUserExists={}, error={}", 
-				hashEmail(normalizedEmail), userExists, customerExists, supabaseUserExists, e.getMessage(), e);
+				EmailHashUtil.hashEmail(normalizedEmail), userExists, customerExists, supabaseUserExists, e.getMessage(), e);
 			throw new com.example.fitnessgym_mg.exception.SystemException(
 				"Supabase Authでのユーザー作成に失敗しました: " + e.getMessage(), e);
 		} catch (Exception e) {
 			log.error("Unexpected error creating user in Supabase Auth: emailHash={}, userExists={}, customerExists={}, supabaseUserExists={}, error={}", 
-				hashEmail(normalizedEmail), userExists, customerExists, supabaseUserExists, e.getMessage(), e);
+				EmailHashUtil.hashEmail(normalizedEmail), userExists, customerExists, supabaseUserExists, e.getMessage(), e);
 			throw new com.example.fitnessgym_mg.exception.SystemException(
 				"Supabase Authでのユーザー作成に失敗しました: " + e.getMessage(), e);
 		}
 
 		// ユーザーの基本情報設定
-		log.info("Creating local user record: emailHash={}, authUserId={}", hashEmail(normalizedEmail), authUserId);
+		log.info("Creating local user record: emailHash={}, authUserId={}", EmailHashUtil.hashEmail(normalizedEmail), authUserId);
 		User user = new User();
 		setUserBasicFields(user, req);
 		// 正規化されたメールアドレスを設定
@@ -370,7 +381,7 @@ public class AccountService {
 		Set<Store> storesToAssign = validateAndGetStores(storeIds);
 		user.setStores(storesToAssign);
 		userRepository.save(user);
-		log.info("Successfully created user in local database: emailHash={}, userId={}", hashEmail(normalizedEmail), user.getId());
+		log.info("Successfully created user in local database: emailHash={}, userId={}", EmailHashUtil.hashEmail(normalizedEmail), user.getId());
 	}
 
 	// --- Admin用: ユーザー更新 ---
@@ -629,36 +640,6 @@ public class AccountService {
 		return stores;
 	}
 
-	/**
-	 * メールアドレスをSHA-256ハッシュ化（ログ出力用）
-	 * 
-	 * <p>個人情報保護のため、ログにはメールアドレスを直接出力せず、ハッシュ値を出力する。</p>
-	 * 
-	 * @param email メールアドレス
-	 * @return SHA-256ハッシュ値（16進数文字列）
-	 */
-	private String hashEmail(String email) {
-		if (email == null) {
-			return "null";
-		}
-		try {
-			MessageDigest digest = MessageDigest.getInstance("SHA-256");
-			byte[] hash = digest.digest(email.getBytes(StandardCharsets.UTF_8));
-			StringBuilder hexString = new StringBuilder();
-			for (byte b : hash) {
-				String hex = Integer.toHexString(0xff & b);
-				if (hex.length() == 1) {
-					hexString.append('0');
-				}
-				hexString.append(hex);
-			}
-			return hexString.toString();
-		} catch (NoSuchAlgorithmException e) {
-			// SHA-256は標準アルゴリズムなので、この例外は発生しないはず
-			log.error("SHA-256 algorithm not found", e);
-			return "hash_error";
-		}
-	}
 
 	/**
 	 * 店長ロールのバリデーション（共通ロジック）
