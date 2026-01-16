@@ -43,22 +43,33 @@ public class AuthenticationException extends RuntimeException {
     public AuthenticationException(String email, String requestInfo) {
         // セキュリティ: 例外メッセージにはマスク済みのメールアドレスを含める
         // GlobalExceptionHandlerのmaskEmail()と同じロジックを適用
-        String maskedEmail = maskEmail(email);
-        super("Authentication failed for email: " + (maskedEmail != null ? maskedEmail : "unknown") + 
-              (requestInfo != null ? ", request: " + requestInfo : ""));
+        // 注意: super()の前にメソッド呼び出しはできないため、staticメソッドとして実装するか、
+        // またはヘルパーメソッドを呼び出す前にメッセージを構築する必要がある
+        super(buildMessage(email, requestInfo));
         this.email = email;
         this.requestInfo = requestInfo;
     }
     
     /**
-     * メールアドレスの機密情報をマスク（AuthenticationException内で使用）
+     * 例外メッセージを構築（コンストラクタから呼び出し可能なstaticメソッド）
      * 
-     * <p>GlobalExceptionHandlerのmaskEmail()と同じロジックを実装します。</p>
+     * @param email 認証を試みたメールアドレス（null許容）
+     * @param requestInfo リクエスト情報（例: IPアドレス、User-Agentなど）
+     * @return 構築された例外メッセージ
+     */
+    private static String buildMessage(String email, String requestInfo) {
+        String maskedEmail = maskEmailStatic(email);
+        return "Authentication failed for email: " + (maskedEmail != null ? maskedEmail : "unknown") + 
+               (requestInfo != null ? ", request: " + requestInfo : "");
+    }
+    
+    /**
+     * メールアドレスの機密情報をマスク（static版、コンストラクタから呼び出し可能）
      * 
      * @param email マスクするメールアドレス
      * @return マスクされたメールアドレス
      */
-    private String maskEmail(String email) {
+    private static String maskEmailStatic(String email) {
         if (email == null || !email.contains("@")) {
             return email;
         }
@@ -94,6 +105,7 @@ public class AuthenticationException extends RuntimeException {
         
         return maskedLocal + "@" + maskedDomain;
     }
+    
     
     /**
      * メールアドレスを取得

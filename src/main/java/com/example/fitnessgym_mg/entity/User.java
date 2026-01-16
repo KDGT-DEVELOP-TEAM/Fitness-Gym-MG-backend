@@ -38,7 +38,7 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @Data
-@EqualsAndHashCode(onlyExplicitlyIncluded = true, exclude = { "password" })
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString(exclude = { "stores", "password" })
 public class User {
 
@@ -84,6 +84,7 @@ public class User {
 
 	/**
 	 * パスワード（ハッシュ化済み）
+	 * セキュリティ: onlyExplicitlyIncluded=trueのため、@Includeが付いていないフィールドは自動的に除外される
 	 */
 	@Column(name = "pass", nullable = false, length = 255)
 	private String password;

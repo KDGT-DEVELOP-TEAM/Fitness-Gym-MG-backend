@@ -41,7 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(onlyExplicitlyIncluded = true, exclude = {"email", "phone", "medical", "taboo", "memo"}) // セキュリティ: 個人情報・機密情報をequals/hashCodeから除外
+@EqualsAndHashCode(onlyExplicitlyIncluded = true) // セキュリティ: 個人情報・機密情報は@EqualsAndHashCode.Excludeで個別に除外
 @ToString(exclude = {"stores", "email", "phone", "medical", "taboo", "memo"}) // セキュリティ: リレーションと個人情報・機密情報をログに出力しない
 @Slf4j
 public class Customer {
@@ -85,12 +85,14 @@ public class Customer {
 
 	/**
 	 * メールアドレス（ユニーク制約あり）
+	 * セキュリティ: onlyExplicitlyIncluded=trueのため、@Includeが付いていないフィールドは自動的に除外される
 	 */
 	@Column(unique = true, nullable = false, length = 255)
 	private String email;
 
 	/**
 	 * 電話番号
+	 * セキュリティ: onlyExplicitlyIncluded=trueのため、@Includeが付いていないフィールドは自動的に除外される
 	 */
 	@Column(nullable = false, length = 12)
 	private String phone;
@@ -103,12 +105,14 @@ public class Customer {
 
 	/**
 	 * 医療・既往歴（任意）
+	 * セキュリティ: onlyExplicitlyIncluded=trueのため、@Includeが付いていないフィールドは自動的に除外される
 	 */
 	@Column(length = 500)
 	private String medical;
 
 	/**
 	 * 禁忌事項（任意）
+	 * セキュリティ: onlyExplicitlyIncluded=trueのため、@Includeが付いていないフィールドは自動的に除外される
 	 */
 	@Column(length = 500)
 	private String taboo;
@@ -121,6 +125,7 @@ public class Customer {
 
 	/**
 	 * メモ（任意）
+	 * セキュリティ: onlyExplicitlyIncluded=trueのため、@Includeが付いていないフィールドは自動的に除外される
 	 */
 	@Column(length = 1000)
 	private String memo;

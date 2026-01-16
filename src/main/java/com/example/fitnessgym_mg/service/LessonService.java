@@ -412,18 +412,19 @@ public class LessonService {
 	private PeriodCount mapToPeriodCount(Object[] row) {
 		if (row == null) {
 			log.error("Query result row is null");
-			throw new IllegalArgumentException("Invalid query result: row is null");
+			throw new com.example.fitnessgym_mg.exception.SystemException("Invalid query result: row is null");
 		}
 		if (row.length < 2) {
 			log.error("Query result row has insufficient elements: length={}", row.length);
-			throw new IllegalArgumentException("Invalid query result: row must have at least 2 elements, but got " + row.length);
+			throw new com.example.fitnessgym_mg.exception.SystemException(
+				"Invalid query result: row must have at least 2 elements, but got " + row.length);
 		}
 		
 		// periodStartの変換: 複数の型に対応（よく使われる型を優先的にチェック）
 		OffsetDateTime periodStart;
 		if (row[0] == null) {
 			log.error("periodStart value is null in query result");
-			throw new IllegalArgumentException("Invalid query result: periodStart is null");
+			throw new com.example.fitnessgym_mg.exception.SystemException("Invalid query result: periodStart is null");
 		}
 		
 		try {
@@ -445,17 +446,17 @@ public class LessonService {
 				String actualType = row[0].getClass().getName();
 				String actualValue = row[0].toString();
 				log.warn("Unsupported type for periodStart: type={}, value={}", actualType, actualValue);
-				throw new IllegalArgumentException(
+				throw new com.example.fitnessgym_mg.exception.SystemException(
 					String.format("Unsupported type for periodStart: %s (value: %s). Supported types: Timestamp, OffsetDateTime, Instant, LocalDateTime", 
 						actualType, actualValue));
 			}
-		} catch (IllegalArgumentException e) {
+		} catch (com.example.fitnessgym_mg.exception.SystemException e) {
 			// 既に適切なメッセージが設定されているため、そのまま再スロー
 			throw e;
 		} catch (Exception e) {
 			log.error("Error converting periodStart to OffsetDateTime: type={}, value={}", 
 				row[0].getClass().getName(), row[0], e);
-			throw new IllegalArgumentException(
+			throw new com.example.fitnessgym_mg.exception.SystemException(
 				String.format("Failed to convert periodStart to OffsetDateTime: %s", e.getMessage()), e);
 		}
 		
@@ -475,18 +476,18 @@ public class LessonService {
 				String actualType = row[1].getClass().getName();
 				String actualValue = row[1].toString();
 				log.warn("Unsupported type for count: type={}, value={}", actualType, actualValue);
-				throw new IllegalArgumentException(
+				throw new com.example.fitnessgym_mg.exception.SystemException(
 					String.format("Unsupported type for count: %s (value: %s). Supported types: BigInteger, Number", 
 						actualType, actualValue));
 			}
-		} catch (IllegalArgumentException e) {
+		} catch (com.example.fitnessgym_mg.exception.SystemException e) {
 			// 既に適切なメッセージが設定されているため、そのまま再スロー
 			throw e;
 		} catch (Exception e) {
 			log.error("Error converting count to Long: type={}, value={}", 
 				row[1] != null ? row[1].getClass().getName() : "null", 
 				row[1], e);
-			throw new IllegalArgumentException(
+			throw new com.example.fitnessgym_mg.exception.SystemException(
 				String.format("Failed to convert count to Long: %s", e.getMessage()), e);
 		}
 		
@@ -1022,7 +1023,7 @@ public class LessonService {
 			trainers = userRepository.findAll();
 			isTrainer = false;
 		} else {
-			throw new IllegalArgumentException("Unknown caller: " + caller);
+			throw new com.example.fitnessgym_mg.exception.ImplementationException("Unknown caller: " + caller);
 		}
 
 		return new LessonFormData(customer, stores, trainers, isTrainer);
