@@ -50,9 +50,10 @@ public interface CustomerRepositoryCustom {
 	 * <p>ネイティブSQLクエリを使用して@SQLRestrictionを完全に回避します。
 	 * オプション選択用なので、idとnameのみを取得します。</p>
 	 * 
+	 * @param limit 取得件数の上限（最大1000件）
 	 * @return 顧客のIDと名前のリスト（[id, name]の配列）
 	 */
-	java.util.List<Object[]> findAllIdAndNameForOptions();
+	java.util.List<Object[]> findAllIdAndNameForOptions(int limit);
 
 	/**
 	 * 顧客IDで顧客を取得し、storesもJOIN FETCHで一括取得（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）

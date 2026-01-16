@@ -21,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,7 +42,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AccountService {
 
 	private final UserRepository userRepository;
@@ -50,9 +50,31 @@ public class AccountService {
 	private final LessonRepository lessonRepository;
 	private final SupabaseAuthService supabaseAuthService;
 	private final CustomerRepository customerRepository;
+	private final AccountAuthorizationService accountAuthorizationService;
+	private final com.example.fitnessgym_mg.util.SecurityUtil securityUtil;
 
 	@PersistenceContext
 	private EntityManager entityManager;
+
+	// 循環依存を解決するため、AccountAuthorizationServiceを@Lazyで注入
+	public AccountService(
+			UserRepository userRepository,
+			StoreRepository storeRepository,
+			PasswordEncoder passwordEncoder,
+			LessonRepository lessonRepository,
+			SupabaseAuthService supabaseAuthService,
+			CustomerRepository customerRepository,
+			@Lazy AccountAuthorizationService accountAuthorizationService,
+			com.example.fitnessgym_mg.util.SecurityUtil securityUtil) {
+		this.userRepository = userRepository;
+		this.storeRepository = storeRepository;
+		this.passwordEncoder = passwordEncoder;
+		this.lessonRepository = lessonRepository;
+		this.supabaseAuthService = supabaseAuthService;
+		this.customerRepository = customerRepository;
+		this.accountAuthorizationService = accountAuthorizationService;
+		this.securityUtil = securityUtil;
+	}
 
 	// --- ユーザー検索 ---
 	@Transactional(readOnly = true)
@@ -205,14 +227,17 @@ public class AccountService {
 
 	// --- ユーザー一覧取得（オプション選択用） ---
 	/**
-	 * オプション選択用の全ユーザー一覧を取得
-	 * ページングなしで全ユーザーを返す
+	 * オプション選択用のユーザー一覧を取得
+	 * 最大件数制限付きでユーザーを返す（パフォーマンス対策）
 	 * 
-	 * @return 全ユーザーのリスト（UserResponse形式）
+	 * @param limit 取得件数の上限（最大1000件）
+	 * @return ユーザーのリスト（UserResponse形式）
 	 */
 	@Transactional(readOnly = true)
-	public List<UserResponse> getAllUsersForOptions() {
-		return userRepository.findAll().stream()
+	public List<UserResponse> getAllUsersForOptions(int limit) {
+		int safeLimit = Math.min(Math.max(limit, 1), 1000); // 1以上1000以下に制限
+		Pageable pageable = PageRequest.of(0, safeLimit);
+		return userRepository.findAll(pageable).getContent().stream()
 				.map(UserResponse::fromEntity)
 				.collect(Collectors.toList());
 	}
@@ -247,6 +272,12 @@ public class AccountService {
 	// --- Admin用: ユーザー作成 ---
 	@Transactional
 	public void createByAdmin(UserRequest req, Set<UUID> storeIds) {
+		User currentUser = securityUtil.getCurrentUserOrThrow();
+		
+		// ビジネスロジックチェック（認可チェックとビジネスルールチェックを一元化）
+		accountAuthorizationService.validateRoleChange(currentUser, null, req.getRole());
+		accountAuthorizationService.checkManagerPermission(currentUser, req.getRole());
+		
 		// 店舗IDの正規化
 		if (storeIds == null) {
 			storeIds = Collections.emptySet();
@@ -387,8 +418,14 @@ public class AccountService {
 	// --- Admin用: ユーザー更新 ---
 	@Transactional
 	public void updateByAdmin(UUID id, UserRequest req, Set<UUID> storeIds) {
+		User currentUser = securityUtil.getCurrentUserOrThrow();
+		
 		// ユーザー取得（Admin用なので、storeIdチェック不要）
-		User user = findUserOrThrow(id);
+		User targetUser = findUserOrThrow(id);
+
+		// ビジネスロジックチェック（認可チェックとビジネスルールチェックを一元化）
+		accountAuthorizationService.validateRoleChange(currentUser, id, req.getRole());
+		accountAuthorizationService.checkManagerPermission(currentUser, targetUser.getRole(), req.getRole());
 
 		// StoreIdsのnullチェック
 		if (storeIds == null) {
@@ -399,16 +436,22 @@ public class AccountService {
 		validateManagerRole(req.getRole(), storeIds);
 
 		// 共通の更新ロジック
-		validateAndUpdateUser(user, req, storeIds);
+		validateAndUpdateUser(targetUser, req, storeIds);
 	}
 
 	// --- Manager用: ユーザー更新 ---
 	@Transactional
 	public void updateByManager(UUID id, UserRequest req, UUID storeId) {
+		User currentUser = securityUtil.getCurrentUserOrThrow();
+		
 		// ユーザー取得
-		User user = findUserOrThrow(id);
+		User targetUser = findUserOrThrow(id);
 		// store所属チェック
-		assertUserAssignedToStore(user, storeId);
+		assertUserAssignedToStore(targetUser, storeId);
+
+		// ビジネスロジックチェック（認可チェックとビジネスルールチェックを一元化）
+		accountAuthorizationService.validateRoleChange(currentUser, id, req.getRole());
+		accountAuthorizationService.checkManagerPermission(currentUser, targetUser.getRole(), req.getRole());
 
 		// Manager APIではstoreIdを強制追加
 		Set<UUID> storeIds = new java.util.HashSet<>();
@@ -418,7 +461,7 @@ public class AccountService {
 		validateManagerRole(req.getRole(), storeIds);
 
 		// 共通の更新ロジック
-		validateAndUpdateUser(user, req, storeIds);
+		validateAndUpdateUser(targetUser, req, storeIds);
 	}
 
 	// --- ユーザー更新の共通ロジック ---

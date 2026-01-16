@@ -334,18 +334,20 @@ public class CustomerService {
 
 	// --- 顧客一覧取得（オプション選択用） ---
 	/**
-	 * オプション選択用の全顧客一覧を取得
-	 * ページングなしでidとnameのみを返す
+	 * オプション選択用の顧客一覧を取得
+	 * 最大件数制限付きでidとnameのみを返す（パフォーマンス対策）
 	 * 
 	 * <p>注意: @SQLRestrictionを回避するために、ネイティブSQLクエリを使用して
 	 * idとnameのみを取得し、直接CustomerResponseを作成します。</p>
 	 * 
-	 * @return 全顧客のリスト（CustomerResponse形式、idとnameのみ）
+	 * @param limit 取得件数の上限（最大1000件）
+	 * @return 顧客のリスト（CustomerResponse形式、idとnameのみ）
 	 */
 	@Transactional(readOnly = true)
-	public List<CustomerResponse> getAllCustomersForOptions() {
+	public List<CustomerResponse> getAllCustomersForOptions(int limit) {
 		// @SQLRestrictionを回避するために、ネイティブSQLクエリでidとnameのみを取得
-		List<Object[]> results = customerRepository.findAllIdAndNameForOptions();
+		int safeLimit = Math.min(Math.max(limit, 1), 1000); // 1以上1000以下に制限
+		List<Object[]> results = customerRepository.findAllIdAndNameForOptions(safeLimit);
 		
 		// Object[]からCustomerResponseを作成
 		return results.stream()

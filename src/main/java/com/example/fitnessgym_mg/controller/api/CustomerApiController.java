@@ -48,17 +48,22 @@ public class CustomerApiController {
 	 * GET /api/customers
 	 * 顧客一覧取得（オプション選択用）
 	 * 認証済みユーザー全員がアクセス可能
-	 * ページングなしで全顧客を返す
+	 * 最大1000件まで取得可能（パフォーマンス対策）
 	 * 
 	 * <p>注意: @SQLRestrictionを回避するために、ネイティブSQLクエリを使用して
 	 * idとnameのみを取得し、直接CustomerResponseを作成します。</p>
+	 * 
+	 * @param limit 取得件数の上限（デフォルト: 1000、最大: 1000）
 	 */
 	@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
 	@GetMapping("/customers")
-	public ResponseEntity<List<CustomerResponse>> getCustomersForOptions() {
-		log.debug("顧客一覧取得（オプション選択用）リクエスト");
+	public ResponseEntity<List<CustomerResponse>> getCustomersForOptions(
+			@RequestParam(defaultValue = "1000") 
+			@jakarta.validation.constraints.Min(value = 1, message = "Limit must be at least 1") 
+			@jakarta.validation.constraints.Max(value = 1000, message = "Limit must not exceed 1000") int limit) {
+		log.debug("顧客一覧取得（オプション選択用）リクエスト: limit={}", limit);
 		
-		List<CustomerResponse> customers = service.getAllCustomersForOptions();
+		List<CustomerResponse> customers = service.getAllCustomersForOptions(limit);
 		
 		log.info("顧客一覧取得（オプション選択用）成功: count={}", customers.size());
 		return ResponseEntity.ok(customers);
@@ -169,14 +174,17 @@ public class CustomerApiController {
 	 * 
 	 * <p>MANAGERが顧客を作成する場合、リクエストボディのstoreIdを使用して店舗に紐付けます。</p>
 	 * <p>storeIdが指定されている場合、その店舗に紐付けてstore_customersテーブルに保存します。</p>
+	 * 
+	 * <p>セキュリティ: リクエストボディのstoreIdに対する認可チェックを@PreAuthorizeで実施し、
+	 * Service層でも二重チェック（Defense in Depth）を実施します。</p>
 	 */
-	@PreAuthorize("hasRole('MANAGER')")
+	@PreAuthorize("hasRole('MANAGER') and (#request.storeId == null or @authorizationFacade.canAccessStore(authentication, #request.storeId))")
 	@PostMapping("/manager/customers")
 	public ResponseEntity<Void> createManagerCustomer(
 			@Valid @RequestBody CustomerRequest request) {
 		log.debug("顧客作成リクエスト受信: name={}, emailHash={}, storeId={}", request.getName(), EmailHashUtil.hashEmail(request.getEmail()), request.getStoreId());
 		// MANAGERの場合、リクエストボディのstoreIdを使用（nullの場合は店舗に紐付けない）
-		// 認可チェックはCustomerService内で実施
+		// 認可チェックは@PreAuthorizeとCustomerService内で二重に実施（Defense in Depth）
 		service.create(request, request.getStoreId());
 		log.info("顧客作成成功: name={}, emailHash={}, storeId={}", request.getName(), EmailHashUtil.hashEmail(request.getEmail()), request.getStoreId());
 		return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();

@@ -122,9 +122,10 @@ public class AuthApiController {
         } catch (BadCredentialsException e) {
             // 認証失敗: メールアドレスまたはパスワードが正しくない
             log.warn("ログイン失敗試行を検出");
+            // メールアドレスの存在有無を推測させないため、統一されたエラーメッセージ
             return ResponseEntity
                     .status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "メールアドレスまたはパスワードが正しくありません"));
+                    .body(Map.of("error", "認証に失敗しました"));
         } catch (Exception e) {
             // その他の予期しないエラー
             log.error("認証処理中にエラーが発生: {}", e.getMessage(), e);

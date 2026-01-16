@@ -52,13 +52,18 @@ public class UserApiController {
 	 * GET /api/users
 	 * ユーザー一覧取得（オプション選択用）
 	 * 認証済みユーザー全員がアクセス可能
-	 * ページングなしで全ユーザーを返す
+	 * 最大1000件まで取得可能（パフォーマンス対策）
+	 * 
+	 * @param limit 取得件数の上限（デフォルト: 1000、最大: 1000）
 	 */
 	@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
 	@GetMapping("/users")
-	public ResponseEntity<List<UserResponse>> getUsersForOptions() {
-		log.debug("ユーザー一覧取得（オプション選択用）リクエスト");
-		List<UserResponse> users = accountService.getAllUsersForOptions();
+	public ResponseEntity<List<UserResponse>> getUsersForOptions(
+			@RequestParam(defaultValue = "1000") 
+			@jakarta.validation.constraints.Min(value = 1, message = "Limit must be at least 1") 
+			@jakarta.validation.constraints.Max(value = 1000, message = "Limit must not exceed 1000") int limit) {
+		log.debug("ユーザー一覧取得（オプション選択用）リクエスト: limit={}", limit);
+		List<UserResponse> users = accountService.getAllUsersForOptions(limit);
 		log.info("ユーザー一覧取得（オプション選択用）成功: count={}", users.size());
 		return ResponseEntity.ok(users);
 	}
@@ -106,11 +111,7 @@ public class UserApiController {
 	@PreAuthorize("hasRole('ADMIN') and @accountAuthorizationService.canCreateUser(authentication, null)")
 	@PostMapping("/admin/users")
 	public ResponseEntity<Void> createUser(@Valid @RequestBody UserRequest request) {
-		// ビジネスルールチェック（Service層で実施）
-		User currentUser = securityUtil.getCurrentUserOrThrow();
-		accountAuthorizationService.validateRoleChange(currentUser, null, request.getRole());
-		accountAuthorizationService.checkManagerPermission(currentUser, request.getRole());
-
+		// ビジネスロジックチェックはService層に委譲
 		accountService.createByAdmin(request,
 				request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
 		log.info("ユーザー作成成功: role={}", request.getRole());
@@ -126,13 +127,7 @@ public class UserApiController {
 	public ResponseEntity<Void> updateUser(
 			@PathVariable("user_id") UUID userId,
 			@Valid @RequestBody UserRequest request) {
-		// ビジネスルールチェック（Service層で実施）
-		User currentUser = securityUtil.getCurrentUserOrThrow();
-		// targetUserはService層で取得
-		User targetUser = accountService.findUserEntityById(userId, null);
-		accountAuthorizationService.validateRoleChange(currentUser, userId, request.getRole());
-		accountAuthorizationService.checkManagerPermission(currentUser, targetUser.getRole(), request.getRole());
-
+		// ビジネスロジックチェックはService層に委譲
 		accountService.updateByAdmin(userId, request,
 				request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
 		log.info("ユーザー更新成功: userId={}, role={}", userId, request.getRole());
@@ -204,11 +199,7 @@ public class UserApiController {
 	public ResponseEntity<Void> createManagerUser(
 			@PathVariable("store_id") UUID storeId,
 			@Valid @RequestBody UserRequest request) {
-		// ビジネスルールチェック（Service層で実施）
-		User currentUser = securityUtil.getCurrentUserOrThrow();
-		accountAuthorizationService.validateRoleChange(currentUser, null, request.getRole());
-		accountAuthorizationService.checkManagerPermission(currentUser, request.getRole());
-
+		// ビジネスロジックチェックはService層に委譲
 		// Manager APIではリクエストボディのstoreIdsを完全に無視し、pathパラメータのstoreIdのみを使用
 		accountService.createByManager(request, storeId);
 		return ResponseEntity.status(HttpStatus.CREATED).build();
@@ -224,13 +215,7 @@ public class UserApiController {
 			@PathVariable("store_id") UUID storeId,
 			@PathVariable("user_id") UUID userId,
 			@Valid @RequestBody UserRequest request) {
-		// ビジネスルールチェック（Service層で実施）
-		User currentUser = securityUtil.getCurrentUserOrThrow();
-		// targetUserはService層で取得
-		User targetUser = accountService.findUserEntityById(userId, storeId);
-		accountAuthorizationService.validateRoleChange(currentUser, userId, request.getRole());
-		accountAuthorizationService.checkManagerPermission(currentUser, targetUser.getRole(), request.getRole());
-
+		// ビジネスロジックチェックはService層に委譲
 		// Manager APIではリクエストボディのstoreIdsを完全に無視し、pathパラメータのstoreIdのみを使用
 		accountService.updateByManager(userId, request, storeId);
 		return ResponseEntity.ok().build();

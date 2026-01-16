@@ -75,15 +75,20 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 	}
 
 	@Override
-	public List<Object[]> findAllIdAndNameForOptions() {
+	public List<Object[]> findAllIdAndNameForOptions(int limit) {
 		// @SQLRestriction("deleted_at IS NULL")を完全に回避するためにネイティブSQLクエリを使用
 		// Object[]を返すことで、Hibernateのエンティティマッピングを完全に回避
 		// オプション選択用なので、idとnameのみを取得
 		// 重要: 論理削除条件（WHERE deleted_at IS NULL）を必ず含めること
-		String nativeQuery = "SELECT id, name FROM customers WHERE deleted_at IS NULL";
+		// パフォーマンス対策: LIMIT句で取得件数を制限（最大1000件）
+		int safeLimit = Math.min(Math.max(limit, 1), 1000); // 1以上1000以下に制限
+		String nativeQuery = "SELECT id, name FROM customers WHERE deleted_at IS NULL LIMIT :limit";
 		
 		@SuppressWarnings("unchecked")
-		List<Object[]> results = entityManager.createNativeQuery(nativeQuery).getResultList();
+		List<Object[]> results = entityManager
+				.createNativeQuery(nativeQuery)
+				.setParameter("limit", safeLimit)
+				.getResultList();
 		
 		return results;
 	}
