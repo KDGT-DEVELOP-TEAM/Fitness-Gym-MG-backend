@@ -9,12 +9,16 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
  * 姿勢画像レスポンスDTO
  * 姿勢画像情報をAPIレスポンスとして返す際に使用
+ * 
+ * <p>セキュリティ: ストレージキーは機密情報のため、ログ出力から除外します。</p>
  */
 @Data
+@ToString(exclude = "storageKey") // セキュリティ: ストレージキーをログに出力しない
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

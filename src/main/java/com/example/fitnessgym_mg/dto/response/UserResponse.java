@@ -10,12 +10,16 @@ import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.UserRole;
 
 import lombok.Data;
+import lombok.ToString;
 
 /**
  * ユーザーレスポンスDTO
  * ユーザー情報をAPIレスポンスとして返す際に使用
+ * 
+ * <p>セキュリティ: メールアドレスはログ出力から除外します。</p>
  */
 @Data
+@ToString(exclude = "email") // セキュリティ: メールアドレスをログに出力しない
 public class UserResponse {
 
 	private UUID id;

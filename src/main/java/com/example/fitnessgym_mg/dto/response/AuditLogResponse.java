@@ -9,13 +9,15 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.ToString;
 
 /**
  * 監査ログレスポンスDTO
+ * 
+ * <p>セキュリティ: 個人情報（userName、customerName）はログ出力から除外します。</p>
  */
-@Slf4j
 @Data
+@ToString(exclude = {"userName", "customerName"}) // セキュリティ: PIIをログに出力しない
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

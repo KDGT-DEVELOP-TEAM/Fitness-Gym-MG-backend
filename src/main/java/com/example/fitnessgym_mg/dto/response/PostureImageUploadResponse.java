@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -13,8 +14,11 @@ import java.util.UUID;
 /**
  * 姿勢画像アップロードレスポンスDTO
  * 画像アップロード成功時に返される情報を含む
+ * 
+ * <p>セキュリティ: ストレージキーは機密情報のため、ログ出力から除外します。</p>
  */
 @Data
+@ToString(exclude = "storageKey") // セキュリティ: ストレージキーをログに出力しない
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

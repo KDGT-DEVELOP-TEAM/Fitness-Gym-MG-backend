@@ -17,8 +17,15 @@ import com.example.fitnessgym_mg.entity.enums.Gender;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
+/**
+ * 顧客リクエストDTO
+ * 
+ * <p>セキュリティ: 個人情報（email、phone）と機密情報（medical、taboo、memo）はログ出力から除外します。</p>
+ */
 @Data
+@ToString(exclude = {"email", "phone", "medical", "taboo", "memo"}) // セキュリティ: 個人情報と機密情報をログに出力しない
 @NoArgsConstructor
 public class CustomerRequest {
 
