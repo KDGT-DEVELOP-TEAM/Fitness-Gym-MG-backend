@@ -303,6 +303,12 @@ public class AccountService {
 	// --- Manager用: ユーザー作成 ---
 	@Transactional
 	public void createByManager(UserRequest req, UUID storeId) {
+		User currentUser = securityUtil.getCurrentUserOrThrow();
+		
+		// ビジネスロジックチェック（認可チェックとビジネスルールチェックを一元化）
+		accountAuthorizationService.validateRoleChange(currentUser, null, req.getRole());
+		accountAuthorizationService.checkManagerPermission(currentUser, req.getRole());
+		
 		// storeIdを強制追加
 		Set<UUID> storeIds = new java.util.HashSet<>();
 		storeIds.add(storeId);
