@@ -1,9 +1,7 @@
 package com.example.fitnessgym_mg.controller.api;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import jakarta.validation.Valid;
 
@@ -24,7 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.HttpStatus;
 
 import com.example.fitnessgym_mg.dto.response.LessonResponse;
-import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.service.AuthorizationFacade;
 import com.example.fitnessgym_mg.service.LessonService;
 
@@ -44,7 +41,6 @@ public class LessonApiController {
 	private final LessonService lessonService;
 	@SuppressWarnings("unused")
 	private final AuthorizationFacade authorizationFacade;
-	private final LessonRepository lessonRepository;
 
 	// ========== REST API エンドポイント ==========
 
@@ -130,29 +126,7 @@ public class LessonApiController {
 		
 		log.debug("トレーナー別次回レッスン希望日程一覧取得リクエスト: trainerId={}", trainerId);
 		
-		// 現在時刻を取得
-		LocalDateTime now = LocalDateTime.now();
-		
-		// 次回レッスン希望日程が設定されているレッスンを取得
-		List<com.example.fitnessgym_mg.entity.Lesson> lessons = lessonRepository.findNextLessonsByTrainerId(trainerId, now);
-		
-		// LessonResponseに変換（nextDate, nextStoreName, nextTrainerNameも含める）
-		List<LessonResponse> responses = lessons.stream()
-				.map(lesson -> {
-					LessonResponse response = LessonResponse.fromEntity(lesson);
-					// 次回レッスン情報を設定
-					if (lesson.getNextDate() != null) {
-						response.setNextDate(lesson.getNextDate());
-					}
-					if (lesson.getNextStore() != null) {
-						response.setNextStoreName(lesson.getNextStore().getName());
-					}
-					if (lesson.getNextUser() != null) {
-						response.setNextTrainerName(lesson.getNextUser().getName());
-					}
-					return response;
-				})
-				.collect(Collectors.toList());
+		List<LessonResponse> responses = lessonService.getNextLessonsByTrainerIdWithoutPaging(trainerId);
 		
 		log.info("トレーナー別次回レッスン希望日程一覧取得成功: trainerId={}, count={}", trainerId, responses.size());
 		return ResponseEntity.ok(responses);

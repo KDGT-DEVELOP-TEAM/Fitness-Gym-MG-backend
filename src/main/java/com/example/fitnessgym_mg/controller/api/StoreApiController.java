@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,6 +35,7 @@ public class StoreApiController {
 	 * 
 	 * @return 店舗一覧（StoreResponseのリスト）
 	 */
+	@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
 	@GetMapping
 	public ResponseEntity<List<StoreResponse>> getStores() {
 		log.debug("店舗一覧取得リクエスト");

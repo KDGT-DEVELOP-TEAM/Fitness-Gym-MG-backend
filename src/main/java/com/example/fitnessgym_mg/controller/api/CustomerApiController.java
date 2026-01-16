@@ -1,5 +1,8 @@
 package com.example.fitnessgym_mg.controller.api;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,7 +44,6 @@ import lombok.extern.slf4j.Slf4j;
 public class CustomerApiController {
 
 	private final CustomerService service;
-	private final com.example.fitnessgym_mg.repository.CustomerRepository customerRepository;
 
 	// ========== REST API エンドポイント ==========
 
@@ -59,18 +61,7 @@ public class CustomerApiController {
 	public ResponseEntity<List<CustomerResponse>> getCustomersForOptions() {
 		log.debug("顧客一覧取得（オプション選択用）リクエスト");
 		
-		// @SQLRestrictionを回避するために、ネイティブSQLクエリでidとnameのみを取得
-		List<Object[]> results = customerRepository.findAllIdAndNameForOptions();
-		
-		// Object[]からCustomerResponseを作成
-		List<CustomerResponse> customers = results.stream()
-				.map(row -> {
-					CustomerResponse response = new CustomerResponse();
-					response.setId((UUID) row[0]);
-					response.setName((String) row[1]);
-					return response;
-				})
-				.collect(java.util.stream.Collectors.toList());
+		List<CustomerResponse> customers = service.getAllCustomersForOptions();
 		
 		log.info("顧客一覧取得（オプション選択用）成功: count={}", customers.size());
 		return ResponseEntity.ok(customers);
@@ -80,6 +71,7 @@ public class CustomerApiController {
 	 * GET /api/admin/customers
 	 * 顧客一覧取得
 	 */
+	@PreAuthorize("hasRole('ADMIN')")
 	@GetMapping("/admin/customers")
 	public ResponseEntity<Page<CustomerResponse>> getAdminCustomers(
 			@RequestParam(required = false) @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") String name,
@@ -110,14 +102,14 @@ public class CustomerApiController {
 	@PreAuthorize("hasRole('ADMIN')")
 	@PostMapping("/admin/customers")
 	public ResponseEntity<Void> createAdminCustomer(@Valid @RequestBody CustomerRequest request) {
-		log.debug("顧客作成リクエスト受信: name={}, email={}, storeId={}", request.getName(), request.getEmail(), request.getStoreId());
+		log.debug("顧客作成リクエスト受信: name={}, emailHash={}, storeId={}", request.getName(), hashEmail(request.getEmail()), request.getStoreId());
 		try {
 			// ADMINの場合、リクエストボディのstoreIdを使用（nullの場合は店舗に紐付けない）
 			service.create(request, request.getStoreId());
-			log.info("顧客作成成功: name={}, email={}, storeId={}", request.getName(), request.getEmail(), request.getStoreId());
+			log.info("顧客作成成功: name={}, emailHash={}, storeId={}", request.getName(), hashEmail(request.getEmail()), request.getStoreId());
 			return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
 		} catch (Exception e) {
-			log.error("顧客作成失敗: name={}, email={}, storeId={}, error={}", request.getName(), request.getEmail(), request.getStoreId(), e.getMessage(), e);
+			log.error("顧客作成失敗: name={}, emailHash={}, storeId={}, error={}", request.getName(), hashEmail(request.getEmail()), request.getStoreId(), e.getMessage(), e);
 			throw e; // 例外を再スローしてGlobalExceptionHandlerで処理
 		}
 	}
@@ -126,6 +118,7 @@ public class CustomerApiController {
 	 * PATCH /api/admin/customers/{customer_id}/disable
 	 * 顧客の無効化
 	 */
+	@PreAuthorize("hasRole('ADMIN')")
 	@PatchMapping("/admin/customers/{customer_id}/disable")
 	public ResponseEntity<Void> disableAdminCustomer(@PathVariable("customer_id") UUID customerId) {
 		service.disableActive(customerId);
@@ -136,6 +129,7 @@ public class CustomerApiController {
 	 * PATCH /api/admin/customers/{customer_id}/enable
 	 * 顧客の再有効化
 	 */
+	@PreAuthorize("hasRole('ADMIN')")
 	@PatchMapping("/admin/customers/{customer_id}/enable")
 	public ResponseEntity<Void> enableAdminCustomer(@PathVariable("customer_id") UUID customerId) {
 		service.enableActive(customerId);
@@ -146,6 +140,7 @@ public class CustomerApiController {
 	 * DELETE /api/admin/customers/{customer_id}
 	 * 顧客の削除
 	 */
+	@PreAuthorize("hasRole('ADMIN')")
 	@DeleteMapping("/admin/customers/{customer_id}")
 	public ResponseEntity<Void> deleteAdminCustomer(@PathVariable("customer_id") UUID customerId) {
 		service.delete(customerId);
@@ -187,15 +182,15 @@ public class CustomerApiController {
 	@PostMapping("/manager/customers")
 	public ResponseEntity<Void> createManagerCustomer(
 			@Valid @RequestBody CustomerRequest request) {
-		log.debug("顧客作成リクエスト受信: name={}, email={}, storeId={}", request.getName(), request.getEmail(), request.getStoreId());
+		log.debug("顧客作成リクエスト受信: name={}, emailHash={}, storeId={}", request.getName(), hashEmail(request.getEmail()), request.getStoreId());
 		try {
 			// MANAGERの場合、リクエストボディのstoreIdを使用（nullの場合は店舗に紐付けない）
 			// 認可チェックはCustomerService内で実施
 			service.create(request, request.getStoreId());
-			log.info("顧客作成成功: name={}, email={}, storeId={}", request.getName(), request.getEmail(), request.getStoreId());
+			log.info("顧客作成成功: name={}, emailHash={}, storeId={}", request.getName(), hashEmail(request.getEmail()), request.getStoreId());
 			return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
 		} catch (Exception e) {
-			log.error("顧客作成失敗: name={}, email={}, storeId={}, error={}", request.getName(), request.getEmail(), request.getStoreId(), e.getMessage(), e);
+			log.error("顧客作成失敗: name={}, emailHash={}, storeId={}, error={}", request.getName(), hashEmail(request.getEmail()), request.getStoreId(), e.getMessage(), e);
 			throw e; // 例外を再スローしてGlobalExceptionHandlerで処理
 		}
 	}
@@ -283,5 +278,36 @@ public class CustomerApiController {
 			@Valid @RequestBody CustomerRequest request) {
 		service.update(customerId, request);
 		return ResponseEntity.ok().build();
+	}
+
+	/**
+	 * メールアドレスをSHA-256ハッシュ化（ログ出力用）
+	 * 
+	 * <p>個人情報保護のため、ログにはメールアドレスを直接出力せず、ハッシュ値を出力する。</p>
+	 * 
+	 * @param email メールアドレス
+	 * @return SHA-256ハッシュ値（16進数文字列）
+	 */
+	private String hashEmail(String email) {
+		if (email == null) {
+			return "null";
+		}
+		try {
+			MessageDigest digest = MessageDigest.getInstance("SHA-256");
+			byte[] hash = digest.digest(email.getBytes(StandardCharsets.UTF_8));
+			StringBuilder hexString = new StringBuilder();
+			for (byte b : hash) {
+				String hex = Integer.toHexString(0xff & b);
+				if (hex.length() == 1) {
+					hexString.append('0');
+				}
+				hexString.append(hex);
+			}
+			return hexString.toString();
+		} catch (NoSuchAlgorithmException e) {
+			// SHA-256は標準アルゴリズムなので、この例外は発生しないはず
+			log.error("SHA-256 algorithm not found", e);
+			return "hash_error";
+		}
 	}
 }

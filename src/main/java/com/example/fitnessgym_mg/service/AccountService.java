@@ -206,6 +206,33 @@ public class AccountService {
 		return users.map(UserResponse::fromEntity);
 	}
 
+	// --- ユーザー一覧取得（オプション選択用） ---
+	/**
+	 * オプション選択用の全ユーザー一覧を取得
+	 * ページングなしで全ユーザーを返す
+	 * 
+	 * @return 全ユーザーのリスト（UserResponse形式）
+	 */
+	@Transactional(readOnly = true)
+	public List<UserResponse> getAllUsersForOptions() {
+		return userRepository.findAll().stream()
+				.map(UserResponse::fromEntity)
+				.collect(Collectors.toList());
+	}
+
+	// --- ユーザー取得（メールアドレス + stores） ---
+	/**
+	 * メールアドレスでユーザーを取得（storesも一緒に取得）
+	 * 認証処理などで使用
+	 * 
+	 * @param email メールアドレス
+	 * @return ユーザー（Optional）
+	 */
+	@Transactional(readOnly = true)
+	public java.util.Optional<User> findUserByEmailWithStores(String email) {
+		return userRepository.findByEmailWithStores(email);
+	}
+
 	// --- Admin用: ユーザー作成 ---
 	@Transactional
 	public void createByAdmin(UserRequest req, Set<UUID> storeIds) {

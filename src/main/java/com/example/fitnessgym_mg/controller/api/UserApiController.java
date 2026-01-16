@@ -48,7 +48,6 @@ public class UserApiController {
 	private final AccountService accountService;
 	private final SecurityUtil securityUtil;
 	private final AccountAuthorizationService accountAuthorizationService;
-	private final com.example.fitnessgym_mg.repository.UserRepository userRepository;
 
 	/**
 	 * GET /api/users
@@ -60,9 +59,7 @@ public class UserApiController {
 	@GetMapping("/users")
 	public ResponseEntity<List<UserResponse>> getUsersForOptions() {
 		log.debug("ユーザー一覧取得（オプション選択用）リクエスト");
-		List<UserResponse> users = userRepository.findAll().stream()
-				.map(UserResponse::fromEntity)
-				.collect(java.util.stream.Collectors.toList());
+		List<UserResponse> users = accountService.getAllUsersForOptions();
 		log.info("ユーザー一覧取得（オプション選択用）成功: count={}", users.size());
 		return ResponseEntity.ok(users);
 	}

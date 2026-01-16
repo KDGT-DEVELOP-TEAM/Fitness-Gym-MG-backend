@@ -332,6 +332,32 @@ public class CustomerService {
 				.collect(Collectors.toList());
 	}
 
+	// --- 顧客一覧取得（オプション選択用） ---
+	/**
+	 * オプション選択用の全顧客一覧を取得
+	 * ページングなしでidとnameのみを返す
+	 * 
+	 * <p>注意: @SQLRestrictionを回避するために、ネイティブSQLクエリを使用して
+	 * idとnameのみを取得し、直接CustomerResponseを作成します。</p>
+	 * 
+	 * @return 全顧客のリスト（CustomerResponse形式、idとnameのみ）
+	 */
+	@Transactional(readOnly = true)
+	public List<CustomerResponse> getAllCustomersForOptions() {
+		// @SQLRestrictionを回避するために、ネイティブSQLクエリでidとnameのみを取得
+		List<Object[]> results = customerRepository.findAllIdAndNameForOptions();
+		
+		// Object[]からCustomerResponseを作成
+		return results.stream()
+				.map(row -> {
+					CustomerResponse response = new CustomerResponse();
+					response.setId((UUID) row[0]);
+					response.setName((String) row[1]);
+					return response;
+				})
+				.collect(Collectors.toList());
+	}
+
 	// --- 顧客IDで顧客詳細を取得（CustomerResponse形式） ---
 	/**
 	 * 顧客IDで顧客情報を取得し、CustomerResponseに変換

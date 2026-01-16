@@ -18,7 +18,7 @@ import com.example.fitnessgym_mg.dto.response.LoginResponse;
 import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.exception.AuthenticationStateException;
-import com.example.fitnessgym_mg.repository.UserRepository;
+import com.example.fitnessgym_mg.service.AccountService;
 import com.example.fitnessgym_mg.util.JwtTokenUtil;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 public class AuthApiController {
 
     private final AuthenticationManager authenticationManager;
-    private final UserRepository userRepository;
+    private final AccountService accountService;
     private final SecurityUtil securityUtil;
     private final JwtTokenUtil jwtTokenUtil;
 
@@ -60,7 +60,7 @@ public class AuthApiController {
         return securityUtil.getCurrentUser()
                 .map(user -> {
                     // storesを読み込むために再取得
-                    User userWithStores = userRepository.findByEmailWithStores(user.getEmail())
+                    User userWithStores = accountService.findUserByEmailWithStores(user.getEmail())
                             .orElse(user); // 取得できない場合は元のuserを使用
                     return ResponseEntity.ok(createLoginResponse(userWithStores, null));
                 })
@@ -100,8 +100,8 @@ public class AuthApiController {
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             // ユーザー情報を取得（認証成功後なので必ず存在するはず、active条件を適用）
-            // storesも一緒に取得するため、findByEmailWithStoresを使用
-            User user = userRepository.findByEmailWithStores(request.getEmail())
+            // storesも一緒に取得するため、findUserByEmailWithStoresを使用
+            User user = accountService.findUserByEmailWithStores(request.getEmail())
                 .orElseThrow(() -> {
                     log.error("認証成功後にユーザーが見つからない異常事態を検出");
                     return new AuthenticationStateException("ユーザー情報の取得に失敗しました");
@@ -150,6 +150,10 @@ public class AuthApiController {
 
     /**
      * LoginResponseを作成
+     * 
+     * <p>注意: ログイン機能では、フロントエンドでユーザー識別のためにメールアドレスが必要な場合があるため、
+     * レスポンスにメールアドレスを含めています。セキュリティリスクを最小限にするため、
+     * フロントエンド側で適切なセキュリティ対策（XSS対策、CSP設定など）を実施してください。</p>
      */
     private LoginResponse createLoginResponse(User user, String token) {
         // stores関係が設定されているかチェック
@@ -162,7 +166,7 @@ public class AuthApiController {
         
         return LoginResponse.builder()
                 .userId(user.getId())
-                .email(user.getEmail())
+                .email(user.getEmail()) // ログイン機能ではユーザー識別のために必要
                 .name(user.getName())
                 .role(user.getRole())
                 .storeIds(storeIds)

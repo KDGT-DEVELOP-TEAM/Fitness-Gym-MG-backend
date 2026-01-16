@@ -701,6 +701,44 @@ public class LessonService {
 	}
 
 	/**
+	 * トレーナー別の次回レッスン希望日程一覧取得（ページングなし）
+	 * 
+	 * <p>指定されたトレーナーの次回レッスン希望日程（nextDateが設定されているレッスン）を取得します。</p>
+	 * <p>nextDateが未来の日時のレッスンのみを返します。</p>
+	 * 
+	 * <p>認可方針: ADMIN、MANAGER、TRAINERがアクセス可能。</p>
+	 * 
+	 * @param trainerId トレーナーID
+	 * @return 次回レッスン希望日程一覧
+	 */
+	@Transactional(readOnly = true)
+	public List<LessonResponse> getNextLessonsByTrainerIdWithoutPaging(UUID trainerId) {
+		// 現在時刻を取得
+		LocalDateTime now = LocalDateTime.now();
+		
+		// 次回レッスン希望日程が設定されているレッスンを取得
+		List<Lesson> lessons = lessonRepository.findNextLessonsByTrainerId(trainerId, now);
+		
+		// LessonResponseに変換（nextDate, nextStoreName, nextTrainerNameも含める）
+		return lessons.stream()
+				.map(lesson -> {
+					LessonResponse response = LessonResponse.fromEntity(lesson);
+					// 次回レッスン情報を設定
+					if (lesson.getNextDate() != null) {
+						response.setNextDate(lesson.getNextDate());
+					}
+					if (lesson.getNextStore() != null) {
+						response.setNextStoreName(lesson.getNextStore().getName());
+					}
+					if (lesson.getNextUser() != null) {
+						response.setNextTrainerName(lesson.getNextUser().getName());
+					}
+					return response;
+				})
+				.collect(Collectors.toList());
+	}
+
+	/**
 	 * 顧客IDで体重/BMI履歴を取得
 	 * レッスンデータから体重とBMIの時系列データを取得
 	 */
