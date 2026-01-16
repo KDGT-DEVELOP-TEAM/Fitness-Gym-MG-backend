@@ -314,9 +314,19 @@ public class PostureImageService {
 			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("画像IDリストが空です");
 		}
 
-		boolean allAccessible = postureImageRepository.existsAllAccessiblePostureImages(
-				currentUser.getId(),
-				imageIds);
+		// MANAGERの場合は各画像に対して個別にチェック（全店舗の姿勢画像にアクセス可能なため）
+		// それ以外のロールはバッチ認可チェックを使用
+		boolean allAccessible;
+		if (currentUser.getRole() == com.example.fitnessgym_mg.entity.enums.UserRole.MANAGER) {
+			// MANAGERの場合は各画像に対して個別にチェック
+			allAccessible = imageIds.stream()
+					.allMatch(imageId -> authorizationFacade.canAccessPostureImage(currentUser, imageId));
+		} else {
+			// それ以外のロールはバッチ認可チェックを使用
+			allAccessible = postureImageRepository.existsAllAccessiblePostureImages(
+					currentUser.getId(),
+					imageIds);
+		}
 
 		if (!allAccessible) {
 			throw new org.springframework.security.access.AccessDeniedException(

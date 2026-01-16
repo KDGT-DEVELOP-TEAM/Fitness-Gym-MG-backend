@@ -1053,12 +1053,18 @@ public class LessonService {
 			stores = List.of(storeRepository.findById(storeId)
 					.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException(
 							"店舗が見つかりません: " + storeId)));
-			trainers = userRepository.findAll();
+			// 店長とトレーナーのみ選択可能（管理者を除外）
+			trainers = userRepository.findAll().stream()
+					.filter(u -> u.getRole() == UserRole.MANAGER || u.getRole() == UserRole.TRAINER)
+					.collect(Collectors.toList());
 			isTrainer = false;
 		} else if (caller == LessonFormCaller.ADMIN) {
 			// 管理者の場合：全店舗
 			stores = storeRepository.findAll();
-			trainers = userRepository.findAll();
+			// 店長とトレーナーのみ選択可能（管理者を除外）
+			trainers = userRepository.findAll().stream()
+					.filter(u -> u.getRole() == UserRole.MANAGER || u.getRole() == UserRole.TRAINER)
+					.collect(Collectors.toList());
 			isTrainer = false;
 		} else {
 			throw new com.example.fitnessgym_mg.exception.ImplementationException("Unknown caller: " + caller);
