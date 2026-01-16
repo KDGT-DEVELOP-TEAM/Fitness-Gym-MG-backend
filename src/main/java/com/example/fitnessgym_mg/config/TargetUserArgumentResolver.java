@@ -13,6 +13,7 @@ import org.springframework.web.servlet.HandlerMapping;
 
 import com.example.fitnessgym_mg.controller.api.TargetUser;
 import com.example.fitnessgym_mg.entity.User;
+import com.example.fitnessgym_mg.exception.InvalidRequestException;
 import com.example.fitnessgym_mg.service.AccountService;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -57,15 +58,26 @@ public class TargetUserArgumentResolver implements HandlerMethodArgumentResolver
         }
         
         if (userIdStr == null) {
-            throw new IllegalArgumentException("user_idパス変数が見つかりません");
+            throw new InvalidRequestException("user_idパス変数が見つかりません");
         }
         
-        UUID userId = UUID.fromString(userIdStr);
+        UUID userId;
+        try {
+            userId = UUID.fromString(userIdStr);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidRequestException(
+                "user_idパス変数が無効な形式です: " + userIdStr, e);
+        }
         
         // storeIdを取得（Manager用エンドポイントの場合）
         UUID storeId = null;
         if (storeIdStr != null) {
-            storeId = UUID.fromString(storeIdStr);
+            try {
+                storeId = UUID.fromString(storeIdStr);
+            } catch (IllegalArgumentException e) {
+                throw new InvalidRequestException(
+                    "store_idパス変数が無効な形式です: " + storeIdStr, e);
+            }
         }
         
         // AccountServiceからUserを取得

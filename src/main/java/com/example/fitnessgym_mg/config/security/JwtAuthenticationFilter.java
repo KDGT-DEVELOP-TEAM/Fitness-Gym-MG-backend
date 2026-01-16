@@ -128,7 +128,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             sendUnauthorized(response, "JWT_EXPIRED", "JWTトークンの有効期限が切れています");
         } catch (JwtException | IllegalArgumentException e) {
             // 署名不正・形式不正・改ざん・サポート外など
-            log.error("JWT無効: {}", e.getMessage(), e);
+            // 注意: 高頻度で発生する可能性があるため、スタックトレースは出力しない
+            log.warn("JWT無効: {}", e.getMessage());
             sendUnauthorized(response, "JWT_INVALID", "JWTトークンが無効です");
         }
     }

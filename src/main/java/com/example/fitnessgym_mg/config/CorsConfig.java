@@ -37,13 +37,28 @@ public class CorsConfig {
             .map(String::trim)
             .filter(origin -> !origin.isEmpty())
             .collect(Collectors.toList());
+        
+        // 空のリストチェック
+        if (origins.isEmpty()) {
+            throw new IllegalStateException(
+                "CORS設定エラー: 許可するオリジンが設定されていません。環境変数CORS_ALLOWED_ORIGINSを確認してください。");
+        }
+        
         configuration.setAllowedOrigins(origins);
         
         // 許可するHTTPメソッド
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         
-        // 許可するヘッダー
-        configuration.setAllowedHeaders(Arrays.asList("*"));
+        // 許可するヘッダー（必要なヘッダーのみを明示的に許可）
+        configuration.setAllowedHeaders(Arrays.asList(
+            "Authorization",
+            "Content-Type",
+            "X-Requested-With",
+            "Accept",
+            "Origin",
+            "Access-Control-Request-Method",
+            "Access-Control-Request-Headers"
+        ));
         
         // 認証情報（Cookie、Authorizationヘッダー）を許可
         configuration.setAllowCredentials(true);
