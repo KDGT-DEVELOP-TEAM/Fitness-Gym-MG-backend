@@ -40,7 +40,7 @@ public class SecurityConfig {
 	private static final int BCRYPT_STRENGTH = 12;
 
 	private static final String[] PUBLIC_API = {
-			"/api/auth/**"
+			"/api/auth/login"  // POST /api/auth/login のみ認証不要
 	};
 
 	private static final String[] ADMIN_API = {

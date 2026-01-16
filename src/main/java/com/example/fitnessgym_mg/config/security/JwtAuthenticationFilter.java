@@ -150,10 +150,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * 認証不要パス判定
      *
      * ※ permitAll() 設定と必ず同期させること
+     * 
+     * POST /api/auth/login のみJWTフィルターをスキップ
+     * GET /api/auth/me と POST /api/auth/logout は認証が必要なため、JWTフィルターを通過させる
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return request.getRequestURI().startsWith("/api/auth/");
+        String uri = request.getRequestURI();
+        String method = request.getMethod();
+        // POST /api/auth/login のみJWTフィルターをスキップ
+        return uri.equals("/api/auth/login") && "POST".equals(method);
     }
 
     /**

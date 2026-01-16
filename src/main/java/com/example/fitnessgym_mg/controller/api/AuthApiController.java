@@ -50,9 +50,31 @@ public class AuthApiController {
     private final JwtTokenUtil jwtTokenUtil;
 
     /**
+     * GET /api/auth/me
+     * 認証状態の確認
+     * 既に認証されている場合はユーザー情報を返す
+     */
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/me")
+    public ResponseEntity<?> getMe() {
+        // 既に認証されている場合はユーザー情報を返す
+        // storesも一緒に取得するため、emailで再取得
+        return securityUtil.getCurrentUser()
+                .map(user -> {
+                    // storesを読み込むために再取得
+                    User userWithStores = accountService.findUserByEmailWithStores(user.getEmail())
+                            .orElse(user); // 取得できない場合は元のuserを使用
+                    return ResponseEntity.ok(createLoginResponse(userWithStores, null));
+                })
+                .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+    }
+
+    /**
      * GET /api/auth/login
      * 認証状態の確認
      * 既に認証されている場合はユーザー情報を返す
+     * 
+     * @deprecated GET /api/auth/me を使用してください
      */
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/login")
