@@ -152,8 +152,8 @@ public class CustomerService {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		Customer customer = getAuthorizedCustomer(id, currentUser);
 
-		// email変更時の重複チェック
-		if (!customer.getEmail().equals(req.getEmail())) {
+		// email変更時の重複チェック（部分更新対応: emailが送信されている場合のみチェック）
+		if (req.getEmail() != null && !customer.getEmail().equals(req.getEmail())) {
 			// emailが変更されている場合のみチェック
 			// @SQLRestrictionを回避するため、ネイティブSQLクエリを使用するexistsByEmailAndIdNotNative()を使用
 			// CustomerRepositoryをCustomerRepositoryCustomにキャストして直接呼び出す
@@ -169,18 +169,28 @@ public class CustomerService {
 			}
 		}
 
-		// 必須項目を更新
+		// 必須項目を更新（部分更新対応: nullフィールドは既存値を保持）
 		setCustomerBasicFields(customer, req);
 
-		// 任意項目を更新
-		customer.setMedical(req.getMedical());
-		customer.setTaboo(req.getTaboo());
-		customer.setMemo(req.getMemo());
+		// 任意項目を更新（部分更新対応: nullフィールドは既存値を保持）
+		if (req.getMedical() != null) {
+			customer.setMedical(req.getMedical());
+		}
+		if (req.getTaboo() != null) {
+			customer.setTaboo(req.getTaboo());
+		}
+		if (req.getMemo() != null) {
+			customer.setMemo(req.getMemo());
+		}
 
-		// システム設定
-		customer.setActive(req.isActive()); // 有効/無効状態も更新できる想定
+		// システム設定（部分更新対応: activeが明示的に送信されている場合のみ更新）
+		// 注意: booleanのデフォルト値はfalseのため、falseを明示的に送信した場合と区別できない
+		// ただし、顧客プロフィール編集ではactiveを更新しないため、この問題は発生しない想定
+		// 必要に応じて、Boolean型に変更してnullチェックを行うことを検討
+		// customer.setActive(req.isActive()); // 部分更新ではactiveは更新しない
 
 		// バリデーション: 更新時のビジネスルールチェック
+		// 部分更新のため、送信されたフィールドのみをバリデーション
 		validateForUpdate(req);
 		
 		// firstPostureGroupIdの更新（nullの場合は既存の値を保持）
@@ -429,18 +439,36 @@ public class CustomerService {
 	/**
 	 * 顧客の基本情報フィールドを設定（共通ロジック）
 	 * 
+	 * <p>部分更新（PATCH）対応: nullフィールドは既存値を保持します。</p>
+	 * 
 	 * @param customer 顧客エンティティ
 	 * @param req 顧客リクエストDTO
 	 */
 	private void setCustomerBasicFields(Customer customer, CustomerRequest req) {
-		customer.setKana(req.getKana());
-		customer.setName(req.getName());
-		customer.setGender(req.getGender());
-		customer.setBirthday(req.getBirthday());
-		customer.setHeight(req.getHeight());
-		customer.setEmail(req.getEmail());
-		customer.setPhone(req.getPhone());
-		customer.setAddress(req.getAddress());
+		if (req.getKana() != null) {
+			customer.setKana(req.getKana());
+		}
+		if (req.getName() != null) {
+			customer.setName(req.getName());
+		}
+		if (req.getGender() != null) {
+			customer.setGender(req.getGender());
+		}
+		if (req.getBirthday() != null) {
+			customer.setBirthday(req.getBirthday());
+		}
+		if (req.getHeight() != null) {
+			customer.setHeight(req.getHeight());
+		}
+		if (req.getEmail() != null) {
+			customer.setEmail(req.getEmail());
+		}
+		if (req.getPhone() != null) {
+			customer.setPhone(req.getPhone());
+		}
+		if (req.getAddress() != null) {
+			customer.setAddress(req.getAddress());
+		}
 	}
 
 	/**

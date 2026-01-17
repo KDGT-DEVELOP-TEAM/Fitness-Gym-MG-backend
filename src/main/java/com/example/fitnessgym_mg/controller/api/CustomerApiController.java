@@ -254,13 +254,18 @@ public class CustomerApiController {
 
 	/**
 	 * PATCH /api/customers/{customer_id}/profile
-	 * 顧客プロフィールの更新
+	 * 顧客プロフィールの更新（部分更新対応）
+	 * 
+	 * <p>部分更新（PATCH）のため、nullフィールドは既存値を保持します。</p>
+	 * <p>バリデーションは、送信されたフィールドのみを検証します。</p>
 	 */
 	@PreAuthorize("@authorizationFacade.canAccessCustomer(authentication, #customerId)")
 	@PatchMapping("/customers/{customer_id}/profile")
 	public ResponseEntity<Void> updateCustomerProfile(
 			@PathVariable("customer_id") UUID customerId,
-			@Valid @RequestBody CustomerRequest request) {
+			@RequestBody CustomerRequest request) {
+		// 部分更新のため、@Validは使用しない（nullフィールドのバリデーションをスキップ）
+		// Service層で既存値とマージしてからバリデーションを行う
 		service.update(customerId, request);
 		return ResponseEntity.ok().build();
 	}
