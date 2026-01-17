@@ -177,4 +177,102 @@ public class CustomerAuthorizationService {
 		}
 	}
 
+	/**
+	 * 現在のユーザーが有効な顧客（論理削除済みを除く）にアクセス可能か確認（内部実装）
+	 * 
+	 * <p>このメソッドは内部実装用。外部からはAuthorizationFacade経由でアクセスすること。</p>
+	 * 
+	 * <p>プロフィール、履歴、姿勢画像など、有効な顧客のみ表示すべきページで使用する。
+	 * canAccessCustomerInternalとは異なり、ADMINロールでもisActiveとisDeletedのチェックを実施する。</p>
+	 * 
+	 * <p>設計方針: 存在確認と権限確認を分離しない。
+	 * 各ロール別ロジック内で必要な情報が取れなければfalseを返す。
+	 * 「見えないものは存在しない扱い」を実現し、情報漏洩リスクを低減する。</p>
+	 * 
+	 * @param currentUser 現在のユーザー
+	 * @param customerId 顧客ID
+	 * @return アクセス可能な場合 true
+	 */
+	boolean canAccessActiveCustomerInternal(User currentUser, UUID customerId) {
+		// 不正な引数は「アクセス不可」として扱う（例外は投げない設計）
+		if (currentUser == null) {
+			log.warn("Authorization check failed: currentUser is null. customerId={}", customerId);
+			return false;
+		}
+
+		if (customerId == null) {
+			log.warn("Authorization check failed: customerId is null. userId={}, customerId=null", currentUser.getId());
+			return false;
+		}
+
+		log.debug("Authorization check (active customer): userId={}, role={}, customerId={}", currentUser.getId(), currentUser.getRole(), customerId);
+
+		// ADMIN: 有効な顧客（isActive=true かつ isDeleted=false）のみアクセス可能
+		if (rolePolicy.isSuperUser(currentUser)) {
+			boolean result = canAdminAccessActiveCustomer(currentUser, customerId);
+			log.debug("Authorization check (active customer): ADMIN access={} for customerId={}", result, customerId);
+			return result;
+		}
+
+		// MANAGER: 全店舗の顧客にアクセス可能（トレーナーと同様のロジック）
+		// 顧客が存在し、論理削除されていない、かつ有効な場合にアクセス可能
+		if (currentUser.getRole() == UserRole.MANAGER) {
+			boolean result = canManagerAccessCustomer(currentUser, customerId);
+			log.debug("Authorization check (active customer): MANAGER access={} for customerId={}", result, customerId);
+			return result;
+		}
+
+		// TRAINER: 所属店舗のすべての顧客にアクセス可能
+		// トレーナーと顧客が同じ店舗に所属しているかチェック
+		if (currentUser.getRole() == UserRole.TRAINER) {
+			boolean result = canTrainerAccessCustomerByStore(currentUser, customerId);
+			log.debug("Authorization check (active customer): TRAINER access={} for trainerId={}, customerId={}", result, currentUser.getId(), customerId);
+			return result;
+		}
+
+		// その他のロール（現時点ではCUSTOMERロールは未対応）
+		// 将来的にCUSTOMERロールが追加された場合は、currentUser.getId().equals(customerId) のチェックを実装予定
+		log.warn("Authorization check (active customer) failed: Unknown role={}", currentUser.getRole());
+		return false;
+	}
+
+	/**
+	 * ADMINが有効な顧客にアクセス可能か確認
+	 * 
+	 * <p>ADMINは有効な顧客（isActive=true かつ isDeleted=false）のみアクセス可能</p>
+	 * 
+	 * @param admin ADMINユーザー
+	 * @param customerId 顧客ID
+	 * @return アクセス可能な場合 true
+	 */
+	private boolean canAdminAccessActiveCustomer(User admin, UUID customerId) {
+		try {
+			if (customerRepository instanceof CustomerRepositoryCustom) {
+				// 顧客が存在し、論理削除されていない、かつ有効かを確認
+				java.util.Optional<Customer> customerOpt = ((CustomerRepositoryCustom) customerRepository)
+						.findByIdWithStoresNative(customerId);
+				
+				if (customerOpt.isEmpty()) {
+					log.debug("canAdminAccessActiveCustomer: customer not found - adminId={}, customerId={}", 
+							admin.getId(), customerId);
+					return false;
+				}
+				
+				Customer customer = customerOpt.get();
+				// 顧客が有効で、論理削除されていない場合にアクセス可能
+				boolean result = customer.isActive() && !customer.isDeleted();
+				log.debug("canAdminAccessActiveCustomer: adminId={}, customerId={}, active={}, deleted={}, result={}", 
+						admin.getId(), customerId, customer.isActive(), customer.isDeleted(), result);
+				return result;
+			} else {
+				log.error("CustomerRepository does not implement CustomerRepositoryCustom");
+				return false;
+			}
+		} catch (Exception e) {
+			log.error("canAdminAccessActiveCustomer failed: adminId={}, customerId={}", 
+					admin.getId(), customerId, e);
+			return false;
+		}
+	}
+
 }

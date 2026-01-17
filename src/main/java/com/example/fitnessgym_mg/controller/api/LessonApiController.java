@@ -44,8 +44,10 @@ public class LessonApiController {
 	/**
 	 * POST /api/customers/{customer_id}/lessons
 	 * 新しいレッスン記録の作成
+	 * 
+	 * <p>有効な顧客（isActive=true かつ isDeleted=false）のみアクセス可能。</p>
 	 */
-	@PreAuthorize("@authorizationFacade.canAccessCustomer(authentication, #customerId)")
+	@PreAuthorize("@authorizationFacade.canAccessActiveCustomer(authentication, #customerId)")
 	@PostMapping("/customers/{customer_id}/lessons")
 	public ResponseEntity<com.example.fitnessgym_mg.dto.response.LessonResponse> createLesson(
 			@PathVariable("customer_id") UUID customerId,
@@ -62,8 +64,10 @@ public class LessonApiController {
 	/**
 	 * GET /api/customers/{customer_id}/lessons
 	 * 顧客の全レッスン履歴一覧（ページネーション/フィルタリング）
+	 * 
+	 * <p>有効な顧客（isActive=true かつ isDeleted=false）のみアクセス可能。</p>
 	 */
-	@PreAuthorize("@authorizationFacade.canAccessCustomer(authentication, #customerId)")
+	@PreAuthorize("@authorizationFacade.canAccessActiveCustomer(authentication, #customerId)")
 	@GetMapping("/customers/{customer_id}/lessons")
 	public ResponseEntity<Page<LessonResponse>> getCustomerLessons(
 			@PathVariable("customer_id") UUID customerId,

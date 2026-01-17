@@ -244,8 +244,10 @@ public class CustomerApiController {
 	/**
 	 * GET /api/customers/{customer_id}/profile
 	 * 顧客の基本プロフィール情報取得
+	 * 
+	 * <p>有効な顧客（isActive=true かつ isDeleted=false）のみアクセス可能。</p>
 	 */
-	@PreAuthorize("@authorizationFacade.canAccessCustomer(authentication, #customerId)")
+	@PreAuthorize("@authorizationFacade.canAccessActiveCustomer(authentication, #customerId)")
 	@GetMapping("/customers/{customer_id}/profile")
 	public ResponseEntity<CustomerResponse> getCustomerProfile(@PathVariable("customer_id") UUID customerId) {
 		CustomerResponse customer = service.getCustomerById(customerId);
@@ -258,8 +260,9 @@ public class CustomerApiController {
 	 * 
 	 * <p>部分更新（PATCH）のため、nullフィールドは既存値を保持します。</p>
 	 * <p>バリデーションは、送信されたフィールドのみを検証します。</p>
+	 * <p>有効な顧客（isActive=true かつ isDeleted=false）のみアクセス可能。</p>
 	 */
-	@PreAuthorize("@authorizationFacade.canAccessCustomer(authentication, #customerId)")
+	@PreAuthorize("@authorizationFacade.canAccessActiveCustomer(authentication, #customerId)")
 	@PatchMapping("/customers/{customer_id}/profile")
 	public ResponseEntity<Void> updateCustomerProfile(
 			@PathVariable("customer_id") UUID customerId,

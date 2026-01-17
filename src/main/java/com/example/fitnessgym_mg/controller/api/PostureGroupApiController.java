@@ -38,8 +38,9 @@ public class PostureGroupApiController {
 	 * 
 	 * <p>Controllerの責務: HTTPリクエスト/レスポンスの制御のみ。
 	 * 認可チェックとDTO変換はService層で実施される。</p>
+	 * <p>有効な顧客（isActive=true かつ isDeleted=false）のみアクセス可能。</p>
 	 */
-	@PreAuthorize("@authorizationFacade.canAccessCustomer(authentication, #customerId)")
+	@PreAuthorize("@authorizationFacade.canAccessActiveCustomer(authentication, #customerId)")
 	@GetMapping("/customers/{customer_id}/posture_groups")
 	public ResponseEntity<List<PostureGroupResponse>> listGroups(@PathVariable("customer_id") UUID customerId) {
 		// 現在のユーザーを取得

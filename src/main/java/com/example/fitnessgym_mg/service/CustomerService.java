@@ -259,12 +259,12 @@ public class CustomerService {
 	@Transactional(readOnly = true)
 	private Customer getAuthorizedCustomer(UUID id, User currentUser) {
 		// 1. エンティティ取得（Repository直接アクセス）
-		// @SQLRestrictionを回避するために、ネイティブSQLクエリを使用するfindByIdWithStoresNative()を使用
+		// 退会済み顧客も検出するために、findByIdWithStoresNativeIncludingDeleted()を使用
 		// CustomerRepositoryをCustomerRepositoryCustomにキャストして直接呼び出す
 		Customer customer;
 		if (customerRepository instanceof CustomerRepositoryCustom) {
 			customer = ((CustomerRepositoryCustom) customerRepository)
-					.findByIdWithStoresNative(id)
+					.findByIdWithStoresNativeIncludingDeleted(id)
 					.orElseThrow(() -> {
 						log.warn("顧客が見つかりません: customerId={}", id);
 						return new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません: " + id);
@@ -275,9 +275,10 @@ public class CustomerService {
 		}
 
 		// 2. 状態検証: 論理削除チェック
+		// 退会済み顧客の場合は特別な例外をスロー
 		if (customer.isDeleted()) {
 			log.warn("論理削除済みの顧客にアクセスしようとしました: customerId={}", id);
-			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません: " + id);
+			throw new com.example.fitnessgym_mg.exception.CustomerDeletedException(id);
 		}
 
 		// 3. 認可チェック（エンティティ版を使用）

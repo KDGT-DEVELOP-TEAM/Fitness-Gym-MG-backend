@@ -216,6 +216,19 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 顧客が論理削除（退会済み）されている場合のハンドリング
+     * 顧客が退会済みの場合に使用
+     * HTTPステータスコード403 Forbiddenを返す
+     */
+    @ExceptionHandler(CustomerDeletedException.class)
+    public ResponseEntity<ErrorResponse> handleCustomerDeleted(CustomerDeletedException e) {
+        log.warn("Customer deleted: customerId={}", e.getCustomerId());
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse("CUSTOMER_DELETED", "顧客は退会済みです"));
+    }
+
+    /**
      * Spring Securityの認可エラーのハンドリング
      * @PreAuthorizeアノテーションによる認可チェックで拒否された場合に発生
      * HTTPステータスコード403 Forbiddenを返す

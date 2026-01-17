@@ -48,6 +48,26 @@ public class AuthorizationFacade {
     }
     
     /**
+     * 有効な顧客（論理削除済みを除く）へのアクセス権限を確認
+     * 
+     * <p>判断の最終責任者。プロフィール、履歴、姿勢画像など、有効な顧客のみ表示すべきページで使用する。</p>
+     * <p>canAccessCustomerとは異なり、ADMINロールでもisActiveとisDeletedのチェックを実施する。</p>
+     * 
+     * @param currentUser 現在のユーザー
+     * @param customerId 顧客ID
+     * @return アクセス可能な場合 true
+     */
+    public boolean canAccessActiveCustomer(User currentUser, UUID customerId) {
+        try {
+            return customerAuthorizationService.canAccessActiveCustomerInternal(currentUser, customerId);
+        } catch (RuntimeException e) {
+            log.error("AuthorizationFacade.canAccessActiveCustomer: Authorization check failed unexpectedly - userId={}, customerId={}", 
+                    currentUser != null ? currentUser.getId() : "null", customerId, e);
+            return false;
+        }
+    }
+    
+    /**
      * 店舗へのアクセス権限を確認
      * 
      * <p>判断の最終責任者。すべての認可チェックはこのFacade経由で実施する。</p>
@@ -116,6 +136,26 @@ public class AuthorizationFacade {
             String userId = currentUser != null ? currentUser.getId().toString() : "unknown";
             String resource = "customer:" + (customerId != null ? customerId.toString() : "unknown");
             log.warn("Access denied: userId={}, resource={}, role={}", 
+                    userId, resource, currentUser != null ? currentUser.getRole() : "unknown");
+            throw new com.example.fitnessgym_mg.exception.AccessDeniedException(userId, resource);
+        }
+    }
+    
+    /**
+     * 有効な顧客（論理削除済みを除く）へのアクセス権限を確認し、不可能な場合は例外をスロー
+     * 
+     * <p>Service層での認可チェック用メソッド。
+     * プロフィール、履歴、姿勢画像など、有効な顧客のみ表示すべきページで使用する。</p>
+     * 
+     * @param currentUser 現在のユーザー
+     * @param customerId 顧客ID
+     * @throws AccessDeniedException アクセス権限がない場合（HTTP 403 Forbidden）
+     */
+    public void checkCanAccessActiveCustomerOrThrow(User currentUser, UUID customerId) {
+        if (!canAccessActiveCustomer(currentUser, customerId)) {
+            String userId = currentUser != null ? currentUser.getId().toString() : "unknown";
+            String resource = "activeCustomer:" + (customerId != null ? customerId.toString() : "unknown");
+            log.warn("Access denied (active customer): userId={}, resource={}, role={}", 
                     userId, resource, currentUser != null ? currentUser.getRole() : "unknown");
             throw new com.example.fitnessgym_mg.exception.AccessDeniedException(userId, resource);
         }
@@ -201,6 +241,28 @@ public class AuthorizationFacade {
         return canAccessCustomer(currentUser, customerId);
         } catch (Exception e) {
             log.error("AuthorizationFacade.canAccessCustomer (SpEL): Failed to extract user or check access - authentication={}, customerId={}", 
+                    authentication != null ? authentication.getName() : "null", customerId, e);
+            return false;
+        }
+    }
+    
+    /**
+     * SpEL用: 現在のユーザーが指定された有効な顧客（論理削除済みを除く）にアクセス可能か確認
+     * 
+     * <p>@PreAuthorizeのSpELから呼び出すためのメソッド。
+     * AuthenticationからUserを取得し、内部のcanAccessActiveCustomerに委譲する。</p>
+     * <p>プロフィール、履歴、姿勢画像など、有効な顧客のみ表示すべきページで使用する。</p>
+     * 
+     * @param authentication Spring Securityの認証情報
+     * @param customerId 顧客ID
+     * @return アクセス可能な場合 true
+     */
+    public boolean canAccessActiveCustomer(Authentication authentication, UUID customerId) {
+        try {
+            User currentUser = securityUtil.getUserFromAuthenticationOrThrow(authentication);
+            return canAccessActiveCustomer(currentUser, customerId);
+        } catch (Exception e) {
+            log.error("AuthorizationFacade.canAccessActiveCustomer (SpEL): Failed to extract user or check access - authentication={}, customerId={}", 
                     authentication != null ? authentication.getName() : "null", customerId, e);
             return false;
         }
