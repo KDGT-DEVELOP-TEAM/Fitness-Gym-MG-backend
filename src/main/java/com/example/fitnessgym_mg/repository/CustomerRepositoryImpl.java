@@ -59,6 +59,69 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 	}
 
 	@Override
+	public Page<Customer> findAllNotDeletedWithStores(Specification<Customer> spec, Pageable pageable) {
+		// 重要: 論理削除条件を明示的に強制
+		Specification<Customer> notDeletedSpec = CustomerSpecifications.notDeleted();
+		if (spec != null) {
+			notDeletedSpec = notDeletedSpec.and(spec);
+		}
+
+		// JOIN FETCHを使用するため、JPQLクエリを動的に構築
+		jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+		jakarta.persistence.criteria.CriteriaQuery<Customer> query = cb.createQuery(Customer.class);
+		jakarta.persistence.criteria.Root<Customer> root = query.from(Customer.class);
+		
+		// storesをJOIN FETCH（N+1問題を回避）
+		root.fetch("stores", jakarta.persistence.criteria.JoinType.LEFT);
+		
+		// SpecificationからPredicateを取得
+		jakarta.persistence.criteria.Predicate predicate = notDeletedSpec.toPredicate(root, query, cb);
+		if (predicate != null) {
+			query.where(predicate);
+		}
+		
+		// DISTINCTを追加（JOIN FETCHによる重複行を排除）
+		query.distinct(true);
+		
+		// ページネーション用のカウントクエリを構築
+		jakarta.persistence.criteria.CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
+		jakarta.persistence.criteria.Root<Customer> countRoot = countQuery.from(Customer.class);
+		jakarta.persistence.criteria.Predicate countPredicate = notDeletedSpec.toPredicate(countRoot, countQuery, cb);
+		if (countPredicate != null) {
+			countQuery.where(countPredicate);
+		}
+		countQuery.select(cb.count(countRoot));
+		
+		// ソートを適用
+		if (pageable.getSort().isSorted()) {
+			java.util.List<jakarta.persistence.criteria.Order> orders = new java.util.ArrayList<>();
+			pageable.getSort().forEach(order -> {
+				jakarta.persistence.criteria.Expression<?> expr = root.get(order.getProperty());
+				if (order.isAscending()) {
+					orders.add(cb.asc(expr));
+				} else {
+					orders.add(cb.desc(expr));
+				}
+			});
+			query.orderBy(orders);
+		}
+		
+		// カウントを取得
+		Long total = entityManager.createQuery(countQuery).getSingleResult();
+		
+		// ページネーションを適用してデータを取得
+		jakarta.persistence.TypedQuery<Customer> typedQuery = entityManager.createQuery(query);
+		if (pageable.isPaged()) {
+			typedQuery.setFirstResult((int) pageable.getOffset());
+			typedQuery.setMaxResults(pageable.getPageSize());
+		}
+		
+		java.util.List<Customer> content = typedQuery.getResultList();
+		
+		return new org.springframework.data.domain.PageImpl<>(content, pageable, total);
+	}
+
+	@Override
 	public List<Customer> findAllNotDeleted() {
 		// @SQLRestriction("deleted_at IS NULL")を回避するためにネイティブSQLクエリを使用
 		// ただし、論理削除条件は明示的に適用する必要がある

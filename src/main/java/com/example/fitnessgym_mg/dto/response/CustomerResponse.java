@@ -58,6 +58,18 @@ public class CustomerResponse {
 	private UUID firstPostureGroupId; // 初回姿勢画像ID
 	
 	/**
+	 * 店舗ID
+	 * 顧客が紐づく店舗のID（顧客は1つの店舗にのみ紐づく）
+	 */
+	private UUID storeId;
+	
+	/**
+	 * 店舗名
+	 * 顧客が紐づく店舗の名前（顧客は1つの店舗にのみ紐づく）
+	 */
+	private String storeName;
+	
+	/**
 	 * 医療・既往歴（任意）
 	 * 
 	 * <p>Entity（{@link com.example.fitnessgym_mg.entity.Customer#medical}）の`medical`フィールドに対応します。</p>
@@ -112,6 +124,14 @@ public class CustomerResponse {
 		r.setMedical(c.getMedical());
 		r.setTaboo(c.getTaboo());
 		r.setMemo(c.getMemo());
+		
+		// 店舗情報を取得（顧客は1つの店舗にのみ紐づくため、最初の店舗を取得）
+		if (c.getStores() != null && !c.getStores().isEmpty()) {
+			com.example.fitnessgym_mg.entity.Store firstStore = c.getStores().iterator().next();
+			r.setStoreId(firstStore.getId());
+			r.setStoreName(firstStore.getName());
+		}
+		
 		// latestWeightは別途設定が必要（レッスンから取得）
 		return r;
 	}

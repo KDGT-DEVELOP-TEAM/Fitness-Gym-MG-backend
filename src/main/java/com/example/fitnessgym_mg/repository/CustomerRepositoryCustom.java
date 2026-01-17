@@ -35,6 +35,24 @@ public interface CustomerRepositoryCustom {
 	Page<Customer> findAllNotDeleted(Specification<Customer> spec, Pageable pageable);
 
 	/**
+	 * 論理削除されていない顧客を検索（storesもJOIN FETCH、ページネーション対応）
+	 * 
+	 * <p>指定されたSpecificationに自動的に`notDeleted()`条件を適用し、
+	 * storesもJOIN FETCHで一括取得します。N+1問題を回避するために使用します。</p>
+	 * 
+	 * <p>パフォーマンスに関する注意事項:</p>
+	 * <ul>
+	 *   <li>storesが多くなる場合、メモリ負荷が大きくなる可能性があります。</li>
+	 *   <li>顧客は通常1つの店舗にのみ紐づくため、メモリ負荷は軽微です。</li>
+	 * </ul>
+	 * 
+	 * @param spec 検索条件（論理削除条件は自動的に追加される）
+	 * @param pageable ページネーション情報
+	 * @return 検索結果のページ（storesもロード済み）
+	 */
+	Page<Customer> findAllNotDeletedWithStores(Specification<Customer> spec, Pageable pageable);
+
+	/**
 	 * 論理削除されていない全顧客を取得（オプション選択用）
 	 * 
 	 * <p>オプション選択用の全件取得メソッドです。

@@ -76,6 +76,7 @@ public class AuthApiController {
      * 
      * @deprecated GET /api/auth/me を使用してください
      */
+    @Deprecated
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/login")
     public ResponseEntity<?> getLogin() {

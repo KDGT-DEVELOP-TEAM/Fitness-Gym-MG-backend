@@ -93,8 +93,8 @@ public class CustomerService {
 		int size = Math.min(pageable.getPageSize(), ApplicationConstants.MAX_PAGE_SIZE);
 		Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), size, sortObj);
 
-		// 4. 検索メソッドの実行 (findAllNotDeletedを使用 - 論理削除条件が自動適用される)
-		Page<Customer> customerPage = customerRepository.findAllNotDeleted(spec, sortedPageable);
+		// 4. 検索メソッドの実行 (findAllNotDeletedWithStoresを使用 - storesもJOIN FETCHで一括取得、N+1問題を回避)
+		Page<Customer> customerPage = customerRepository.findAllNotDeletedWithStores(spec, sortedPageable);
 
 		// 5. マッピング
 		return customerPage.map(CustomerResponse::fromEntity);
@@ -304,8 +304,9 @@ public class CustomerService {
 		};
 		
 		// 論理削除されていない、かつ有効な顧客のみを取得
+		// findAllNotDeletedWithStoresを使用してstoresもJOIN FETCHで一括取得（N+1問題を回避）
 		// Pageable.unpaged()を使用して全件取得
-		Page<Customer> customerPage = customerRepository.findAllNotDeleted(distinctSpec, Pageable.unpaged());
+		Page<Customer> customerPage = customerRepository.findAllNotDeletedWithStores(distinctSpec, Pageable.unpaged());
 		List<Customer> customers = customerPage.getContent();
 		
 		log.info("トレーナーが取得した顧客数: trainerId={}, count={}", trainerId, customers.size());
