@@ -113,8 +113,61 @@ public class LessonService {
 			lessonPage = lessonRepository.findByEndDateBefore(now, pageable);
 		}
 
-		// 2. マッピング
-		return lessonPage.map(LessonResponse::fromEntity);
+		// 2. Customer情報をバッチで取得（削除状態も含む）
+		java.util.List<Lesson> lessons = lessonPage.getContent();
+		java.util.Map<UUID, java.util.Map<String, Object>> customerMap = new java.util.HashMap<>();
+		
+		if (!lessons.isEmpty()) {
+			// レッスンIDのリストを作成
+			java.util.List<UUID> lessonIds = lessons.stream()
+					.map(Lesson::getId)
+					.collect(Collectors.toList());
+			
+			try {
+				// バッチでCustomer情報を取得（削除状態も含む）
+				java.util.List<Object[]> customerDataList = lessonRepository.findCustomerIdNameAndDeletedByLessonIds(lessonIds);
+				
+				log.debug("Customer情報取得: lessonIds={}, customerDataList.size()={}", lessonIds.size(), customerDataList.size());
+				
+				// レッスンIDをキーとしてCustomer情報をマップに格納
+				for (Object[] row : customerDataList) {
+					try {
+						UUID lessonId = convertToUUID(row[0]);
+						UUID customerId = convertToUUID(row[1]);
+						String customerName = row[2] != null ? row[2].toString() : null;
+						Boolean customerDeleted = row[3] != null ? (Boolean) row[3] : false;
+						
+						if (lessonId != null && customerId != null && customerName != null) {
+							java.util.Map<String, Object> customerInfo = new java.util.HashMap<>();
+							customerInfo.put("id", customerId);
+							customerInfo.put("name", customerName);
+							customerInfo.put("deleted", customerDeleted);
+							customerMap.put(lessonId, customerInfo);
+						}
+					} catch (Exception e) {
+						log.warn("Customer情報のマッピングに失敗: row={}, error={}", java.util.Arrays.toString(row), e.getMessage());
+					}
+				}
+			} catch (Exception e) {
+				log.error("Customer情報の取得に失敗: lessonIds={}, error={}", lessonIds, e.getMessage(), e);
+				// エラーが発生しても処理を続行（Customer情報なしでレスポンスを返す）
+			}
+		}
+
+		// 3. マッピング（Customer情報と削除状態を設定）
+		return lessonPage.map(lesson -> {
+			LessonResponse response = LessonResponse.fromEntity(lesson);
+			
+			// Customerの情報をマップから取得して設定
+			java.util.Map<String, Object> customerInfo = customerMap.get(lesson.getId());
+			if (customerInfo != null) {
+				response.setCustomerId((UUID) customerInfo.get("id"));
+				response.setCustomerName((String) customerInfo.get("name"));
+				response.setCustomerDeleted((Boolean) customerInfo.get("deleted"));
+			}
+			
+			return response;
+		});
 	}
 
 	/**
@@ -240,6 +293,17 @@ public class LessonService {
 		// レスポンス作成（fromEntityを使用して基本データを設定）
 		LessonResponse response = LessonResponse.fromEntity(lesson);
 
+		// 顧客の削除状態を取得して設定
+		UUID customerId = lesson.getCustomer().getId();
+		if (customerRepository instanceof com.example.fitnessgym_mg.repository.CustomerRepositoryCustom) {
+			java.util.Optional<Customer> customerOpt = ((com.example.fitnessgym_mg.repository.CustomerRepositoryCustom) customerRepository)
+					.findByIdWithStoresNativeIncludingDeleted(customerId);
+			if (customerOpt.isPresent()) {
+				Customer customer = customerOpt.get();
+				response.setCustomerDeleted(customer.getDeletedAt() != null);
+			}
+		}
+
 		// 追加データを設定
 		response.setCondition(lesson.getCondition());
 		response.setWeight(lesson.getWeight());
@@ -324,11 +388,28 @@ public class LessonService {
 		Page<Lesson> lessonPage = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId, pageable);
 
 		// Customer情報を1回のクエリで取得（すべてのレッスンが同じcustomerIdを持つため）
-		Customer customer = customerRepository.findById(customerId)
-				.orElse(null);
+		// 論理削除された顧客も取得できるようにfindByIdWithStoresNativeIncludingDeletedを使用
+		final Customer customer;
+		final Boolean customerDeleted;
+		if (customerRepository instanceof com.example.fitnessgym_mg.repository.CustomerRepositoryCustom) {
+			java.util.Optional<Customer> customerOpt = ((com.example.fitnessgym_mg.repository.CustomerRepositoryCustom) customerRepository)
+					.findByIdWithStoresNativeIncludingDeleted(customerId);
+			if (customerOpt.isPresent()) {
+				Customer foundCustomer = customerOpt.get();
+				customer = foundCustomer;
+				customerDeleted = foundCustomer.getDeletedAt() != null;
+			} else {
+				customer = null;
+				customerDeleted = null;
+			}
+		} else {
+			customer = null;
+			customerDeleted = null;
+		}
 		
-		UUID customerIdForResponse = customer != null ? customer.getId() : customerId;
-		String customerNameForResponse = customer != null ? customer.getName() : null;
+		final UUID customerIdForResponse = customer != null ? customer.getId() : customerId;
+		final String customerNameForResponse = customer != null ? customer.getName() : null;
+		final java.math.BigDecimal customerHeight = customer != null ? customer.getHeight() : null;
 
 		// LessonResponseに変換し、Customer情報を設定
 		return lessonPage.map(lesson -> {
@@ -341,13 +422,16 @@ public class LessonService {
 			if (customerNameForResponse != null) {
 				response.setCustomerName(customerNameForResponse);
 			}
+			if (customerDeleted != null) {
+				response.setCustomerDeleted(customerDeleted);
+			}
 			
 			// weightとbmiを設定（BMI計算に必要）
 			response.setWeight(lesson.getWeight());
-			if (lesson.getWeight() != null && customer != null && customer.getHeight() != null) {
-				java.math.BigDecimal bmi = BmiCalculator.calculate(lesson.getWeight(), customer.getHeight());
+			if (lesson.getWeight() != null && customerHeight != null) {
+				java.math.BigDecimal bmi = BmiCalculator.calculate(lesson.getWeight(), customerHeight);
 				response.setBmi(bmi);
-						}
+			}
 			
 			// 次回レッスン情報を設定
 			if (lesson.getNextDate() != null) {

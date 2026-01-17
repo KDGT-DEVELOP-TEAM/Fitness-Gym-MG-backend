@@ -333,6 +333,21 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	java.util.List<Object[]> findCustomerIdAndNameByLessonIds(@Param("lessonIds") java.util.List<UUID> lessonIds);
 
 	/**
+	 * 複数のレッスンIDからCustomerのID、名前、削除状態を一括取得（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * <p>N+1問題を回避するため、複数のレッスンIDに対して一度のクエリでCustomer情報を取得します。</p>
+	 * <p>論理削除された顧客も含めて取得します（deleted_at条件を含まない）。</p>
+	 * <p>統計画面など、論理削除された顧客のレッスンも表示する必要がある場合に使用します。</p>
+	 * 
+	 * @param lessonIds レッスンIDのリスト
+	 * @return レッスンIDとCustomerのID、名前、削除状態のマッピング（レッスンID -> [Customer ID, Customer Name, Customer Deleted]）
+	 *         削除状態はboolean型（deleted_at IS NOT NULLの場合true）
+	 */
+	@Query(nativeQuery = true, value = "SELECT l.id as lesson_id, c.id as customer_id, c.name as customer_name, (c.deleted_at IS NOT NULL) as customer_deleted FROM lessons l JOIN customers c ON l.customer_id = c.id WHERE l.id IN :lessonIds")
+	java.util.List<Object[]> findCustomerIdNameAndDeletedByLessonIds(@Param("lessonIds") java.util.List<UUID> lessonIds);
+
+	/**
 	 * レッスンIDでレッスンを取得し、関連エンティティもJOIN FETCHで取得（N+1問題を回避）
 	 * 
 	 * <p>この用途（詳細画面）では現状の実装が妥当です。</p>

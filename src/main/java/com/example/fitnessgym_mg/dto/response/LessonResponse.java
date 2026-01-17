@@ -39,6 +39,7 @@ public class LessonResponse {
 	// 顧客
 	private UUID customerId;
 	private String customerName;
+	private Boolean customerDeleted; // 顧客が論理削除されているかどうか
 
 	// 詳細表示用フィールド
 	private String condition;
