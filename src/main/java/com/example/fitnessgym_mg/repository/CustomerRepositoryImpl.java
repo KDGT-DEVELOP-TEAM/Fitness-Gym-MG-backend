@@ -320,6 +320,171 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 	}
 
 	@Override
+	public Optional<Customer> findByIdWithStoresNativeIncludingDeleted(java.util.UUID customerId) {
+		// @SQLRestriction("deleted_at IS NULL")を回避するためにネイティブSQLクエリを使用
+		// Object[]として取得し、手動でCustomerエンティティを構築することで、
+		// Hibernateのエンティティマッピングと@SQLRestrictionの適用を完全に回避
+		// 
+		// 注意: このメソッドは手動でエンティティマッピングを行っているため、保守性が低い。
+		// 将来的には、DTO Projectionや専用のマッピングライブラリ（MapStructなど）の導入を検討すること。
+		// または、@SQLRestrictionを回避する別の方法を検討すること。
+		// 
+		// 重要: このメソッドは論理削除された顧客も含めて取得します（deleted_at条件を含まない）。
+		// レッスン認可チェックなど、論理削除された顧客の情報も必要な場合に使用します。
+		String customerQuery = """
+				SELECT id, kana, name, gender, birthday, height, email, phone, address,
+				       medical, taboo, first_posture_group_id, memo, created_at, is_active, deleted_at
+				FROM customers
+				WHERE id = :customerId
+				""";
+		
+		@SuppressWarnings("unchecked")
+		List<Object[]> customerResults = entityManager
+				.createNativeQuery(customerQuery)
+				.setParameter("customerId", customerId)
+				.getResultList();
+		
+		if (customerResults.isEmpty()) {
+			return Optional.empty();
+		}
+		
+		Object[] row = customerResults.get(0);
+		Customer customer = new Customer();
+		
+		// GenderConverterを使用してgenderを変換
+		GenderConverter genderConverter = new GenderConverter();
+		
+		try {
+			customer.setId(row[0] instanceof UUID ? (UUID) row[0] : UUID.fromString(row[0].toString()));
+			customer.setKana(row[1] != null ? row[1].toString() : null);
+			customer.setName(row[2] != null ? row[2].toString() : null);
+			
+			// gender: String型として取得し、GenderConverterで変換
+			if (row[3] != null) {
+				customer.setGender(genderConverter.convertToEntityAttribute(row[3].toString()));
+			}
+			
+			// birthday: 様々な型に対応
+			if (row[4] != null) {
+				if (row[4] instanceof java.sql.Date) {
+					customer.setBirthday(((java.sql.Date) row[4]).toLocalDate());
+				} else if (row[4] instanceof java.time.LocalDate) {
+					customer.setBirthday((java.time.LocalDate) row[4]);
+				} else if (row[4] instanceof java.sql.Timestamp) {
+					customer.setBirthday(((java.sql.Timestamp) row[4]).toLocalDateTime().toLocalDate());
+				} else if (row[4] instanceof java.time.LocalDateTime) {
+					customer.setBirthday(((java.time.LocalDateTime) row[4]).toLocalDate());
+				}
+			}
+			
+			customer.setHeight(row[5] != null && row[5] instanceof java.math.BigDecimal 
+					? (java.math.BigDecimal) row[5] 
+					: row[5] != null ? new java.math.BigDecimal(row[5].toString()) : null);
+			customer.setEmail(row[6] != null ? row[6].toString() : null);
+			customer.setPhone(row[7] != null ? row[7].toString() : null);
+			customer.setAddress(row[8] != null ? row[8].toString() : null);
+			customer.setMedical(row[9] != null ? row[9].toString() : null);
+			customer.setTaboo(row[10] != null ? row[10].toString() : null);
+			
+			if (row[11] != null) {
+				customer.setFirstPostureGroupId(row[11] instanceof UUID 
+						? (UUID) row[11] 
+						: UUID.fromString(row[11].toString()));
+			}
+			
+			customer.setMemo(row[12] != null ? row[12].toString() : null);
+			
+			// created_at: 様々な型に対応
+			if (row[13] != null) {
+				if (row[13] instanceof java.sql.Timestamp) {
+					customer.setCreatedAt(((java.sql.Timestamp) row[13]).toLocalDateTime());
+				} else if (row[13] instanceof java.time.LocalDateTime) {
+					customer.setCreatedAt((java.time.LocalDateTime) row[13]);
+				}
+			}
+			
+			// is_active: PostgreSQLのboolean型をBooleanオブジェクトとして取得
+			// 様々な型に対応する堅牢な型変換を実装
+			boolean isActive = false;
+			if (row[14] != null) {
+				if (row[14] instanceof Boolean) {
+					isActive = (Boolean) row[14];
+				} else if (row[14] instanceof Number) {
+					// 数値型の場合（0=false, 1=true）
+					isActive = ((Number) row[14]).intValue() != 0;
+				} else if (row[14] instanceof String) {
+					// 文字列型の場合（"true"/"false"）
+					isActive = Boolean.parseBoolean(row[14].toString());
+				}
+			}
+			customer.setActive(isActive);
+			
+			// deleted_at: OffsetDateTime型として取得
+			if (row[15] != null) {
+				if (row[15] instanceof java.sql.Timestamp) {
+					customer.setDeletedAt(((java.sql.Timestamp) row[15]).toInstant()
+						.atOffset(java.time.ZoneOffset.UTC));
+				} else if (row[15] instanceof java.time.OffsetDateTime) {
+					customer.setDeletedAt((java.time.OffsetDateTime) row[15]);
+				} else if (row[15] instanceof java.time.ZonedDateTime) {
+					customer.setDeletedAt(((java.time.ZonedDateTime) row[15]).toOffsetDateTime());
+				}
+			}
+			
+			// version はデータベースに存在しないため、null のままにする
+		} catch (Exception mappingException) {
+			throw new com.example.fitnessgym_mg.exception.SystemException(
+				"Customerエンティティのマッピングに失敗しました: customerId=" + customerId, mappingException);
+		}
+		
+		// storesを別途ネイティブSQLクエリで取得
+		String storesQuery = """
+				SELECT s.id, s.name
+				FROM stores s
+				JOIN store_customers sc ON s.id = sc.store_id
+				WHERE sc.customer_id = :customerId
+				""";
+		
+		@SuppressWarnings("unchecked")
+		List<Object[]> storeResults = entityManager
+				.createNativeQuery(storesQuery)
+				.setParameter("customerId", customerId)
+				.getResultList();
+		
+		// Storeエンティティを構築してCustomerに設定
+		Set<Store> stores = new HashSet<>();
+		for (Object[] storeRow : storeResults) {
+			try {
+				UUID storeId;
+				if (storeRow[0] instanceof UUID) {
+					storeId = (UUID) storeRow[0];
+				} else if (storeRow[0] instanceof String) {
+					storeId = UUID.fromString((String) storeRow[0]);
+				} else {
+					continue; // 型が予期しない場合はスキップ
+				}
+				
+				String storeName = storeRow[1] != null ? storeRow[1].toString() : null;
+				if (storeName == null) {
+					continue;
+				}
+				
+				Store store = new Store();
+				store.setId(storeId);
+				store.setName(storeName);
+				stores.add(store);
+			} catch (Exception storeMappingException) {
+				// Storeのマッピングエラーはスキップして続行
+				continue;
+			}
+		}
+		
+		customer.setStores(stores);
+		
+		return Optional.of(customer);
+	}
+
+	@Override
 	public boolean existsManagerCustomerInSameStoreNative(UUID managerId, UUID customerId) {
 		// @SQLRestriction("deleted_at IS NULL")を回避するためにネイティブSQLクエリを使用
 		// マネージャーと顧客が同じ店舗に所属しているか確認

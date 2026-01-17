@@ -78,11 +78,25 @@ public interface CustomerRepositoryCustom {
 	 * 
 	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
 	 * <p>データベースに`deleted_at`カラムが存在しない場合でも、エラーが発生しません。</p>
+	 * <p>重要: このメソッドは論理削除されていない顧客のみを取得します（deleted_at IS NULL条件を含む）。</p>
 	 * 
 	 * @param customerId 顧客ID
 	 * @return 顧客エンティティ（存在しない場合はempty）
 	 */
 	java.util.Optional<Customer> findByIdWithStoresNative(java.util.UUID customerId);
+
+	/**
+	 * 顧客IDで顧客を取得し、storesもJOIN FETCHで一括取得（論理削除された顧客も含む、@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * <p>データベースに`deleted_at`カラムが存在しない場合でも、エラーが発生しません。</p>
+	 * <p>重要: このメソッドは論理削除された顧客も含めて取得します（deleted_at条件を含まない）。</p>
+	 * <p>レッスン認可チェックなど、論理削除された顧客の情報も必要な場合に使用します。</p>
+	 * 
+	 * @param customerId 顧客ID
+	 * @return 顧客エンティティ（存在しない場合はempty）
+	 */
+	java.util.Optional<Customer> findByIdWithStoresNativeIncludingDeleted(java.util.UUID customerId);
 
 	/**
 	 * マネージャーと顧客が同じ店舗に所属しているか確認（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）

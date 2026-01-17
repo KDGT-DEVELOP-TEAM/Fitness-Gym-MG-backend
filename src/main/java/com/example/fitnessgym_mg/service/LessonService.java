@@ -212,8 +212,7 @@ public class LessonService {
 
 		// 認可チェック: Service層での最終防衛ライン（Controller層での早期リターンとは別）
 		User currentUser = securityUtil.getCurrentUserOrThrow();
-		UUID customerId = lesson.getCustomer().getId();
-		authorizationFacade.checkCanAccessCustomerOrThrow(currentUser, customerId);
+		authorizationFacade.checkCanAccessLessonOrThrow(currentUser, lessonId);
 
 		// トレーニングと姿勢画像の取得（順次実行、N+1問題を回避するためJOIN FETCHを使用）
 		List<TrainingResponse> trainings = trainingService.getTrainingsByLessonId(lessonId);
