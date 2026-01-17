@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 
 import org.springframework.data.domain.Page;
@@ -291,13 +292,15 @@ public class CustomerService {
 	/**
 	 * 現在ログイン中のトレーナーが所属店舗の全ての顧客リストを取得
 	 * トレーナーが所属する店舗の顧客のみを取得
+	 * 
+	 * @param storeId - 店舗ID（オプショナル）。指定された場合は該当店舗の顧客のみを返す
 	 */
 	@Transactional(readOnly = true)
-	public List<CustomerResponse> getAllCustomersForTrainerStores() {
+	public List<CustomerResponse> getAllCustomersForTrainerStores(UUID storeId) {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		UUID trainerId = currentUser.getId();
 		
-		log.info("トレーナーが顧客を取得: trainerId={}", trainerId);
+		log.info("トレーナーが顧客を取得: trainerId={}, storeId={}", trainerId, storeId);
 		
 		// トレーナーにはuser_storesテーブルにレコードがないため、店舗フィルタリングを行わず全顧客を取得
 		// 店舗と顧客の紐付けは維持されるが、トレーナーは全顧客を閲覧可能
@@ -308,9 +311,14 @@ public class CustomerService {
 		long totalCustomersCount = allCustomersPage.getTotalElements();
 		log.info("全顧客数（論理削除されていない）: count={}", totalCustomersCount);
 		
-		// 店舗フィルタリングなしで、論理削除されていない全顧客を取得
+		// 店舗IDが指定されている場合は、該当店舗の顧客のみを取得
 		Specification<Customer> distinctSpec = (root, query, cb) -> {
 			query.distinct(true);
+			if (storeId != null) {
+				// 店舗IDでフィルタリング
+				Join<Customer, Store> storesJoin = root.join("stores", JoinType.INNER);
+				return cb.equal(storesJoin.get("id"), storeId);
+			}
 			return cb.conjunction();
 		};
 		
@@ -320,13 +328,13 @@ public class CustomerService {
 		Page<Customer> customerPage = customerRepository.findAllNotDeletedWithStores(distinctSpec, Pageable.unpaged());
 		List<Customer> customers = customerPage.getContent();
 		
-		log.info("トレーナーが取得した顧客数: trainerId={}, count={}", trainerId, customers.size());
+		log.info("トレーナーが取得した顧客数: trainerId={}, storeId={}, count={}", trainerId, storeId, customers.size());
 		
 		// デバッグ: 取得された顧客のIDと名前をログ出力
 		if (log.isDebugEnabled() || customers.isEmpty()) {
 			if (customers.isEmpty()) {
-				log.warn("顧客が取得できませんでした: trainerId={}, totalCustomers={}", 
-					trainerId, totalCustomersCount);
+				log.warn("顧客が取得できませんでした: trainerId={}, storeId={}, totalCustomers={}", 
+					trainerId, storeId, totalCustomersCount);
 			} else {
 				customers.forEach(customer -> 
 					log.debug("取得された顧客: customerId={}, name={}, active={}, stores={}", 

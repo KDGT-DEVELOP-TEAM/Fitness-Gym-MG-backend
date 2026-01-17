@@ -233,11 +233,14 @@ public class CustomerApiController {
 	 * GET /api/trainers/customers
 	 * 担当顧客の一覧取得（storeId不要版）
 	 * 現在ログイン中のトレーナーが所属する店舗の全ての顧客リストを取得
+	 * 
+	 * @param storeId - 店舗ID（オプショナル）。指定された場合は該当店舗の顧客のみを返す
 	 */
 	@PreAuthorize("hasRole('TRAINER')")
 	@GetMapping("/trainers/customers")
-	public ResponseEntity<java.util.List<CustomerResponse>> getTrainerCustomersWithoutStoreId() {
-		java.util.List<CustomerResponse> customers = service.getAllCustomersForTrainerStores();
+	public ResponseEntity<java.util.List<CustomerResponse>> getTrainerCustomersWithoutStoreId(
+			@RequestParam(required = false) UUID storeId) {
+		java.util.List<CustomerResponse> customers = service.getAllCustomersForTrainerStores(storeId);
 		return ResponseEntity.ok(customers);
 	}
 
