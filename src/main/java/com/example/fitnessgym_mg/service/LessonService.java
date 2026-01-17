@@ -905,6 +905,14 @@ public class LessonService {
 				? userRepository.findById(request.getNextTrainerId()).orElse(null)
 				: null;
 
+		// バリデーション: 日時範囲と未来日時のチェック
+		// セキュリティ: 更新時も同じバリデーションを適用（データ整合性の保証）
+		validateLessonDateRange(request.getStartDate(), request.getEndDate());
+		validateLessonDateNotFuture(request.getStartDate(), request.getEndDate());
+
+		// 文字列フィールドのバリデーション
+		validateLessonStringFields(request.getCondition(), request.getMeal(), request.getMemo());
+
 		// レッスン情報を更新（storeIdとtrainerIdは既存の値を保持）
 		lesson.setCondition(request.getCondition());
 		lesson.setWeight(request.getWeight());
@@ -1040,6 +1048,37 @@ public class LessonService {
 	}
 
 	/**
+	 * レッスンの日時が未来でないことを検証
+	 * 
+	 * <p>レッスンの開始日時・終了日時は現在の日時より未来に設定できません。
+	 * これは業務ルールとして、レッスンは実施済み（過去または現在）のものを記録することを前提としています。</p>
+	 * 
+	 * <p>タイムゾーン: UTC基準で検証します（DBに保存されているLocalDateTimeがUTCとして扱われるため）。</p>
+	 * 
+	 * <p>セキュリティ: サービス層での第二層の防御として機能します。
+	 * Bean Validationをバイパスされても、サービス層で必ず検証されるため、セキュリティを強化します。</p>
+	 * 
+	 * <p>パフォーマンス: 現在時刻は一度だけ取得して、複数の検証で再利用することで、パフォーマンスを最適化します。</p>
+	 * 
+	 * @param startDate 開始日時
+	 * @param endDate 終了日時
+	 * @throws InvalidRequestException 日時が未来の場合
+	 */
+	private void validateLessonDateNotFuture(LocalDateTime startDate, LocalDateTime endDate) {
+		// パフォーマンス: 現在時刻を一度だけ取得
+		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		
+		if (startDate != null && startDate.isAfter(now)) {
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"開始日時は現在の日時より未来に設定できません");
+		}
+		if (endDate != null && endDate.isAfter(now)) {
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"終了日時は現在の日時より未来に設定できません");
+		}
+	}
+
+	/**
 	 * レッスンの文字列フィールドを検証
 	 * 
 	 * @param condition 体調
@@ -1064,10 +1103,21 @@ public class LessonService {
 
 	/**
 	 * レッスンリクエストの内容をレッスンエンティティに適用する共通メソッド
+	 * 
+	 * <p>バリデーション順序:
+	 * <ol>
+	 *   <li>日時範囲のバリデーション（終了日時 > 開始日時）</li>
+	 *   <li>未来日時チェック（セキュリティ重視）</li>
+	 *   <li>文字列フィールドのバリデーション</li>
+	 * </ol>
+	 * </p>
 	 */
 	private void applyLessonRequestToEntity(Lesson lesson, LessonRequest request, LessonEntities entities) {
-		// 日時範囲のバリデーション
+		// 日時範囲のバリデーション（終了日時 > 開始日時）
 		validateLessonDateRange(request.getStartDate(), request.getEndDate());
+
+		// 未来日時チェック（セキュリティ: Bean Validationをバイパスされても検証される）
+		validateLessonDateNotFuture(request.getStartDate(), request.getEndDate());
 
 		// 文字列フィールドのバリデーション
 		validateLessonStringFields(request.getCondition(), request.getMeal(), request.getMemo());

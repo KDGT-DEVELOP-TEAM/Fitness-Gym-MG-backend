@@ -2,6 +2,7 @@ package com.example.fitnessgym_mg.dto.request;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -82,6 +83,56 @@ public class LessonRequest {
         return endDate.isAfter(startDate);
     }
     
+    /**
+     * 開始日時が未来でないことを検証
+     * 
+     * <p>レッスンの開始日時は現在の日時より未来に設定できません。
+     * これは業務ルールとして、レッスンは実施済み（過去または現在）のものを記録することを前提としています。</p>
+     * 
+     * <p>タイムゾーン: UTC基準で検証します（DBに保存されているLocalDateTimeがUTCとして扱われるため）。</p>
+     * 
+     * <p>セキュリティ: Bean Validationによる第一層の防御として機能します。
+     * サービス層でも再チェックを行うことで、二重の防御を実現します。</p>
+     * 
+     * <p>Bean Validation仕様に準拠するため、このメソッドはpublicである必要があります。</p>
+     * 
+     * @return True if startDate is null or not in the future
+     */
+    @AssertTrue(message = "開始日時は現在の日時より未来に設定できません")
+    public boolean isValidStartDateNotFuture() {
+        if (startDate == null) {
+            return true; // @NotNullでチェックされるため
+        }
+        // UTC基準で現在時刻を取得して比較
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        return !startDate.isAfter(now);
+    }
+
+    /**
+     * 終了日時が未来でないことを検証
+     * 
+     * <p>レッスンの終了日時は現在の日時より未来に設定できません。
+     * これは業務ルールとして、レッスンは実施済み（過去または現在）のものを記録することを前提としています。</p>
+     * 
+     * <p>タイムゾーン: UTC基準で検証します（DBに保存されているLocalDateTimeがUTCとして扱われるため）。</p>
+     * 
+     * <p>セキュリティ: Bean Validationによる第一層の防御として機能します。
+     * サービス層でも再チェックを行うことで、二重の防御を実現します。</p>
+     * 
+     * <p>Bean Validation仕様に準拠するため、このメソッドはpublicである必要があります。</p>
+     * 
+     * @return True if endDate is null or not in the future
+     */
+    @AssertTrue(message = "終了日時は現在の日時より未来に設定できません")
+    public boolean isValidEndDateNotFuture() {
+        if (endDate == null) {
+            return true; // @NotNullでチェックされるため
+        }
+        // UTC基準で現在時刻を取得して比較
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        return !endDate.isAfter(now);
+    }
+
     /**
      * 次回予約フィールドの相関制約を検証
      * 
