@@ -420,6 +420,20 @@ public class CustomerService {
 			throw new com.example.fitnessgym_mg.exception.ImplementationException(
 				"CustomerRepository does not implement CustomerRepositoryCustom");
 		}
+		
+		// 電話番号のバリデーション（ハイフンを含めない）
+		if (req.getPhone() != null) {
+			// ハイフン（-）が含まれている場合はエラー
+			if (req.getPhone().contains("-")) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"電話番号にハイフン（-）を含めることはできません");
+			}
+			// 数字のみで10-15文字であることを確認
+			if (!req.getPhone().matches("^[0-9]{10,15}$")) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"電話番号は10文字以上15文字以下の数字のみで入力してください");
+			}
+		}
 	}
 
 	/**
