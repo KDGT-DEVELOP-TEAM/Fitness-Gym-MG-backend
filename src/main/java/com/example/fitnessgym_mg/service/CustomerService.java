@@ -433,7 +433,56 @@ public class CustomerService {
 	 */
 	private void validateForUpdate(CustomerRequest req) {
 		// firstPostureGroupIdは任意のため、バリデーションは不要
-		// 必要に応じて他のバリデーションを追加可能
+		
+		// 部分更新（PATCH）対応: 送信されたフィールドのみをバリデーション
+		// 生年月日のバリデーション（送信されている場合のみ）
+		if (req.getBirthday() != null) {
+			// @Pastアノテーションのチェック（過去の日付である必要がある）
+			if (!req.getBirthday().isBefore(java.time.LocalDate.now())) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"生年月日は過去の日付である必要があります");
+			}
+		}
+		
+		// メールアドレスのバリデーション（送信されている場合のみ）
+		if (req.getEmail() != null) {
+			if (req.getEmail().trim().isEmpty()) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"メールアドレスは必須です");
+			}
+			// 簡易的なメールアドレス形式チェック
+			if (!req.getEmail().contains("@")) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"有効なメールアドレスを入力してください");
+			}
+		}
+		
+		// 電話番号のバリデーション（送信されている場合のみ）
+		if (req.getPhone() != null) {
+			if (req.getPhone().trim().isEmpty()) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"電話番号は必須です");
+			}
+			// ハイフン（-）が含まれている場合はエラー
+			if (req.getPhone().contains("-")) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"電話番号にハイフン（-）を含めることはできません");
+			}
+			// 数字のみで10-15文字であることを確認
+			if (!req.getPhone().matches("^[0-9]{10,15}$")) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"電話番号は10文字以上15文字以下の数字のみで入力してください");
+			}
+		}
+		
+		// 身長のバリデーション（送信されている場合のみ）
+		if (req.getHeight() != null) {
+			if (req.getHeight().compareTo(java.math.BigDecimal.valueOf(50.0)) < 0 ||
+				req.getHeight().compareTo(java.math.BigDecimal.valueOf(300.0)) > 0) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"身長は50cm以上300cm以下である必要があります");
+			}
+		}
 	}
 
 	/**
@@ -455,7 +504,13 @@ public class CustomerService {
 			customer.setGender(req.getGender());
 		}
 		if (req.getBirthday() != null) {
-			customer.setBirthday(req.getBirthday());
+			// 日付の有効性チェック（無効な日付（例：4月90日）を防ぐ）
+			try {
+				customer.setBirthday(req.getBirthday());
+			} catch (Exception e) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"有効な日付を入力してください: " + e.getMessage());
+			}
 		}
 		if (req.getHeight() != null) {
 			customer.setHeight(req.getHeight());
