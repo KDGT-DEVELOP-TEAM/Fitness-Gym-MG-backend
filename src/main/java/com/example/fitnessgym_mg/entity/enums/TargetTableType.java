@@ -11,7 +11,8 @@ public enum TargetTableType {
     TRAININGS("trainings"),
     POSTURE_GROUPS("posture_groups"),
     POSTURE_IMAGES("posture_images"),
-    LOGS("logs");
+    LOGS("logs"),
+    PASSWORD_RESET_REQUESTS("password_reset_requests");
 
     private final String tableName;
 

@@ -6,6 +6,9 @@ package com.example.fitnessgym_mg.entity.enums;
 public enum ActionType {
     CREATE,
     UPDATE,
-    DELETE
+    DELETE,
+    PASSWORD_RESET_REQUEST,
+    PASSWORD_RESET_APPROVE,
+    PASSWORD_RESET_REJECT
 }
 

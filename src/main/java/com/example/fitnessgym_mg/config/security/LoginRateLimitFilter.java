@@ -28,8 +28,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * ログインエンドポイント用レートリミットフィルター
- * ブルートフォース攻撃を防ぐため、5分間に5回までのログイン試行を許可
+ * ログインエンドポイントとパスワードリセットリクエストエンドポイント用レートリミットフィルター
+ * ブルートフォース攻撃やDoS攻撃を防ぐため、5分間に5回までのリクエストを許可
  * 
  * <p>パフォーマンス注意事項:</p>
  * <ul>
@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 public class LoginRateLimitFilter extends OncePerRequestFilter {
 
     private static final String LOGIN_ENDPOINT = "/api/auth/login";
+    private static final String PASSWORD_RESET_REQUEST_ENDPOINT = "/api/password-reset/request";
     private static final int MAX_ATTEMPTS = 5;
     private static final Duration TIME_WINDOW = Duration.ofMinutes(5);
     private static final Duration CLEANUP_INTERVAL = Duration.ofMinutes(10);
@@ -139,9 +140,12 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        // ログインエンドポイントのPOSTリクエストのみに適用
-        if (LOGIN_ENDPOINT.equals(request.getRequestURI()) 
-                && "POST".equals(request.getMethod())) {
+        String requestUri = request.getRequestURI();
+        String method = request.getMethod();
+
+        // ログインエンドポイントまたはパスワードリセットリクエストエンドポイントのPOSTリクエストに適用
+        if ("POST".equals(method) && 
+            (LOGIN_ENDPOINT.equals(requestUri) || PASSWORD_RESET_REQUEST_ENDPOINT.equals(requestUri))) {
 
             String clientIp = getClientIp(request);
             Bucket bucket = cache.computeIfAbsent(clientIp, k -> createBucket());
@@ -151,7 +155,7 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
 
             // レートリミットチェック
             if (!bucket.tryConsume(1)) {
-                log.warn("レートリミット超過: IP={}, エンドポイント={}", clientIp, LOGIN_ENDPOINT);
+                log.warn("レートリミット超過: IP={}, エンドポイント={}", clientIp, requestUri);
                 sendRateLimitExceeded(response);
                 return;
             }

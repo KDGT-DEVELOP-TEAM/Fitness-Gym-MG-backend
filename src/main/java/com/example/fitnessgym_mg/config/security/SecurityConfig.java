@@ -40,7 +40,8 @@ public class SecurityConfig {
 	private static final int BCRYPT_STRENGTH = 12;
 
 	private static final String[] PUBLIC_API = {
-			"/api/auth/login"  // POST /api/auth/login のみ認証不要
+			"/api/auth/login",  // POST /api/auth/login のみ認証不要
+			"/api/password-reset/request"  // POST /api/password-reset/request は認証不要（パスワードを忘れたユーザーが使用）
 	};
 
 	private static final String[] ADMIN_API = {

@@ -1,0 +1,23 @@
+-- パスワードリセット関連のデータベース状態を確認するクエリ
+-- Supabaseダッシュボードの SQL Editor で実行してください
+
+-- 1. password_reset_status ENUM型の定義を確認
+SELECT 
+    t.typname AS enum_name,
+    e.enumlabel AS enum_value,
+    e.enumsortorder AS sort_order
+FROM pg_type t 
+JOIN pg_enum e ON t.oid = e.enumtypid  
+WHERE t.typname = 'password_reset_status'
+ORDER BY e.enumsortorder;
+
+-- 2. password_reset_requests テーブルの構造を確認
+SELECT 
+    column_name,
+    data_type,
+    udt_name,
+    column_default,
+    is_nullable
+FROM information_schema.columns
+WHERE table_name = 'password_reset_requests'
+ORDER BY ordinal_position;

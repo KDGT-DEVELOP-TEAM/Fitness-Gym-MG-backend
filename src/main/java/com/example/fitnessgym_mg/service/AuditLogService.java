@@ -75,6 +75,37 @@ public class AuditLogService {
 	}
 
 	/**
+	 * 監査ログを記録する（匿名ユーザー対応版）
+	 * 
+	 * <p>匿名ユーザーによる操作（例: パスワードリセットリクエスト作成）の監査ログを記録します。
+	 * userがnullの場合は、エンティティの制約により監査ログを記録できませんが、
+	 * 警告ログを出力してスキップします。</p>
+	 * 
+	 * <p>将来的にシステムユーザーを実装する場合は、このメソッド内でシステムユーザーを
+	 * 取得して使用するように拡張できます。</p>
+	 * 
+	 * <p>監査ログ記録に失敗しても、呼び出し元の処理は継続する（監査ログは補助的な機能）</p>
+	 * 
+	 * @param action 操作種別（CREATE, UPDATE, DELETE等）
+	 * @param targetTable 対象テーブル
+	 * @param targetId 対象レコードID（UUID）
+	 * @param user 操作を実行したユーザー（nullの場合は匿名ユーザー）
+	 */
+	@Transactional
+	public void recordAuditLogOptionalUser(ActionType action, TargetTableType targetTable, UUID targetId, User user) {
+		if (user == null) {
+			// エンティティの制約により、userがnullの場合は監査ログを記録できない
+			// 警告ログを出力してスキップ（将来的にシステムユーザーを実装する場合は、このメソッドを拡張）
+			log.warn("匿名ユーザーによる操作の監査ログは記録できません（システムユーザー未実装）: action={}, targetTable={}, targetId={}", 
+					action, targetTable, targetId);
+			return;
+		}
+
+		// userがnullでない場合は、通常のメソッドを呼び出す
+		recordAuditLog(action, targetTable, targetId, user);
+	}
+
+	/**
 	 * 監査ログ一覧を取得（ページネーション対応）
 	 * 作成日時の降順（最新順）で時系列に並べる
 	 * 
