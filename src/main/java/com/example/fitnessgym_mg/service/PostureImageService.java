@@ -17,11 +17,13 @@ import com.example.fitnessgym_mg.dto.request.PostureImageUploadRequest;
 import com.example.fitnessgym_mg.dto.response.BatchSignedUrlResponse;
 import com.example.fitnessgym_mg.dto.response.PostureImageUploadResponse;
 import com.example.fitnessgym_mg.dto.response.SignedUrlResponse;
+import com.example.fitnessgym_mg.entity.Customer;
 import com.example.fitnessgym_mg.entity.PostureGroup;
 import com.example.fitnessgym_mg.entity.PostureImage;
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.PostureImagePosition;
 import com.example.fitnessgym_mg.exception.StorageException;
+import com.example.fitnessgym_mg.repository.CustomerRepository;
 import com.example.fitnessgym_mg.repository.PostureGroupRepository;
 import com.example.fitnessgym_mg.repository.PostureImageRepository;
 
@@ -39,6 +41,7 @@ public class PostureImageService {
 
 	private final PostureImageRepository postureImageRepository;
 	private final PostureGroupRepository postureGroupRepository;
+	private final CustomerRepository customerRepository;
 	private final StorageService storageService;
 	private final AuthorizationFacade authorizationFacade;
 
@@ -208,6 +211,15 @@ public class PostureImageService {
 				// 削除に失敗しても例外を再スローしない（不整合は定期ジョブで解消）
 			}
 			throw new com.example.fitnessgym_mg.exception.SystemException("Failed to save image metadata", e);
+		}
+
+		// 7.5. 顧客のfirstPostureGroupIdがnullの場合、この画像のグループを初回姿勢グループとして設定
+		Customer customer = group.getCustomer();
+		if (customer.getFirstPostureGroupId() == null) {
+			customer.setFirstPostureGroupId(group.getId());
+			customerRepository.save(customer);
+			log.info("Set firstPostureGroupId for customer on first image upload: customerId={}, postureGroupId={}",
+					customer.getId(), group.getId());
 		}
 
 		// 8. 署名付きURL生成

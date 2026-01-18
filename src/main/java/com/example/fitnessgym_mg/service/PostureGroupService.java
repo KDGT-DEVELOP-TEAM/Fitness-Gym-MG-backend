@@ -16,7 +16,6 @@ import com.example.fitnessgym_mg.entity.Lesson;
 import com.example.fitnessgym_mg.entity.PostureGroup;
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.exception.ConflictException;
-import com.example.fitnessgym_mg.repository.CustomerRepository;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.PostureGroupRepository;
 
@@ -34,7 +33,6 @@ public class PostureGroupService {
 
 	private final PostureGroupRepository postureGroupRepository;
 	private final LessonRepository lessonRepository;
-	private final CustomerRepository customerRepository;
 	private final AuthorizationFacade authorizationFacade;
 	private final StorageService storageService;
 
@@ -223,15 +221,7 @@ public class PostureGroupService {
 
 		try {
 			PostureGroup savedPostureGroup = postureGroupRepository.save(postureGroup);
-			
-			// 顧客のfirstPostureGroupIdがnullの場合、初回姿勢グループとして設定
-			if (customer.getFirstPostureGroupId() == null) {
-				customer.setFirstPostureGroupId(savedPostureGroup.getId());
-				customerRepository.save(customer);
-				log.info("Set firstPostureGroupId for customer: customerId={}, postureGroupId={}", 
-						customer.getId(), savedPostureGroup.getId());
-			}
-			
+
 			// DTO変換して返却
 			return PostureGroupResponse.fromEntity(savedPostureGroup);
 		} catch (DataIntegrityViolationException e) {
