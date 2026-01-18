@@ -270,6 +270,8 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	 * <p>レッスンを登録したトレーナー（l.trainer.id）または次回担当トレーナー（l.nextUser.id）のどちらかに
 	 * 一致するレッスンを取得します。</p>
 	 * 
+	 * <p>退会済み顧客（deletedAt IS NOT NULL）のレッスンは除外されます。</p>
+	 * 
 	 * <p>このメソッドは{@link com.example.fitnessgym_mg.dto.response.LessonResponse#fromEntity(Lesson)}で使用されることを前提としています。</p>
 	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer、nextStore、nextUser）がJOIN FETCH済みである必要があります。</p>
 	 * <p>JOIN FETCHが未使用の場合、{@link LessonResponse#fromEntity(Lesson)}内のnullチェックにより安全に処理されますが、パフォーマンス問題が発生する可能性があります。</p>
@@ -284,6 +286,7 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	@Query(value = """
 			SELECT DISTINCT l
 			FROM Lesson l
+			JOIN FETCH l.customer c
 			LEFT JOIN FETCH l.store
 			LEFT JOIN FETCH l.trainer
 			LEFT JOIN FETCH l.nextStore
@@ -291,14 +294,17 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 			WHERE (l.trainer.id = :trainerId OR l.nextUser.id = :trainerId)
 			  AND l.nextDate IS NOT NULL
 			  AND l.nextDate > :now
+			  AND c.deletedAt IS NULL
 			ORDER BY l.nextDate ASC
 			""",
 			countQuery = """
 			SELECT COUNT(DISTINCT l)
 			FROM Lesson l
+			JOIN l.customer c
 			WHERE (l.trainer.id = :trainerId OR l.nextUser.id = :trainerId)
 			  AND l.nextDate IS NOT NULL
 			  AND l.nextDate > :now
+			  AND c.deletedAt IS NULL
 			""")
 	org.springframework.data.domain.Page<Lesson> findNextLessonsByTrainerIdOrNextTrainerId(
 			@Param("trainerId") UUID trainerId,
