@@ -264,8 +264,11 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 			org.springframework.data.domain.Pageable pageable);
 
 	/**
-	 * 次回トレーナーIDで指定期間内の次回レッスン希望を取得する（ページネーション対応）
-	 * nextDateがfromDate以上かつtoDate未満のものをnextDate昇順で返す
+	 * トレーナーIDで次回レッスン希望を取得する（ページネーション対応）
+	 * nextDateが現在日時より未来のものをnextDate昇順で返す
+	 * 
+	 * <p>レッスンを登録したトレーナー（l.trainer.id）または次回担当トレーナー（l.nextUser.id）のどちらかに
+	 * 一致するレッスンを取得します。</p>
 	 * 
 	 * <p>このメソッドは{@link com.example.fitnessgym_mg.dto.response.LessonResponse#fromEntity(Lesson)}で使用されることを前提としています。</p>
 	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer、nextStore、nextUser）がJOIN FETCH済みである必要があります。</p>
@@ -273,9 +276,8 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	 * 
 	 * <p>注意: JOIN FETCHとページネーションを組み合わせる場合、カウントクエリを明示的に定義する必要があります。</p>
 	 * 
-	 * @param trainerId 次回トレーナーID（nextUser.id）
-	 * @param fromDate 開始日時（nextDate >= fromDate の条件でフィルタ）
-	 * @param toDate 終了日時（nextDate < toDate の条件でフィルタ）
+	 * @param trainerId トレーナーID（trainer.idまたはnextUser.id）
+	 * @param now 現在日時（nextDate > now の条件でフィルタ）
 	 * @param pageable ページネーション情報
 	 * @return 次回レッスン希望日程が設定されているレッスンページ（nextDateの昇順）
 	 */
@@ -286,24 +288,21 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 			LEFT JOIN FETCH l.trainer
 			LEFT JOIN FETCH l.nextStore
 			LEFT JOIN FETCH l.nextUser
-			WHERE l.nextUser.id = :trainerId
+			WHERE (l.trainer.id = :trainerId OR l.nextUser.id = :trainerId)
 			  AND l.nextDate IS NOT NULL
-			  AND l.nextDate >= :fromDate
-			  AND l.nextDate < :toDate
+			  AND l.nextDate > :now
 			ORDER BY l.nextDate ASC
 			""",
 			countQuery = """
 			SELECT COUNT(DISTINCT l)
 			FROM Lesson l
-			WHERE l.nextUser.id = :trainerId
+			WHERE (l.trainer.id = :trainerId OR l.nextUser.id = :trainerId)
 			  AND l.nextDate IS NOT NULL
-			  AND l.nextDate >= :fromDate
-			  AND l.nextDate < :toDate
+			  AND l.nextDate > :now
 			""")
-	org.springframework.data.domain.Page<Lesson> findNextLessonsByNextTrainerIdBetween(
+	org.springframework.data.domain.Page<Lesson> findNextLessonsByTrainerIdOrNextTrainerId(
 			@Param("trainerId") UUID trainerId,
-			@Param("fromDate") LocalDateTime fromDate,
-			@Param("toDate") LocalDateTime toDate,
+			@Param("now") LocalDateTime now,
 			org.springframework.data.domain.Pageable pageable);
 
 	/**

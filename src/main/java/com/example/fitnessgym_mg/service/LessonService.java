@@ -710,12 +710,11 @@ public class LessonService {
 		}
 
 		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
-		LocalDateTime oneWeekLater = now.plusWeeks(1);
-		LocalDateTime oneMonthLater = now.plusMonths(1);
 
 		// 次回レッスン希望を取得（ページネーション対応）
-		org.springframework.data.domain.Page<Lesson> lessonPage = lessonRepository.findNextLessonsByNextTrainerIdBetween(
-				trainerId, oneWeekLater, oneMonthLater, pageable);
+		// レッスンを登録したトレーナーまたは次回担当トレーナーのどちらかに一致するレッスンを取得
+		org.springframework.data.domain.Page<Lesson> lessonPage = lessonRepository.findNextLessonsByTrainerIdOrNextTrainerId(
+				trainerId, now, pageable);
 
 		// CustomerはJOIN FETCHしていないため、Customerの情報をバッチで取得（N+1問題を回避）
 		java.util.List<Lesson> lessons = lessonPage.getContent();
