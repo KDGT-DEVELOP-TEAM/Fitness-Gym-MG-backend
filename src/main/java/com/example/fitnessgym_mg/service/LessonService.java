@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
@@ -99,7 +100,7 @@ public class LessonService {
 		PageableValidator.validateOffset(pageable);
 
 		Page<Lesson> lessonPage;
-		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
 
 		// ソートは Repository メソッド名で定義されているため、Pageableにはサイズとページ番号のみを渡す
 		// findByStoreIdAndEndDateBefore... (ソート済み) を使用するため、Pageableはソート情報なしでOK
@@ -187,7 +188,7 @@ public class LessonService {
 			throw new AccessDeniedException("この操作を実行する権限がありません");
 		}
 
-		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
 		UUID storeUuid = storeId;
 
 		// 1. 期間タイプの決定とJPQL呼び出し
@@ -463,7 +464,7 @@ public class LessonService {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		authorizationFacade.checkCanAccessCustomerOrThrow(currentUser, customerId);
 
-		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
 
 		// 1. 期間タイプの決定
 		String intervalType = (period == ChartPeriod.WEEK) ? "week" : "month";
@@ -650,7 +651,7 @@ public class LessonService {
 			throw new AccessDeniedException("自分のレッスンのみアクセス可能です");
 		}
 
-		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
 		LocalDateTime oneWeekLater = now.plusWeeks(1);
 
 		// 開始日時が現在から1週間以内のレッスンを取得（Repositoryで範囲検索）
@@ -680,7 +681,7 @@ public class LessonService {
 			throw new AccessDeniedException("自分のレッスンのみアクセス可能です");
 		}
 
-		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
 		LocalDateTime oneWeekLater = now.plusWeeks(1);
 		LocalDateTime oneMonthLater = now.plusMonths(1);
 
@@ -709,7 +710,7 @@ public class LessonService {
 			throw new AccessDeniedException("自分のレッスンのみアクセス可能です");
 		}
 
-		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
 
 		// 次回レッスン希望を取得（ページネーション対応）
 		// レッスンを登録したトレーナーまたは次回担当トレーナーのどちらかに一致するレッスンを取得
@@ -1012,7 +1013,9 @@ public class LessonService {
 	 * <p>レッスンの開始日時・終了日時は現在の日時より未来に設定できません。
 	 * これは業務ルールとして、レッスンは実施済み（過去または現在）のものを記録することを前提としています。</p>
 	 * 
-	 * <p>タイムゾーン: UTC基準で検証します（DBに保存されているLocalDateTimeがUTCとして扱われるため）。</p>
+	 * <p>タイムゾーン: Asia/Tokyo（日本時間）基準で検証します。
+	 * フロントエンドから送信される日時はローカルタイムゾーン（日本時間）であり、
+	 * それをサーバー側でも日本時間として比較します。</p>
 	 * 
 	 * <p>セキュリティ: サービス層での第二層の防御として機能します。
 	 * Bean Validationをバイパスされても、サービス層で必ず検証されるため、セキュリティを強化します。</p>
@@ -1024,8 +1027,8 @@ public class LessonService {
 	 * @throws InvalidRequestException 日時が未来の場合
 	 */
 	private void validateLessonDateNotFuture(LocalDateTime startDate, LocalDateTime endDate) {
-		// パフォーマンス: 現在時刻を一度だけ取得
-		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		// パフォーマンス: 現在時刻を一度だけ取得（日本時間基準）
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
 		
 		if (startDate != null && startDate.isAfter(now)) {
 			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(

@@ -2,6 +2,7 @@ package com.example.fitnessgym_mg.dto.request;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
@@ -89,7 +90,9 @@ public class LessonRequest {
      * <p>レッスンの開始日時は現在の日時より未来に設定できません。
      * これは業務ルールとして、レッスンは実施済み（過去または現在）のものを記録することを前提としています。</p>
      * 
-     * <p>タイムゾーン: UTC基準で検証します（DBに保存されているLocalDateTimeがUTCとして扱われるため）。</p>
+     * <p>タイムゾーン: Asia/Tokyo（日本時間）基準で検証します。
+     * フロントエンドから送信される日時はローカルタイムゾーン（日本時間）であり、
+     * それをサーバー側でも日本時間として比較します。</p>
      * 
      * <p>セキュリティ: Bean Validationによる第一層の防御として機能します。
      * サービス層でも再チェックを行うことで、二重の防御を実現します。</p>
@@ -103,8 +106,8 @@ public class LessonRequest {
         if (startDate == null) {
             return true; // @NotNullでチェックされるため
         }
-        // UTC基準で現在時刻を取得して比較
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        // 日本時間（Asia/Tokyo）基準で現在時刻を取得して比較
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
         return !startDate.isAfter(now);
     }
 
@@ -114,7 +117,9 @@ public class LessonRequest {
      * <p>レッスンの終了日時は現在の日時より未来に設定できません。
      * これは業務ルールとして、レッスンは実施済み（過去または現在）のものを記録することを前提としています。</p>
      * 
-     * <p>タイムゾーン: UTC基準で検証します（DBに保存されているLocalDateTimeがUTCとして扱われるため）。</p>
+     * <p>タイムゾーン: Asia/Tokyo（日本時間）基準で検証します。
+     * フロントエンドから送信される日時はローカルタイムゾーン（日本時間）であり、
+     * それをサーバー側でも日本時間として比較します。</p>
      * 
      * <p>セキュリティ: Bean Validationによる第一層の防御として機能します。
      * サービス層でも再チェックを行うことで、二重の防御を実現します。</p>
@@ -128,8 +133,8 @@ public class LessonRequest {
         if (endDate == null) {
             return true; // @NotNullでチェックされるため
         }
-        // UTC基準で現在時刻を取得して比較
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        // 日本時間（Asia/Tokyo）基準で現在時刻を取得して比較
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
         return !endDate.isAfter(now);
     }
 
