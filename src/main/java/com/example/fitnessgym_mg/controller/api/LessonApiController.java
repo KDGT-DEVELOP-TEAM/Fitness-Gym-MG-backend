@@ -23,6 +23,8 @@ import org.springframework.http.HttpStatus;
 
 import com.example.fitnessgym_mg.dto.response.LessonResponse;
 import com.example.fitnessgym_mg.service.LessonService;
+import com.example.fitnessgym_mg.validation.ValidPage;
+import com.example.fitnessgym_mg.validation.ValidPageSize;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -71,8 +73,8 @@ public class LessonApiController {
 	@GetMapping("/customers/{customer_id}/lessons")
 	public ResponseEntity<Page<LessonResponse>> getCustomerLessons(
 			@PathVariable("customer_id") UUID customerId,
-			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
-			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
+			@RequestParam(defaultValue = "0") @ValidPage int page,
+			@RequestParam(defaultValue = "10") @ValidPageSize int size) {
 
 		Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
 		Page<LessonResponse> lessonPage = lessonService

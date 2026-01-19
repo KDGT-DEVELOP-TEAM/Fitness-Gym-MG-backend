@@ -3,7 +3,6 @@ package com.example.fitnessgym_mg.controller.api;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -27,7 +26,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -111,51 +109,36 @@ public class AuthApiController {
      * </ul>
      */
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
-        try {
-            // 認証処理
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            request.getEmail(),
-                            request.getPassword()
-                    )
-            );
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+        // 認証処理
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        request.getEmail(),
+                        request.getPassword()
+                )
+        );
 
-            // セキュリティコンテキストに認証情報を設定
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+        // セキュリティコンテキストに認証情報を設定
+        SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            // ユーザー情報を取得（認証成功後なので必ず存在するはず、active条件を適用）
-            // storesも一緒に取得するため、findUserByEmailWithStoresを使用
-            User user = accountService.findUserByEmailWithStores(request.getEmail())
-                .orElseThrow(() -> {
-                    log.error("認証成功後にユーザーが見つからない異常事態を検出");
-                    return new AuthenticationStateException("ユーザー情報の取得に失敗しました");
-                });
+        // ユーザー情報を取得（認証成功後なので必ず存在するはず、active条件を適用）
+        // storesも一緒に取得するため、findUserByEmailWithStoresを使用
+        User user = accountService.findUserByEmailWithStores(request.getEmail())
+            .orElseThrow(() -> {
+                log.error("認証成功後にユーザーが見つからない異常事態を検出");
+                return new AuthenticationStateException("ユーザー情報の取得に失敗しました");
+            });
 
-            // JWTトークンを生成
-            String token = jwtTokenUtil.generateToken(user);
+        // JWTトークンを生成
+        String token = jwtTokenUtil.generateToken(user);
 
-            // レスポンス作成（トークンを含める）
-            LoginResponse responseBody = createLoginResponse(user, token);
-            
-            // ログ出力（権限情報は機密性が高いため除外）
-            log.info("ログイン成功: ユーザーID={}", user.getId());
-            
-            return ResponseEntity.ok(responseBody);
-        } catch (BadCredentialsException e) {
-            // 認証失敗: メールアドレスまたはパスワードが正しくない
-            log.warn("ログイン失敗試行を検出");
-            // メールアドレスの存在有無を推測させないため、統一されたエラーメッセージ
-            return ResponseEntity
-                    .status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "認証に失敗しました"));
-        } catch (Exception e) {
-            // その他の予期しないエラー
-            log.error("認証処理中にエラーが発生: {}", e.getMessage(), e);
-            return ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "認証処理中にエラーが発生しました"));
-        }
+        // レスポンス作成（トークンを含める）
+        LoginResponse responseBody = createLoginResponse(user, token);
+        
+        // ログ出力（権限情報は機密性が高いため除外）
+        log.info("ログイン成功: ユーザーID={}", user.getId());
+        
+        return ResponseEntity.ok(responseBody);
     }
 
     /**

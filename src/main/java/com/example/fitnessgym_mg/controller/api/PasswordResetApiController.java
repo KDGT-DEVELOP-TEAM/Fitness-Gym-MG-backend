@@ -19,16 +19,16 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.fitnessgym_mg.config.ApplicationConstants;
 import com.example.fitnessgym_mg.dto.request.PasswordResetApprovalDto;
 import com.example.fitnessgym_mg.dto.request.PasswordResetRejectionDto;
 import com.example.fitnessgym_mg.dto.request.PasswordResetRequestCreateDto;
 import com.example.fitnessgym_mg.dto.response.PasswordResetRequestResponse;
 import com.example.fitnessgym_mg.service.PasswordResetService;
 
+import com.example.fitnessgym_mg.validation.ValidPage;
+import com.example.fitnessgym_mg.validation.ValidPageSize;
+
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -72,13 +72,8 @@ public class PasswordResetApiController {
 	@PreAuthorize("hasRole('ADMIN')")
 	@GetMapping("/requests")
 	public ResponseEntity<Page<PasswordResetRequestResponse>> getRequests(
-			@RequestParam(defaultValue = "0") 
-			@Min(value = 0, message = "Page must be 0 or greater") 
-			int page,
-			@RequestParam(defaultValue = "10") 
-			@Min(value = ApplicationConstants.MIN_PAGE_SIZE, message = "Size must be at least 1") 
-			@Max(value = ApplicationConstants.MAX_PAGE_SIZE, message = "Invalid page size") 
-			int size) {
+			@RequestParam(defaultValue = "0") @ValidPage int page,
+			@RequestParam(defaultValue = "10") @ValidPageSize int size) {
 		log.debug("パスワードリセットリクエスト一覧取得: page={}, size={}", page, size);
 		
 		// リクエストは時系列（リクエスト日時の降順）で表示

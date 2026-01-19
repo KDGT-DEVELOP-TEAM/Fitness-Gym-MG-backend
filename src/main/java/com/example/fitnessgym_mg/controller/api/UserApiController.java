@@ -30,6 +30,8 @@ import com.example.fitnessgym_mg.entity.enums.UserSortType;
 import com.example.fitnessgym_mg.service.AccountAuthorizationService;
 import com.example.fitnessgym_mg.service.AccountService;
 import com.example.fitnessgym_mg.util.SecurityUtil;
+import com.example.fitnessgym_mg.validation.ValidPage;
+import com.example.fitnessgym_mg.validation.ValidPageSize;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -78,8 +80,8 @@ public class UserApiController {
 			@RequestParam(required = false) @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") String name,
 			@RequestParam(required = false) UserRole role,
 			@RequestParam(defaultValue = "created") String sort,
-			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
-			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
+			@RequestParam(defaultValue = "0") @ValidPage int page,
+			@RequestParam(defaultValue = "10") @ValidPageSize int size) {
 
 		Pageable pageable = PageRequest.of(page, size);
 		UserSortType sortEnum = UserSortType.fromCode(sort);
@@ -161,8 +163,8 @@ public class UserApiController {
 			@RequestParam(required = false) @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") String name,
 			@RequestParam(required = false) UserRole role,
 			@RequestParam(defaultValue = "created") String sort,
-			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
-			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
+			@RequestParam(defaultValue = "0") @ValidPage int page,
+			@RequestParam(defaultValue = "10") @ValidPageSize int size) {
 
 		log.debug("getManagerUsers called: storeId={}, name={}, role={}, sort={}, page={}, size={}", storeId, name, role, sort, page, size);
 		Pageable pageable = PageRequest.of(page, size);
