@@ -2,8 +2,6 @@ package com.example.fitnessgym_mg.dto.request;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -107,7 +105,7 @@ public class LessonRequest {
             return true; // @NotNullでチェックされるため
         }
         // 日本時間（Asia/Tokyo）基準で現在時刻を取得して比較
-        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
+        LocalDateTime now = LocalDateTime.now(ApplicationConstants.DEFAULT_TIMEZONE);
         return !startDate.isAfter(now);
     }
 
@@ -134,7 +132,7 @@ public class LessonRequest {
             return true; // @NotNullでチェックされるため
         }
         // 日本時間（Asia/Tokyo）基準で現在時刻を取得して比較
-        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
+        LocalDateTime now = LocalDateTime.now(ApplicationConstants.DEFAULT_TIMEZONE);
         return !endDate.isAfter(now);
     }
 

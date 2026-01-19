@@ -1,5 +1,7 @@
 package com.example.fitnessgym_mg.config;
 
+import java.time.ZoneId;
+
 /**
  * アプリケーション全体で使用する定数クラス
  * マジックナンバーを定数として集約
@@ -143,4 +145,13 @@ public final class ApplicationConstants {
      * BMI計算時の身長変換係数（cmからmへの変換）
      */
     public static final int HEIGHT_CONVERSION_FACTOR = 100;
+    
+    /**
+     * デフォルトタイムゾーン
+     * 
+     * <p>レッスンの日時検証などで使用するタイムゾーンです。</p>
+     * <p>フロントエンドから送信される日時はローカルタイムゾーン（日本時間）であり、
+     * それをサーバー側でも日本時間として比較します。</p>
+     */
+    public static final ZoneId DEFAULT_TIMEZONE = ZoneId.of("Asia/Tokyo");
 }

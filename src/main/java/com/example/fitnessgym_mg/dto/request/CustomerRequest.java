@@ -74,8 +74,8 @@ public class CustomerRequest {
 	 * <p>注意: 部分更新（PATCH）時は、Service層でハイフンチェックと文字数チェックを実施します。</p>
 	 */
 	@NotBlank(message = "電話番号は必須です")
-	@Pattern(regexp = "^[0-9-]+$", message = "電話番号は数字とハイフンのみで入力してください")
-	@Size(max = 12, message = "電話番号は最大12文字まで入力できます")
+	@Pattern(regexp = "^[0-9]{10,15}$", message = "電話番号は10文字以上15文字以下の数字のみで入力してください")
+	@Size(max = 15, message = "電話番号は最大15文字まで入力できます")
 	private String phone;
 
 	@NotBlank(message = "住所は必須です")
