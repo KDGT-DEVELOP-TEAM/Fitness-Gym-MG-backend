@@ -67,12 +67,16 @@ public class AuthenticationException extends RuntimeException {
     
     
     /**
-     * メールアドレスを取得
+     * メールアドレスを取得（マスク済み）
      * 
-     * @return メールアドレス（設定されていない場合はnull）
+     * <p>セキュリティ: 機密情報漏洩を防ぐため、マスク済みのメールアドレスのみを返します。
+     * これにより、スタックトレースやログに例外オブジェクトが出力される場合でも、
+     * 生のメールアドレスが漏洩することを防ぎます。</p>
+     * 
+     * @return マスク済みのメールアドレス（設定されていない場合はnull）
      */
     public String getEmail() {
-        return email;
+        return email != null ? com.example.fitnessgym_mg.util.SecurityUtil.maskEmail(email) : null;
     }
     
     /**

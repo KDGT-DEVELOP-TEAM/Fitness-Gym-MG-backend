@@ -39,8 +39,14 @@ public class GlobalExceptionHandler {
         // 本番環境プロファイルが設定されている場合はデバッグモードではない
         boolean isProduction = Arrays.stream(activeProfiles)
             .anyMatch(profile -> profile.equalsIgnoreCase("prod") || profile.equalsIgnoreCase("production"));
-        // デバッグモードは本番環境でない場合、またはログレベルがDEBUGの場合
-        return !isProduction || log.isDebugEnabled();
+        
+        // 本番環境の場合は常にfalse（スタックトレースを出力しない）
+        if (isProduction) {
+            return false;
+        }
+        
+        // 開発環境の場合はログレベルに依存
+        return log.isDebugEnabled();
     }
 
     /**
@@ -192,9 +198,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ErrorResponse> handleAuthenticationException(AuthenticationException e) {
         // 構造化された情報を活用し、機密情報をマスク
+        // 注意: getEmail()は既にマスク済みの値を返すため、再度マスクする必要はない
         if (e.getEmail() != null || e.getRequestInfo() != null) {
             log.warn("Authentication error: email={}, requestInfo={}", 
-                e.getEmail() != null ? com.example.fitnessgym_mg.util.SecurityUtil.maskEmail(e.getEmail()) : "unknown",
+                e.getEmail() != null ? e.getEmail() : "unknown",
                 e.getRequestInfo() != null ? e.getRequestInfo() : "unknown");
         } else {
             log.warn("Authentication error: {}", e.getMessage());
