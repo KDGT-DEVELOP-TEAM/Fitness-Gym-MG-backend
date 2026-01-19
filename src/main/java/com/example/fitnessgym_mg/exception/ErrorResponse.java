@@ -1,7 +1,6 @@
 package com.example.fitnessgym_mg.exception;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Value;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -14,15 +13,15 @@ import java.util.List;
  * <ul>
  *   <li>各エラーレスポンスには正確なタイムスタンプが必要なため、コンストラクタで生成します</li>
  *   <li>複数のエラーメッセージに対応するため、errorsフィールドをオプショナルで提供します</li>
+ *   <li>不変クラスとして設計し、エラーレスポンスの変更を防ぎます</li>
  * </ul>
  */
-@Data
-@AllArgsConstructor
+@Value
 public class ErrorResponse {
-    private String code;
-    private String message;
-    private List<String> errors; // 複数エラー対応（オプショナル）
-    private OffsetDateTime timestamp;
+    String code;
+    String message;
+    List<String> errors; // 複数エラー対応（オプショナル、null許容）
+    OffsetDateTime timestamp;
     
     /**
      * エラーレスポンスを生成（単一メッセージ）

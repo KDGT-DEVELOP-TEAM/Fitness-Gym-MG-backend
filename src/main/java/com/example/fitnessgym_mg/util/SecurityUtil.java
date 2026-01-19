@@ -319,5 +319,67 @@ public class SecurityUtil {
         
         return true;
     }
+    
+    /**
+     * メールアドレスの機密情報をマスク
+     * 
+     * <p>セキュリティ強化: ローカル部分（@の前）とドメイン部分（@の後）の両方を部分的にマスクします。
+     * これにより、メールアドレスの完全な露出を防ぎます。</p>
+     * 
+     * <p>マスク方法:</p>
+     * <ul>
+     *   <li>ローカル部分: 最初の2文字のみ表示、残りは***</li>
+     *   <li>ドメイン部分: 最初のドメイン名の最初の2文字のみ表示、残りは***</li>
+     * </ul>
+     * 
+     * <p>例:</p>
+     * <ul>
+     *   <li>"user@example.com" → "us***@ex***.com"</li>
+     *   <li>"ab@test.co.jp" → "ab***@te***.co.jp"</li>
+     * </ul>
+     * 
+     * <p>このメソッドは、ログ出力や例外メッセージでメールアドレスを安全に記録するために使用します。</p>
+     * 
+     * @param email マスクするメールアドレス
+     * @return マスクされたメールアドレス（nullの場合はnullを返す）
+     */
+    public static String maskEmail(String email) {
+        if (email == null || !email.contains("@")) {
+            return email;
+        }
+        String[] parts = email.split("@");
+        if (parts.length != 2) {
+            return email;
+        }
+        
+        String localPart = parts[0];
+        String domain = parts[1];
+        
+        // ローカル部分のマスク（最初の2文字のみ表示、残りは***）
+        String maskedLocal;
+        if (localPart.length() <= 2) {
+            maskedLocal = "***";
+        } else {
+            maskedLocal = localPart.substring(0, 2) + "***";
+        }
+        
+        // ドメイン部分のマスク（最初のドメイン名の最初の2文字のみ表示）
+        int dotIndex = domain.indexOf('.');
+        String maskedDomain;
+        if (dotIndex > 0) {
+            // ドメイン名の最初の2文字のみ表示
+            String domainName = domain.substring(0, dotIndex);
+            String domainSuffix = domain.substring(dotIndex); // .com, .co.jp など
+            String maskedDomainName = domainName.length() <= 2 
+                ? "***" 
+                : domainName.substring(0, 2) + "***";
+            maskedDomain = maskedDomainName + domainSuffix;
+        } else {
+            // ドットがない場合は、全体をマスク
+            maskedDomain = domain.length() <= 2 ? "***" : domain.substring(0, 2) + "***";
+        }
+        
+        return maskedLocal + "@" + maskedDomain;
+    }
 }
 

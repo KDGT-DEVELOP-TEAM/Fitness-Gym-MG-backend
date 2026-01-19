@@ -2,9 +2,11 @@ package com.example.fitnessgym_mg.exception;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import lombok.RequiredArgsConstructor;
 
 /**
  * REST API用のグローバル例外ハンドラー
@@ -20,7 +23,25 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
  */
 @Slf4j
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
+    
+    private final Environment environment;
+    
+    /**
+     * デバッグモードかどうかを判定
+     * 本番環境ではスタックトレースを制限し、情報漏洩を防ぐ
+     * 
+     * @return デバッグモードの場合 true
+     */
+    private boolean isDebugMode() {
+        String[] activeProfiles = environment.getActiveProfiles();
+        // 本番環境プロファイルが設定されている場合はデバッグモードではない
+        boolean isProduction = Arrays.stream(activeProfiles)
+            .anyMatch(profile -> profile.equalsIgnoreCase("prod") || profile.equalsIgnoreCase("production"));
+        // デバッグモードは本番環境でない場合、またはログレベルがDEBUGの場合
+        return !isProduction || log.isDebugEnabled();
+    }
 
     /**
      * @RequestParam のバリデーションエラーのハンドリング
@@ -39,9 +60,7 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.toList());
         // 最初のエラーメッセージをmessageフィールドに設定（後方互換性のため）
         String firstMessage = errorMessages.isEmpty() ? "Validation failed" : errorMessages.get(0);
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse("VALIDATION_ERROR", firstMessage, errorMessages));
+        return ErrorResponseFactory.createValidationError(firstMessage, errorMessages);
     }
 
     /**
@@ -61,9 +80,7 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.toList());
         // 最初のエラーメッセージをmessageフィールドに設定（後方互換性のため）
         String firstMessage = errorMessages.isEmpty() ? "Validation failed" : errorMessages.get(0);
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse("VALIDATION_ERROR", firstMessage, errorMessages));
+        return ErrorResponseFactory.createValidationError(firstMessage, errorMessages);
     }
 
     /**
@@ -77,9 +94,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleInvalidRequest(InvalidRequestException e) {
         // 高頻度で発生する可能性があるため、スタックトレースは出力しない
         log.warn("Invalid request: {}", e.getMessage());
-        return ResponseEntity
-            .status(HttpStatus.BAD_REQUEST)
-            .body(new ErrorResponse("INVALID_REQUEST", e.getMessage()));
+        return ErrorResponseFactory.create(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", e.getMessage());
     }
 
     /**
@@ -93,9 +108,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleBusinessRuleViolation(BusinessRuleViolationException e) {
         // 意図的な例外のため、スタックトレースは出力しない
         log.warn("Business rule violation: {}", e.getMessage());
-        return ResponseEntity
-            .status(HttpStatus.BAD_REQUEST)
-            .body(new ErrorResponse("BUSINESS_RULE_VIOLATION", e.getMessage()));
+        return ErrorResponseFactory.create(HttpStatus.BAD_REQUEST, "BUSINESS_RULE_VIOLATION", e.getMessage());
     }
 
     /**
@@ -109,9 +122,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         // 高頻度で発生する可能性があるため、スタックトレースは出力しない
         log.warn("Validation error: {}", e.getMessage());
-        return ResponseEntity
-            .status(HttpStatus.BAD_REQUEST)
-            .body(new ErrorResponse("VALIDATION_ERROR", e.getMessage()));
+        return ErrorResponseFactory.create(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", e.getMessage());
     }
 
     /**
@@ -122,9 +133,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException e) {
         log.warn("ログイン失敗: 認証に失敗しました");
-        return ResponseEntity
-                .status(HttpStatus.UNAUTHORIZED)
-                .body(new ErrorResponse("AUTHENTICATION_ERROR", "メールアドレスまたはパスワードが正しくありません"));
+        return ErrorResponseFactory.create(
+            HttpStatus.UNAUTHORIZED, 
+            "AUTHENTICATION_ERROR", 
+            "メールアドレスまたはパスワードが正しくありません");
     }
 
     /**
@@ -133,10 +145,13 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(AuthenticationStateException.class)
     public ResponseEntity<ErrorResponse> handleAuthenticationStateException(AuthenticationStateException e) {
-        log.error("ログイン処理で不整合が発生しました: {}", e.getMessage(), e);
-        return ResponseEntity
-            .status(HttpStatus.UNAUTHORIZED)
-            .body(new ErrorResponse("AUTHENTICATION_ERROR", "認証に失敗しました"));
+        // デバッグモード時のみスタックトレースを出力（本番環境での情報漏洩防止）
+        if (isDebugMode()) {
+            log.error("ログイン処理で不整合が発生しました: {}", e.getMessage(), e);
+        } else {
+            log.error("ログイン処理で不整合が発生しました: {}", e.getMessage());
+        }
+        return ErrorResponseFactory.createAuthenticationError();
     }
 
     /**
@@ -149,9 +164,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException e) {
         // 意図的な例外のため、スタックトレースは出力しない
         log.warn("Business logic error: {}", e.getMessage());
-        return ResponseEntity
-            .status(HttpStatus.BAD_REQUEST)
-            .body(new ErrorResponse("BUSINESS_LOGIC_ERROR", e.getMessage()));
+        return ErrorResponseFactory.create(HttpStatus.BAD_REQUEST, "BUSINESS_LOGIC_ERROR", e.getMessage());
     }
 
     /**
@@ -169,9 +182,7 @@ public class GlobalExceptionHandler {
             log.warn("Entity not found: {}", e.getMessage());
         }
         // 情報漏洩を防ぐため、詳細情報はログに記録し、クライアントには汎用的なメッセージを返す
-        return ResponseEntity
-            .status(HttpStatus.NOT_FOUND)
-            .body(new ErrorResponse("NOT_FOUND", "リソースが見つかりません"));
+        return ErrorResponseFactory.createNotFoundError();
     }
 
     /**
@@ -183,15 +194,13 @@ public class GlobalExceptionHandler {
         // 構造化された情報を活用し、機密情報をマスク
         if (e.getEmail() != null || e.getRequestInfo() != null) {
             log.warn("Authentication error: email={}, requestInfo={}", 
-                e.getEmail() != null ? maskEmail(e.getEmail()) : "unknown",
+                e.getEmail() != null ? com.example.fitnessgym_mg.util.SecurityUtil.maskEmail(e.getEmail()) : "unknown",
                 e.getRequestInfo() != null ? e.getRequestInfo() : "unknown");
         } else {
             log.warn("Authentication error: {}", e.getMessage());
         }
         // 情報漏洩を防ぐため、詳細情報はログに記録し、クライアントには汎用的なメッセージを返す
-        return ResponseEntity
-            .status(HttpStatus.UNAUTHORIZED)
-            .body(new ErrorResponse("AUTHENTICATION_ERROR", "認証に失敗しました"));
+        return ErrorResponseFactory.createAuthenticationError();
     }
 
     /**
@@ -210,9 +219,7 @@ public class GlobalExceptionHandler {
             log.warn("Access denied: {}", e.getMessage());
         }
         // 情報漏洩を防ぐため、詳細情報はログに記録し、クライアントには汎用的なメッセージを返す
-        return ResponseEntity
-                .status(HttpStatus.FORBIDDEN)
-                .body(new ErrorResponse("ACCESS_DENIED", "このリソースにアクセスする権限がありません"));
+        return ErrorResponseFactory.createAccessDeniedError();
     }
 
     /**
@@ -223,9 +230,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CustomerDeletedException.class)
     public ResponseEntity<ErrorResponse> handleCustomerDeleted(CustomerDeletedException e) {
         log.warn("Customer deleted: customerId={}", e.getCustomerId());
-        return ResponseEntity
-                .status(HttpStatus.FORBIDDEN)
-                .body(new ErrorResponse("CUSTOMER_DELETED", "顧客は退会済みです"));
+        return ErrorResponseFactory.create(HttpStatus.FORBIDDEN, "CUSTOMER_DELETED", "顧客は退会済みです");
     }
 
     /**
@@ -250,9 +255,7 @@ public class GlobalExceptionHandler {
         }
         
         // 情報漏洩を防ぐため、詳細情報はログに記録し、クライアントには汎用的なメッセージを返す
-        return ResponseEntity
-                .status(HttpStatus.FORBIDDEN)
-                .body(new ErrorResponse("ACCESS_DENIED", "このリソースにアクセスする権限がありません"));
+        return ErrorResponseFactory.createAccessDeniedError();
     }
 
     /**
@@ -273,9 +276,7 @@ public class GlobalExceptionHandler {
             
             // UNIQUE制約違反の場合はCONFLICTとして扱う
             if (constraintName != null && constraintName.toUpperCase().contains("UNIQUE")) {
-                return ResponseEntity
-                    .status(HttpStatus.CONFLICT)
-                    .body(new ErrorResponse("CONFLICT", "リソースが既に存在します"));
+                return ErrorResponseFactory.create(HttpStatus.CONFLICT, "CONFLICT", "リソースが既に存在します");
             }
         }
         
@@ -283,9 +284,7 @@ public class GlobalExceptionHandler {
         if (rootCause instanceof java.sql.SQLException) {
             java.sql.SQLException sqlEx = (java.sql.SQLException) rootCause;
             if ("23505".equals(sqlEx.getSQLState())) { // PostgreSQL UNIQUE制約違反
-                return ResponseEntity
-                    .status(HttpStatus.CONFLICT)
-                    .body(new ErrorResponse("CONFLICT", "リソースが既に存在します"));
+                return ErrorResponseFactory.create(HttpStatus.CONFLICT, "CONFLICT", "リソースが既に存在します");
             }
         }
         
@@ -293,15 +292,11 @@ public class GlobalExceptionHandler {
         String message = e.getMessage();
         if (message != null && (message.contains("UNIQUE") || message.contains("unique") || 
             message.contains("duplicate") || message.contains("Duplicate"))) {
-            return ResponseEntity
-                .status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse("CONFLICT", "リソースが既に存在します"));
+            return ErrorResponseFactory.create(HttpStatus.CONFLICT, "CONFLICT", "リソースが既に存在します");
         }
         
         // その他のDB制約違反（NOT NULL、FK制約など）はBAD_REQUESTとして扱う
-        return ResponseEntity
-            .status(HttpStatus.BAD_REQUEST)
-            .body(new ErrorResponse("DATA_INTEGRITY_ERROR", "データ整合性エラーが発生しました"));
+        return ErrorResponseFactory.create(HttpStatus.BAD_REQUEST, "DATA_INTEGRITY_ERROR", "データ整合性エラーが発生しました");
     }
 
     /**
@@ -314,9 +309,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleConflict(ConflictException e) {
         // 意図的な例外のため、スタックトレースは出力しない
         log.warn("Resource conflict: {}", e.getMessage());
-        return ResponseEntity
-                .status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse("CONFLICT", e.getMessage()));
+        return ErrorResponseFactory.create(HttpStatus.CONFLICT, "CONFLICT", e.getMessage());
     }
 
     /**
@@ -329,9 +322,10 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e) {
         // クライアントの入力ミスに近いため、スタックトレースは出力しない
         log.warn("File size exceeds maximum: {}", e.getMessage());
-        return ResponseEntity
-            .status(HttpStatus.BAD_REQUEST)
-            .body(new ErrorResponse("FILE_SIZE_EXCEEDED", "File size exceeds the maximum allowed size"));
+        return ErrorResponseFactory.create(
+            HttpStatus.BAD_REQUEST, 
+            "FILE_SIZE_EXCEEDED", 
+            "File size exceeds the maximum allowed size");
     }
 
     /**
@@ -339,10 +333,13 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(StorageException.class)
     public ResponseEntity<ErrorResponse> handleStorageException(StorageException e) {
-        log.error("Storage error: {}", e.getMessage(), e);
-        return ResponseEntity
-            .status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(new ErrorResponse("STORAGE_ERROR", "Storage operation failed"));
+        // デバッグモード時のみスタックトレースを出力（本番環境での情報漏洩防止）
+        if (isDebugMode()) {
+            log.error("Storage error: {}", e.getMessage(), e);
+        } else {
+            log.error("Storage error: {}", e.getMessage());
+        }
+        return ErrorResponseFactory.createSystemError("STORAGE_ERROR", "Storage operation failed");
     }
 
     /**
@@ -351,10 +348,13 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(SystemException.class)
     public ResponseEntity<ErrorResponse> handleSystemException(SystemException e) {
-        log.error("System error: {}", e.getMessage(), e);
-        return ResponseEntity
-            .status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(new ErrorResponse("SYSTEM_ERROR", "システムエラーが発生しました"));
+        // デバッグモード時のみスタックトレースを出力（本番環境での情報漏洩防止）
+        if (isDebugMode()) {
+            log.error("System error: {}", e.getMessage(), e);
+        } else {
+            log.error("System error: {}", e.getMessage());
+        }
+        return ErrorResponseFactory.createSystemError("SYSTEM_ERROR", "システムエラーが発生しました");
     }
 
     /**
@@ -363,10 +363,13 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(ConfigurationException.class)
     public ResponseEntity<ErrorResponse> handleConfigurationException(ConfigurationException e) {
-        log.error("Configuration error: {}", e.getMessage(), e);
-        return ResponseEntity
-            .status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(new ErrorResponse("CONFIGURATION_ERROR", "設定エラーが発生しました"));
+        // デバッグモード時のみスタックトレースを出力（本番環境での情報漏洩防止）
+        if (isDebugMode()) {
+            log.error("Configuration error: {}", e.getMessage(), e);
+        } else {
+            log.error("Configuration error: {}", e.getMessage());
+        }
+        return ErrorResponseFactory.createSystemError("CONFIGURATION_ERROR", "設定エラーが発生しました");
     }
 
     /**
@@ -376,10 +379,13 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(ImplementationException.class)
     public ResponseEntity<ErrorResponse> handleImplementationException(ImplementationException e) {
-        log.error("Implementation error: {}", e.getMessage(), e);
-        return ResponseEntity
-            .status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(new ErrorResponse("IMPLEMENTATION_ERROR", "実装エラーが発生しました"));
+        // デバッグモード時のみスタックトレースを出力（本番環境での情報漏洩防止）
+        if (isDebugMode()) {
+            log.error("Implementation error: {}", e.getMessage(), e);
+        } else {
+            log.error("Implementation error: {}", e.getMessage());
+        }
+        return ErrorResponseFactory.createSystemError("IMPLEMENTATION_ERROR", "実装エラーが発生しました");
     }
 
     /**
@@ -395,75 +401,24 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception e) {
-        // RuntimeExceptionの場合は、より具体的な例外として扱う
-        if (e instanceof RuntimeException) {
-            log.error("Unexpected runtime error: {}", e.getMessage(), e);
+        // デバッグモード時のみスタックトレースを出力（本番環境での情報漏洩防止）
+        if (isDebugMode()) {
+            // RuntimeExceptionの場合は、より具体的な例外として扱う
+            if (e instanceof RuntimeException) {
+                log.error("Unexpected runtime error: {}", e.getMessage(), e);
+            } else {
+                // チェック例外（Checked Exception）の場合は、システムエラーとして扱う
+                log.error("Unexpected checked exception: {}", e.getMessage(), e);
+            }
         } else {
-            // チェック例外（Checked Exception）の場合は、システムエラーとして扱う
-            log.error("Unexpected checked exception: {}", e.getMessage(), e);
+            // 本番環境ではスタックトレースを出力しない
+            if (e instanceof RuntimeException) {
+                log.error("Unexpected runtime error: {}", e.getMessage());
+            } else {
+                log.error("Unexpected checked exception: {}", e.getMessage());
+            }
         }
-        return ResponseEntity
-            .status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(new ErrorResponse("INTERNAL_ERROR", "An internal error occurred"));
+        return ErrorResponseFactory.createSystemError("INTERNAL_ERROR", "An internal error occurred");
     }
     
-    /**
-     * メールアドレスの機密情報をマスク
-     * 
-     * <p>セキュリティ強化: ローカル部分（@の前）とドメイン部分（@の後）の両方を部分的にマスクします。
-     * これにより、メールアドレスの完全な露出を防ぎます。</p>
-     * 
-     * <p>マスク方法:</p>
-     * <ul>
-     *   <li>ローカル部分: 最初の2文字のみ表示、残りは***</li>
-     *   <li>ドメイン部分: 最初のドメイン名の最初の2文字のみ表示、残りは***</li>
-     * </ul>
-     * 
-     * <p>例:</p>
-     * <ul>
-     *   <li>"user@example.com" → "us***@ex***.com"</li>
-     *   <li>"ab@test.co.jp" → "ab***@te***.co.jp"</li>
-     * </ul>
-     * 
-     * @param email マスクするメールアドレス
-     * @return マスクされたメールアドレス
-     */
-    private String maskEmail(String email) {
-        if (email == null || !email.contains("@")) {
-            return email;
-        }
-        String[] parts = email.split("@");
-        if (parts.length != 2) {
-            return email;
-        }
-        
-        String localPart = parts[0];
-        String domain = parts[1];
-        
-        // ローカル部分のマスク（最初の2文字のみ表示、残りは***）
-        String maskedLocal;
-        if (localPart.length() <= 2) {
-            maskedLocal = "***";
-        } else {
-            maskedLocal = localPart.substring(0, 2) + "***";
-        }
-        
-        // ドメイン部分のマスク（最初のドメイン名の最初の2文字のみ表示）
-        int dotIndex = domain.indexOf('.');
-        String maskedDomain;
-        if (dotIndex > 0) {
-            // ドメイン名の最初の2文字のみ表示
-            String domainName = domain.substring(0, dotIndex);
-            String domainSuffix = domain.substring(dotIndex); // .com, .co.jp など
-            String maskedDomainName = domainName.length() <= 2 
-                ? "***" 
-                : domainName.substring(0, 2) + "***";
-            maskedDomain = maskedDomainName + domainSuffix;
-        } else {
-            // ドットがない場合は、全体をマスク
-            maskedDomain = domain.length() <= 2 ? "***" : domain.substring(0, 2) + "***";
-        }
-        
-        return maskedLocal + "@" + maskedDomain;
-    }
 }

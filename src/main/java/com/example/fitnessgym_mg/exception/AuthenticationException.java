@@ -53,57 +53,16 @@ public class AuthenticationException extends RuntimeException {
     /**
      * 例外メッセージを構築（コンストラクタから呼び出し可能なstaticメソッド）
      * 
+     * <p>セキュリティ: メールアドレスはSecurityUtil.maskEmail()を使用してマスクします。</p>
+     * 
      * @param email 認証を試みたメールアドレス（null許容）
      * @param requestInfo リクエスト情報（例: IPアドレス、User-Agentなど）
      * @return 構築された例外メッセージ
      */
     private static String buildMessage(String email, String requestInfo) {
-        String maskedEmail = maskEmailStatic(email);
+        String maskedEmail = com.example.fitnessgym_mg.util.SecurityUtil.maskEmail(email);
         return "Authentication failed for email: " + (maskedEmail != null ? maskedEmail : "unknown") + 
                (requestInfo != null ? ", request: " + requestInfo : "");
-    }
-    
-    /**
-     * メールアドレスの機密情報をマスク（static版、コンストラクタから呼び出し可能）
-     * 
-     * @param email マスクするメールアドレス
-     * @return マスクされたメールアドレス
-     */
-    private static String maskEmailStatic(String email) {
-        if (email == null || !email.contains("@")) {
-            return email;
-        }
-        String[] parts = email.split("@");
-        if (parts.length != 2) {
-            return email;
-        }
-        
-        String localPart = parts[0];
-        String domain = parts[1];
-        
-        // ローカル部分のマスク（最初の2文字のみ表示、残りは***）
-        String maskedLocal;
-        if (localPart.length() <= 2) {
-            maskedLocal = "***";
-        } else {
-            maskedLocal = localPart.substring(0, 2) + "***";
-        }
-        
-        // ドメイン部分のマスク（最初のドメイン名の最初の2文字のみ表示）
-        int dotIndex = domain.indexOf('.');
-        String maskedDomain;
-        if (dotIndex > 0) {
-            String domainName = domain.substring(0, dotIndex);
-            String domainSuffix = domain.substring(dotIndex);
-            String maskedDomainName = domainName.length() <= 2 
-                ? "***" 
-                : domainName.substring(0, 2) + "***";
-            maskedDomain = maskedDomainName + domainSuffix;
-        } else {
-            maskedDomain = domain.length() <= 2 ? "***" : domain.substring(0, 2) + "***";
-        }
-        
-        return maskedLocal + "@" + maskedDomain;
     }
     
     
