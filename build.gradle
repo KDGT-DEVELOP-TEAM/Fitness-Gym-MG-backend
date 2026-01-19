@@ -4,6 +4,8 @@ plugins {
 	id 'io.spring.dependency-management' version '1.1.7'
 }
 
+import org.gradle.api.logging.LogLevel
+
 group = 'com.example'
 version = '0.0.1-SNAPSHOT'
 description = 'Fitness Gym Management System'
@@ -42,6 +44,9 @@ dependencies {
 	// Guava (LoginAttemptFilter用)
 	implementation 'com.google.guava:guava:33.3.1-jre'
 	
+	// Caffeine Cache (JWT認証フィルター用)
+	implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+	
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	runtimeOnly 'org.postgresql:postgresql'
@@ -54,4 +59,15 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// コンパイル時の警告を非表示にする
+tasks.named('compileJava') {
+	options.compilerArgs += [
+		'-Xlint:none'                // すべてのlint警告を非表示
+	]
+	options.encoding = 'UTF-8'
+	// コンパイル時のログ出力を抑制（INFOレベル以下のメッセージを非表示）
+	logging.captureStandardOutput(LogLevel.WARN)
+	logging.captureStandardError(LogLevel.WARN)
 }

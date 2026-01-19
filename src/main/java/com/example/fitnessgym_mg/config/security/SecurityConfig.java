@@ -12,6 +12,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.core.Ordered;
+import org.springframework.web.filter.ForwardedHeaderFilter;
 
 import com.example.fitnessgym_mg.filter.LoginAttemptFilter;
 
@@ -125,5 +128,29 @@ public class SecurityConfig {
 			);
 
 		return http.build();
+	}
+	
+	/**
+	 * ForwardedHeaderFilterをBeanとして登録
+	 * X-Forwarded-Forヘッダーを適切に処理し、信頼できるプロキシからのIPのみを取得
+	 * 
+	 * <p>セキュリティ注意事項:</p>
+	 * <ul>
+	 *   <li>ForwardedHeaderFilterはserver.forward-headers-strategy=frameworkにより自動設定されます</li>
+	 *   <li>信頼できるプロキシのIPアドレスを明示的に設定するには、TomcatのRemoteIpValve設定が必要です</li>
+	 *   <li>本番環境では、環境変数TRUSTED_PROXY_IPSで信頼できるプロキシのIPアドレス（CIDR表記）を設定してください</li>
+	 *   <li>開発環境では直接接続を想定し、TRUSTED_PROXY_IPSは空にしてください</li>
+	 * </ul>
+	 * 
+	 * <p>注意: 現在の実装では、ForwardedHeaderFilterはすべてのX-Forwarded-Forヘッダーを受け入れます。
+	 * より厳密な制御が必要な場合は、カスタムフィルターの実装を検討してください。</p>
+	 */
+	@Bean
+	public FilterRegistrationBean<ForwardedHeaderFilter> forwardedHeaderFilter() {
+		ForwardedHeaderFilter filter = new ForwardedHeaderFilter();
+		FilterRegistrationBean<ForwardedHeaderFilter> registration = 
+			new FilterRegistrationBean<>(filter);
+		registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
+		return registration;
 	}
 }

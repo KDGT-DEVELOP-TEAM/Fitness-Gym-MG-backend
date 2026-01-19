@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -33,7 +34,7 @@ import java.util.concurrent.TimeUnit;
  * 
  * <p>パフォーマンス注意事項:</p>
  * <ul>
- *   <li>バケットは定期的にクリーンアップされる（10分ごと）</li>
+ *   <li>バケットは定期的にクリーンアップされる（デフォルト5分ごと、環境変数で変更可能）</li>
  *   <li>長時間使用されていないIPアドレスのバケットは自動的に削除される</li>
  * </ul>
  */
@@ -46,9 +47,14 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
     private static final String PASSWORD_RESET_REQUEST_ENDPOINT = "/api/password-reset/request";
     private static final int MAX_ATTEMPTS = 5;
     private static final Duration TIME_WINDOW = Duration.ofMinutes(5);
-    private static final Duration CLEANUP_INTERVAL = Duration.ofMinutes(10);
+    private static final Duration DEFAULT_CLEANUP_INTERVAL = Duration.ofMinutes(5);
 
     private final ObjectMapper objectMapper;
+    
+    @Value("${login.rate-limit.cleanup-interval-minutes:5}")
+    private int cleanupIntervalMinutes;
+    
+    private Duration cleanupInterval;
 
     // IPアドレスごとのバケットを保持
     private final Map<String, Bucket> cache = new ConcurrentHashMap<>();
@@ -65,13 +71,18 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
 
     @PostConstruct
     public void init() {
+        // クリーンアップ間隔を設定（環境変数から取得、デフォルト5分）
+        cleanupInterval = Duration.ofMinutes(cleanupIntervalMinutes);
+        
         // 定期的にクリーンアップを実行
         cleanupScheduler.scheduleAtFixedRate(
             this::cleanupExpiredBuckets,
-            CLEANUP_INTERVAL.toMinutes(),
-            CLEANUP_INTERVAL.toMinutes(),
+            cleanupInterval.toMinutes(),
+            cleanupInterval.toMinutes(),
             TimeUnit.MINUTES
         );
+        
+        log.info("LoginRateLimitFilter初期化完了: クリーンアップ間隔={}分", cleanupInterval.toMinutes());
     }
     
     @PreDestroy
@@ -98,14 +109,14 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
     
     /**
      * 期限切れのバケットをクリーンアップ
-     * 最後のアクセスから10分以上経過したバケットを削除
+     * 最後のアクセスからクリーンアップ間隔以上経過したバケットを削除
      * 
      * <p>例外が発生してもスケジューラーを継続させるため、すべての例外をキャッチしてログに記録します。</p>
      */
     private void cleanupExpiredBuckets() {
         try {
             long now = System.currentTimeMillis();
-            long expireTime = CLEANUP_INTERVAL.toMillis();
+            long expireTime = cleanupInterval.toMillis();
             
             // 削除対象のIPアドレスを事前に収集
             Set<String> expiredIps = new HashSet<>();

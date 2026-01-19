@@ -7,18 +7,32 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * CORS設定クラス
  * 
  * <p>フロントエンドからのリクエストを許可するためのCORS設定を提供します。</p>
  * <p>環境変数`CORS_ALLOWED_ORIGINS`で許可するオリジンを設定できます（カンマ区切りで複数指定可能）。</p>
+ * 
+ * <p>セキュリティ注意事項:</p>
+ * <ul>
+ *   <li>本番環境では、開発環境のデフォルト値（localhost等）が残らないように注意してください</li>
+ *   <li>環境変数CORS_ALLOWED_ORIGINSを必ず設定してください</li>
+ * </ul>
  */
+@Slf4j
 @Configuration
+@RequiredArgsConstructor
 public class CorsConfig {
+    
+    private final Environment environment;
     
     @Value("${cors.allowed-origins:http://localhost:5173}")
     private String allowedOrigins;
@@ -42,6 +56,30 @@ public class CorsConfig {
         if (origins.isEmpty()) {
             throw new IllegalStateException(
                 "CORS設定エラー: 許可するオリジンが設定されていません。環境変数CORS_ALLOWED_ORIGINSを確認してください。");
+        }
+        
+        // 本番環境での検証（開発環境のデフォルト値が残っていないかチェック）
+        String[] activeProfiles = environment.getActiveProfiles();
+        boolean isProduction = Arrays.stream(activeProfiles)
+            .anyMatch(profile -> profile.equalsIgnoreCase("prod") || profile.equalsIgnoreCase("production"));
+        
+        if (isProduction) {
+            // 本番環境でlocalhostや127.0.0.1が含まれている場合は警告
+            boolean hasLocalhost = origins.stream()
+                .anyMatch(origin -> origin.contains("localhost") || origin.contains("127.0.0.1") || origin.startsWith("http://"));
+            
+            if (hasLocalhost) {
+                log.warn("CORS設定警告: 本番環境でlocalhostや127.0.0.1が許可されています。セキュリティリスクがあります。");
+                log.warn("許可されているオリジン: {}", origins);
+            }
+            
+            // HTTPSでないオリジンが含まれている場合は警告
+            boolean hasHttp = origins.stream()
+                .anyMatch(origin -> origin.startsWith("http://") && !origin.startsWith("https://"));
+            
+            if (hasHttp) {
+                log.warn("CORS設定警告: 本番環境でHTTP（非HTTPS）のオリジンが許可されています。セキュリティリスクがあります。");
+            }
         }
         
         configuration.setAllowedOrigins(origins);
