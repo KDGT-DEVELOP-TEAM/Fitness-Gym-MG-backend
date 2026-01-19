@@ -354,25 +354,12 @@ public class AccountService {
 				"このメールアドレスは既に顧客として登録されています。顧客とユーザーで同じメールアドレスは使用できません。");
 		}
 
-		// Supabase Auth側のユーザー存在チェック（オプション、エラーが発生しても続行）
-		boolean supabaseUserExists = false;
-		try {
-			log.info("Checking user existence in Supabase Auth: emailHash={}", EmailHashUtil.hashEmail(normalizedEmail));
-			supabaseUserExists = supabaseAuthService.userExists(normalizedEmail);
-			log.info("Supabase Auth existence check: emailHash={}, exists={}", EmailHashUtil.hashEmail(normalizedEmail), supabaseUserExists);
-			if (supabaseUserExists) {
-				log.warn("User already exists in Supabase Auth but not in local DB: emailHash={}", EmailHashUtil.hashEmail(normalizedEmail));
-				throw new com.example.fitnessgym_mg.exception.ConflictException(
-					"このメールアドレスは既にSupabase Authに登録されています。管理者に連絡してください。");
-			}
-		} catch (com.example.fitnessgym_mg.exception.ConflictException e) {
-			// 既存ユーザーエラーはそのまま再スロー
-			throw e;
-		} catch (Exception e) {
-			// 存在チェックのエラーは無視して続行（Supabase側でエラーになる可能性があるが、試行する）
-			log.warn("Failed to check user existence in Supabase Auth: emailHash={}, error={}", 
-				EmailHashUtil.hashEmail(normalizedEmail), e.getMessage());
-		}
+		// Supabase Auth側のユーザー存在チェックはスキップ
+		// 理由: Supabase Admin APIの`/auth/v1/admin/users?email=...`エンドポイントは存在せず、
+		// `filter`パラメータは部分一致検索のため正確なチェックが難しい。
+		// 代わりに、`createUser()`で既存ユーザーの場合は確実にエラーが返されるため、
+		// そのエラーハンドリングに依存する。
+		// これにより、誤検知を防ぎ、パフォーマンスも向上する（1回のAPI呼び出しで済む）。
 
 		// Supabase Authにユーザーを作成
 		log.info("Attempting to create user in Supabase Auth: emailHash={}", EmailHashUtil.hashEmail(normalizedEmail));
@@ -380,25 +367,26 @@ public class AccountService {
 		try {
 			authUserId = supabaseAuthService.createUser(normalizedEmail, req.getPass());
 			log.info("Successfully created user in Supabase Auth: emailHash={}, authUserId={}", EmailHashUtil.hashEmail(normalizedEmail), authUserId);
+		} catch (com.example.fitnessgym_mg.exception.ConflictException e) {
+			// 既存ユーザーエラー（Supabase Authに既に登録されている場合）
+			log.warn("User already exists in Supabase Auth: emailHash={}, userExists={}, customerExists={}, error={}", 
+				EmailHashUtil.hashEmail(normalizedEmail), userExists, customerExists, e.getMessage());
+			// エラーメッセージをそのまま再スロー（SupabaseAuthServiceから適切なメッセージが返される）
+			throw e;
 		} catch (IllegalArgumentException e) {
 			// バリデーションエラー
 			log.error("Invalid request for Supabase Auth user creation: emailHash={}, error={}, userExists={}, customerExists={}", 
 				EmailHashUtil.hashEmail(normalizedEmail), e.getMessage(), userExists, customerExists, e);
 			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(e.getMessage(), e);
 		} catch (RuntimeException e) {
-			// 既存ユーザーエラーの場合
-			if (e.getMessage() != null && e.getMessage().contains("既にSupabase Authに登録されています")) {
-				log.warn("User already exists in Supabase Auth: emailHash={}, userExists={}, customerExists={}", 
-					EmailHashUtil.hashEmail(normalizedEmail), userExists, customerExists);
-				throw new com.example.fitnessgym_mg.exception.ConflictException(e.getMessage(), e);
-			}
-			log.error("Failed to create user in Supabase Auth: emailHash={}, userExists={}, customerExists={}, supabaseUserExists={}, error={}", 
-				EmailHashUtil.hashEmail(normalizedEmail), userExists, customerExists, supabaseUserExists, e.getMessage(), e);
+			// その他のRuntimeException（SystemExceptionなど）
+			log.error("Failed to create user in Supabase Auth: emailHash={}, userExists={}, customerExists={}, error={}", 
+				EmailHashUtil.hashEmail(normalizedEmail), userExists, customerExists, e.getMessage(), e);
 			throw new com.example.fitnessgym_mg.exception.SystemException(
 				"Supabase Authでのユーザー作成に失敗しました: " + e.getMessage(), e);
 		} catch (Exception e) {
-			log.error("Unexpected error creating user in Supabase Auth: emailHash={}, userExists={}, customerExists={}, supabaseUserExists={}, error={}", 
-				EmailHashUtil.hashEmail(normalizedEmail), userExists, customerExists, supabaseUserExists, e.getMessage(), e);
+			log.error("Unexpected error creating user in Supabase Auth: emailHash={}, userExists={}, customerExists={}, error={}", 
+				EmailHashUtil.hashEmail(normalizedEmail), userExists, customerExists, e.getMessage(), e);
 			throw new com.example.fitnessgym_mg.exception.SystemException(
 				"Supabase Authでのユーザー作成に失敗しました: " + e.getMessage(), e);
 		}
