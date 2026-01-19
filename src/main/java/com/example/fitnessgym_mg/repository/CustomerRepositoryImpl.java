@@ -187,84 +187,149 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 		Customer customer = new Customer();
 		
 		try {
-			customer.setId(row[0] instanceof UUID ? (UUID) row[0] : UUID.fromString(row[0].toString()));
+			// 各フィールドのマッピングを個別にtry-catchで囲み、エラー発生箇所を特定しやすくする
+			try {
+				customer.setId(row[0] instanceof UUID ? (UUID) row[0] : UUID.fromString(row[0].toString()));
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=id, value={}, error={}", 
+					customerId, row[0], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=id", e);
+			}
+			
 			customer.setKana(row[1] != null ? row[1].toString() : null);
 			customer.setName(row[2] != null ? row[2].toString() : null);
 			
 			// gender: String型として取得し、Gender.fromString()で変換（ENUM名または日本語ラベルをサポート）
-			if (row[3] != null) {
-				customer.setGender(Gender.fromString(row[3].toString()));
+			try {
+				if (row[3] != null) {
+					customer.setGender(Gender.fromString(row[3].toString()));
+				}
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=gender, value={}, error={}", 
+					customerId, row[3], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=gender", e);
 			}
 			
 			// birthday: 様々な型に対応
-			if (row[4] != null) {
-				if (row[4] instanceof java.sql.Date) {
-					customer.setBirthday(((java.sql.Date) row[4]).toLocalDate());
-				} else if (row[4] instanceof java.time.LocalDate) {
-					customer.setBirthday((java.time.LocalDate) row[4]);
-				} else if (row[4] instanceof java.sql.Timestamp) {
-					customer.setBirthday(((java.sql.Timestamp) row[4]).toLocalDateTime().toLocalDate());
-				} else if (row[4] instanceof java.time.LocalDateTime) {
-					customer.setBirthday(((java.time.LocalDateTime) row[4]).toLocalDate());
+			try {
+				if (row[4] != null) {
+					if (row[4] instanceof java.sql.Date) {
+						customer.setBirthday(((java.sql.Date) row[4]).toLocalDate());
+					} else if (row[4] instanceof java.time.LocalDate) {
+						customer.setBirthday((java.time.LocalDate) row[4]);
+					} else if (row[4] instanceof java.sql.Timestamp) {
+						customer.setBirthday(((java.sql.Timestamp) row[4]).toLocalDateTime().toLocalDate());
+					} else if (row[4] instanceof java.time.LocalDateTime) {
+						customer.setBirthday(((java.time.LocalDateTime) row[4]).toLocalDate());
+					}
 				}
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=birthday, value={}, error={}", 
+					customerId, row[4], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=birthday", e);
 			}
 			
-			customer.setHeight(row[5] != null && row[5] instanceof java.math.BigDecimal 
-					? (java.math.BigDecimal) row[5] 
-					: row[5] != null ? new java.math.BigDecimal(row[5].toString()) : null);
+			try {
+				customer.setHeight(row[5] != null && row[5] instanceof java.math.BigDecimal 
+						? (java.math.BigDecimal) row[5] 
+						: row[5] != null ? new java.math.BigDecimal(row[5].toString()) : null);
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=height, value={}, error={}", 
+					customerId, row[5], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=height", e);
+			}
+			
 			customer.setEmail(row[6] != null ? row[6].toString() : null);
 			customer.setPhone(row[7] != null ? row[7].toString() : null);
 			customer.setAddress(row[8] != null ? row[8].toString() : null);
 			customer.setMedical(row[9] != null ? row[9].toString() : null);
 			customer.setTaboo(row[10] != null ? row[10].toString() : null);
 			
-			if (row[11] != null) {
-				customer.setFirstPostureGroupId(row[11] instanceof UUID 
-						? (UUID) row[11] 
-						: UUID.fromString(row[11].toString()));
+			try {
+				if (row[11] != null) {
+					customer.setFirstPostureGroupId(row[11] instanceof UUID 
+							? (UUID) row[11] 
+							: UUID.fromString(row[11].toString()));
+				}
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=firstPostureGroupId, value={}, error={}", 
+					customerId, row[11], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=firstPostureGroupId", e);
 			}
 			
 			customer.setMemo(row[12] != null ? row[12].toString() : null);
 			
 			// created_at: 様々な型に対応
-			if (row[13] != null) {
-				if (row[13] instanceof java.sql.Timestamp) {
-					customer.setCreatedAt(((java.sql.Timestamp) row[13]).toLocalDateTime());
-				} else if (row[13] instanceof java.time.LocalDateTime) {
-					customer.setCreatedAt((java.time.LocalDateTime) row[13]);
+			try {
+				if (row[13] != null) {
+					if (row[13] instanceof java.sql.Timestamp) {
+						customer.setCreatedAt(((java.sql.Timestamp) row[13]).toLocalDateTime());
+					} else if (row[13] instanceof java.time.LocalDateTime) {
+						customer.setCreatedAt((java.time.LocalDateTime) row[13]);
+					}
 				}
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=createdAt, value={}, error={}", 
+					customerId, row[13], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=createdAt", e);
 			}
 			
 			// is_active: PostgreSQLのboolean型をBooleanオブジェクトとして取得
 			// 様々な型に対応する堅牢な型変換を実装
-			boolean isActive = false;
-			if (row[14] != null) {
-				if (row[14] instanceof Boolean) {
-					isActive = (Boolean) row[14];
-				} else if (row[14] instanceof Number) {
-					// 数値型の場合（0=false, 1=true）
-					isActive = ((Number) row[14]).intValue() != 0;
-				} else if (row[14] instanceof String) {
-					// 文字列型の場合（"true"/"false"）
-					isActive = Boolean.parseBoolean(row[14].toString());
+			try {
+				boolean isActive = false;
+				if (row[14] != null) {
+					if (row[14] instanceof Boolean) {
+						isActive = (Boolean) row[14];
+					} else if (row[14] instanceof Number) {
+						// 数値型の場合（0=false, 1=true）
+						isActive = ((Number) row[14]).intValue() != 0;
+					} else if (row[14] instanceof String) {
+						// 文字列型の場合（"true"/"false"）
+						isActive = Boolean.parseBoolean(row[14].toString());
+					}
 				}
+				customer.setActive(isActive);
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=isActive, value={}, error={}", 
+					customerId, row[14], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=isActive", e);
 			}
-			customer.setActive(isActive);
 			
 			// deleted_at: OffsetDateTime型として取得
-			if (row[15] != null) {
-				if (row[15] instanceof java.sql.Timestamp) {
-					customer.setDeletedAt(((java.sql.Timestamp) row[15]).toInstant()
-						.atOffset(java.time.ZoneOffset.UTC));
-				} else if (row[15] instanceof java.time.OffsetDateTime) {
-					customer.setDeletedAt((java.time.OffsetDateTime) row[15]);
-				} else if (row[15] instanceof java.time.ZonedDateTime) {
-					customer.setDeletedAt(((java.time.ZonedDateTime) row[15]).toOffsetDateTime());
+			try {
+				if (row[15] != null) {
+					if (row[15] instanceof java.sql.Timestamp) {
+						customer.setDeletedAt(((java.sql.Timestamp) row[15]).toInstant()
+							.atOffset(java.time.ZoneOffset.UTC));
+					} else if (row[15] instanceof java.time.OffsetDateTime) {
+						customer.setDeletedAt((java.time.OffsetDateTime) row[15]);
+					} else if (row[15] instanceof java.time.ZonedDateTime) {
+						customer.setDeletedAt(((java.time.ZonedDateTime) row[15]).toOffsetDateTime());
+					}
 				}
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=deletedAt, value={}, error={}", 
+					customerId, row[15], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=deletedAt", e);
 			}
 			
 			// version はデータベースに存在しないため、null のままにする
+		} catch (com.example.fitnessgym_mg.exception.SystemException e) {
+			// SystemExceptionは再スロー（既にログ出力済み）
+			throw e;
 		} catch (Exception mappingException) {
+			// 予期しない例外の場合
+			log.error("Customerエンティティのマッピングに予期しないエラーが発生しました: customerId={}", 
+				customerId, mappingException);
 			throw new com.example.fitnessgym_mg.exception.SystemException(
 				"Customerエンティティのマッピングに失敗しました: customerId=" + customerId, mappingException);
 		}
@@ -293,11 +358,15 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 				} else if (storeRow[0] instanceof String) {
 					storeId = UUID.fromString((String) storeRow[0]);
 				} else {
+					log.warn("Storeマッピングエラー: customerId={}, field=storeId, value={}, reason=予期しない型", 
+						customerId, storeRow[0] != null ? storeRow[0].getClass().getName() : "null");
 					continue; // 型が予期しない場合はスキップ
 				}
 				
 				String storeName = storeRow[1] != null ? storeRow[1].toString() : null;
 				if (storeName == null) {
+					log.warn("Storeマッピングエラー: customerId={}, storeId={}, field=storeName, reason=null値", 
+						customerId, storeId);
 					continue;
 				}
 				
@@ -306,7 +375,10 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 				store.setName(storeName);
 				stores.add(store);
 			} catch (Exception storeMappingException) {
-				// Storeのマッピングエラーはスキップして続行
+				// Storeのマッピングエラーはログを出力してスキップ（Customerの取得は継続）
+				log.warn("Storeマッピングエラー: customerId={}, storeRow={}, error={}", 
+					customerId, java.util.Arrays.toString(storeRow), storeMappingException.getMessage(), 
+					storeMappingException);
 				continue;
 			}
 		}
@@ -349,84 +421,149 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 		Customer customer = new Customer();
 		
 		try {
-			customer.setId(row[0] instanceof UUID ? (UUID) row[0] : UUID.fromString(row[0].toString()));
+			// 各フィールドのマッピングを個別にtry-catchで囲み、エラー発生箇所を特定しやすくする
+			try {
+				customer.setId(row[0] instanceof UUID ? (UUID) row[0] : UUID.fromString(row[0].toString()));
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=id, value={}, error={}", 
+					customerId, row[0], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=id", e);
+			}
+			
 			customer.setKana(row[1] != null ? row[1].toString() : null);
 			customer.setName(row[2] != null ? row[2].toString() : null);
 			
 			// gender: String型として取得し、Gender.fromString()で変換（ENUM名または日本語ラベルをサポート）
-			if (row[3] != null) {
-				customer.setGender(Gender.fromString(row[3].toString()));
+			try {
+				if (row[3] != null) {
+					customer.setGender(Gender.fromString(row[3].toString()));
+				}
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=gender, value={}, error={}", 
+					customerId, row[3], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=gender", e);
 			}
 			
 			// birthday: 様々な型に対応
-			if (row[4] != null) {
-				if (row[4] instanceof java.sql.Date) {
-					customer.setBirthday(((java.sql.Date) row[4]).toLocalDate());
-				} else if (row[4] instanceof java.time.LocalDate) {
-					customer.setBirthday((java.time.LocalDate) row[4]);
-				} else if (row[4] instanceof java.sql.Timestamp) {
-					customer.setBirthday(((java.sql.Timestamp) row[4]).toLocalDateTime().toLocalDate());
-				} else if (row[4] instanceof java.time.LocalDateTime) {
-					customer.setBirthday(((java.time.LocalDateTime) row[4]).toLocalDate());
+			try {
+				if (row[4] != null) {
+					if (row[4] instanceof java.sql.Date) {
+						customer.setBirthday(((java.sql.Date) row[4]).toLocalDate());
+					} else if (row[4] instanceof java.time.LocalDate) {
+						customer.setBirthday((java.time.LocalDate) row[4]);
+					} else if (row[4] instanceof java.sql.Timestamp) {
+						customer.setBirthday(((java.sql.Timestamp) row[4]).toLocalDateTime().toLocalDate());
+					} else if (row[4] instanceof java.time.LocalDateTime) {
+						customer.setBirthday(((java.time.LocalDateTime) row[4]).toLocalDate());
+					}
 				}
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=birthday, value={}, error={}", 
+					customerId, row[4], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=birthday", e);
 			}
 			
-			customer.setHeight(row[5] != null && row[5] instanceof java.math.BigDecimal 
-					? (java.math.BigDecimal) row[5] 
-					: row[5] != null ? new java.math.BigDecimal(row[5].toString()) : null);
+			try {
+				customer.setHeight(row[5] != null && row[5] instanceof java.math.BigDecimal 
+						? (java.math.BigDecimal) row[5] 
+						: row[5] != null ? new java.math.BigDecimal(row[5].toString()) : null);
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=height, value={}, error={}", 
+					customerId, row[5], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=height", e);
+			}
+			
 			customer.setEmail(row[6] != null ? row[6].toString() : null);
 			customer.setPhone(row[7] != null ? row[7].toString() : null);
 			customer.setAddress(row[8] != null ? row[8].toString() : null);
 			customer.setMedical(row[9] != null ? row[9].toString() : null);
 			customer.setTaboo(row[10] != null ? row[10].toString() : null);
 			
-			if (row[11] != null) {
-				customer.setFirstPostureGroupId(row[11] instanceof UUID 
-						? (UUID) row[11] 
-						: UUID.fromString(row[11].toString()));
+			try {
+				if (row[11] != null) {
+					customer.setFirstPostureGroupId(row[11] instanceof UUID 
+							? (UUID) row[11] 
+							: UUID.fromString(row[11].toString()));
+				}
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=firstPostureGroupId, value={}, error={}", 
+					customerId, row[11], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=firstPostureGroupId", e);
 			}
 			
 			customer.setMemo(row[12] != null ? row[12].toString() : null);
 			
 			// created_at: 様々な型に対応
-			if (row[13] != null) {
-				if (row[13] instanceof java.sql.Timestamp) {
-					customer.setCreatedAt(((java.sql.Timestamp) row[13]).toLocalDateTime());
-				} else if (row[13] instanceof java.time.LocalDateTime) {
-					customer.setCreatedAt((java.time.LocalDateTime) row[13]);
+			try {
+				if (row[13] != null) {
+					if (row[13] instanceof java.sql.Timestamp) {
+						customer.setCreatedAt(((java.sql.Timestamp) row[13]).toLocalDateTime());
+					} else if (row[13] instanceof java.time.LocalDateTime) {
+						customer.setCreatedAt((java.time.LocalDateTime) row[13]);
+					}
 				}
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=createdAt, value={}, error={}", 
+					customerId, row[13], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=createdAt", e);
 			}
 			
 			// is_active: PostgreSQLのboolean型をBooleanオブジェクトとして取得
 			// 様々な型に対応する堅牢な型変換を実装
-			boolean isActive = false;
-			if (row[14] != null) {
-				if (row[14] instanceof Boolean) {
-					isActive = (Boolean) row[14];
-				} else if (row[14] instanceof Number) {
-					// 数値型の場合（0=false, 1=true）
-					isActive = ((Number) row[14]).intValue() != 0;
-				} else if (row[14] instanceof String) {
-					// 文字列型の場合（"true"/"false"）
-					isActive = Boolean.parseBoolean(row[14].toString());
+			try {
+				boolean isActive = false;
+				if (row[14] != null) {
+					if (row[14] instanceof Boolean) {
+						isActive = (Boolean) row[14];
+					} else if (row[14] instanceof Number) {
+						// 数値型の場合（0=false, 1=true）
+						isActive = ((Number) row[14]).intValue() != 0;
+					} else if (row[14] instanceof String) {
+						// 文字列型の場合（"true"/"false"）
+						isActive = Boolean.parseBoolean(row[14].toString());
+					}
 				}
+				customer.setActive(isActive);
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=isActive, value={}, error={}", 
+					customerId, row[14], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=isActive", e);
 			}
-			customer.setActive(isActive);
 			
 			// deleted_at: OffsetDateTime型として取得
-			if (row[15] != null) {
-				if (row[15] instanceof java.sql.Timestamp) {
-					customer.setDeletedAt(((java.sql.Timestamp) row[15]).toInstant()
-						.atOffset(java.time.ZoneOffset.UTC));
-				} else if (row[15] instanceof java.time.OffsetDateTime) {
-					customer.setDeletedAt((java.time.OffsetDateTime) row[15]);
-				} else if (row[15] instanceof java.time.ZonedDateTime) {
-					customer.setDeletedAt(((java.time.ZonedDateTime) row[15]).toOffsetDateTime());
+			try {
+				if (row[15] != null) {
+					if (row[15] instanceof java.sql.Timestamp) {
+						customer.setDeletedAt(((java.sql.Timestamp) row[15]).toInstant()
+							.atOffset(java.time.ZoneOffset.UTC));
+					} else if (row[15] instanceof java.time.OffsetDateTime) {
+						customer.setDeletedAt((java.time.OffsetDateTime) row[15]);
+					} else if (row[15] instanceof java.time.ZonedDateTime) {
+						customer.setDeletedAt(((java.time.ZonedDateTime) row[15]).toOffsetDateTime());
+					}
 				}
+			} catch (Exception e) {
+				log.error("Customerマッピングエラー: customerId={}, field=deletedAt, value={}, error={}", 
+					customerId, row[15], e.getMessage());
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					"Customerエンティティのマッピングに失敗しました: customerId=" + customerId + ", field=deletedAt", e);
 			}
 			
 			// version はデータベースに存在しないため、null のままにする
+		} catch (com.example.fitnessgym_mg.exception.SystemException e) {
+			// SystemExceptionは再スロー（既にログ出力済み）
+			throw e;
 		} catch (Exception mappingException) {
+			// 予期しない例外の場合
+			log.error("Customerエンティティのマッピングに予期しないエラーが発生しました: customerId={}", 
+				customerId, mappingException);
 			throw new com.example.fitnessgym_mg.exception.SystemException(
 				"Customerエンティティのマッピングに失敗しました: customerId=" + customerId, mappingException);
 		}
@@ -455,11 +592,15 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 				} else if (storeRow[0] instanceof String) {
 					storeId = UUID.fromString((String) storeRow[0]);
 				} else {
+					log.warn("Storeマッピングエラー: customerId={}, field=storeId, value={}, reason=予期しない型", 
+						customerId, storeRow[0] != null ? storeRow[0].getClass().getName() : "null");
 					continue; // 型が予期しない場合はスキップ
 				}
 				
 				String storeName = storeRow[1] != null ? storeRow[1].toString() : null;
 				if (storeName == null) {
+					log.warn("Storeマッピングエラー: customerId={}, storeId={}, field=storeName, reason=null値", 
+						customerId, storeId);
 					continue;
 				}
 				
@@ -468,7 +609,10 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 				store.setName(storeName);
 				stores.add(store);
 			} catch (Exception storeMappingException) {
-				// Storeのマッピングエラーはスキップして続行
+				// Storeのマッピングエラーはログを出力してスキップ（Customerの取得は継続）
+				log.warn("Storeマッピングエラー: customerId={}, storeRow={}, error={}", 
+					customerId, java.util.Arrays.toString(storeRow), storeMappingException.getMessage(), 
+					storeMappingException);
 				continue;
 			}
 		}

@@ -41,48 +41,56 @@ public class UserRepositoryImpl implements UserRepositoryCustom {
 		// キーワードがnullまたは空文字の場合は、全文検索をスキップ
 		boolean useFullTextSearch = keyword != null && !keyword.trim().isEmpty();
 
-		// ネイティブクエリでtsvectorを使用
-		StringBuilder sql = new StringBuilder();
-		sql.append("SELECT DISTINCT u.* FROM users u");
-
-		StringBuilder whereClause = new StringBuilder();
-		boolean hasCondition = false;
+		// WHERE句の条件を構築（Listを使用して条件を管理し、可読性と保守性を向上）
+		java.util.List<String> whereConditions = new java.util.ArrayList<>();
+		java.util.List<String> joinClauses = new java.util.ArrayList<>();
 
 		// --- 店舗IDによる絞り込み (中間テーブル user_stores 経由) ---
 		if (storeId != null) {
-			sql.append(" INNER JOIN user_stores us ON u.id = us.user_id");
-			whereClause.append(" WHERE us.store_id = :storeId");
-			hasCondition = true;
+			joinClauses.add("INNER JOIN user_stores us ON u.id = us.user_id");
+			whereConditions.add("us.store_id = :storeId");
 		}
 
+		// --- 全文検索による絞り込み ---
 		if (useFullTextSearch) {
-			if (hasCondition) {
-				whereClause.append(" AND u.search_vector @@ plainto_tsquery('simple', :keyword)");
-			} else {
-				whereClause.append(" WHERE u.search_vector @@ plainto_tsquery('simple', :keyword)");
-				hasCondition = true;
-			}
+			whereConditions.add("u.search_vector @@ plainto_tsquery('simple', :keyword)");
 		}
 
+		// --- ロールによる絞り込み ---
 		if (role != null) {
-			if (hasCondition) {
-				whereClause.append(" AND u.role = :role");
-			} else {
-				whereClause.append(" WHERE u.role = :role");
-				hasCondition = true;
-			}
+			whereConditions.add("u.role = :role");
 		}
 
-		sql.append(whereClause);
+		// SQLクエリを構築
+		StringBuilder sql = new StringBuilder("SELECT DISTINCT u.* FROM users u");
+		
+		// JOIN句を追加
+		for (String joinClause : joinClauses) {
+			sql.append(" ").append(joinClause);
+		}
+		
+		// WHERE句を構築（条件が1つ以上ある場合のみ）
+		if (!whereConditions.isEmpty()) {
+			sql.append(" WHERE ");
+			sql.append(String.join(" AND ", whereConditions));
+		}
+		
 		sql.append(" ORDER BY u.created_at DESC");
 
-		// カウントクエリ（JOINも含める）
-		StringBuilder countSqlBuilder = new StringBuilder();
-		countSqlBuilder.append("SELECT COUNT(DISTINCT u.id) FROM users u");
-		if (storeId != null) {
-			countSqlBuilder.append(" INNER JOIN user_stores us ON u.id = us.user_id");
+		// カウントクエリを構築（データ取得クエリと同じJOINとWHERE条件を使用）
+		StringBuilder countSqlBuilder = new StringBuilder("SELECT COUNT(DISTINCT u.id) FROM users u");
+		
+		// JOIN句を追加（データ取得クエリと同じ）
+		for (String joinClause : joinClauses) {
+			countSqlBuilder.append(" ").append(joinClause);
 		}
-		countSqlBuilder.append(whereClause.toString());
+		
+		// WHERE句を構築（データ取得クエリと同じ条件）
+		if (!whereConditions.isEmpty()) {
+			countSqlBuilder.append(" WHERE ");
+			countSqlBuilder.append(String.join(" AND ", whereConditions));
+		}
+		
 		String countSql = countSqlBuilder.toString();
 
 		// データ取得クエリ
