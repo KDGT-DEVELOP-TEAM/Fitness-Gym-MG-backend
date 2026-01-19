@@ -137,13 +137,18 @@ public class SecurityConfig {
 	 * <p>セキュリティ注意事項:</p>
 	 * <ul>
 	 *   <li>ForwardedHeaderFilterはserver.forward-headers-strategy=frameworkにより自動設定されます</li>
-	 *   <li>信頼できるプロキシのIPアドレスを明示的に設定するには、TomcatのRemoteIpValve設定が必要です</li>
-	 *   <li>本番環境では、環境変数TRUSTED_PROXY_IPSで信頼できるプロキシのIPアドレス（CIDR表記）を設定してください</li>
+	 *   <li>信頼できるプロキシのIPアドレスを明示的に設定するには、application.propertiesで
+	 *       server.tomcat.remoteip.internal-proxiesを設定してください</li>
+	 *   <li>本番環境では、環境変数TRUSTED_PROXY_IPSで信頼できるプロキシのIPアドレス（CIDR表記、パイプ区切り）を設定してください</li>
 	 *   <li>開発環境では直接接続を想定し、TRUSTED_PROXY_IPSは空にしてください</li>
 	 * </ul>
 	 * 
-	 * <p>注意: 現在の実装では、ForwardedHeaderFilterはすべてのX-Forwarded-Forヘッダーを受け入れます。
-	 * より厳密な制御が必要な場合は、カスタムフィルターの実装を検討してください。</p>
+	 * <p>設定方法:</p>
+	 * <ul>
+	 *   <li>application.propertiesでserver.tomcat.remoteip.internal-proxiesを設定することで、
+	 *       TomcatのRemoteIpValveが信頼できるプロキシのIPアドレスのみを受け入れるようになります</li>
+	 *   <li>信頼できないプロキシからのX-Forwarded-Forヘッダーは無視され、元のIPアドレスが使用されます</li>
+	 * </ul>
 	 */
 	@Bean
 	public FilterRegistrationBean<ForwardedHeaderFilter> forwardedHeaderFilter() {

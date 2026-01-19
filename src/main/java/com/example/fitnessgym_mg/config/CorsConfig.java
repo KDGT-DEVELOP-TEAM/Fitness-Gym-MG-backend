@@ -64,21 +64,25 @@ public class CorsConfig {
             .anyMatch(profile -> profile.equalsIgnoreCase("prod") || profile.equalsIgnoreCase("production"));
         
         if (isProduction) {
-            // 本番環境でlocalhostや127.0.0.1が含まれている場合は警告
+            // 本番環境でlocalhostや127.0.0.1が含まれている場合は例外をスローして起動を阻止
             boolean hasLocalhost = origins.stream()
-                .anyMatch(origin -> origin.contains("localhost") || origin.contains("127.0.0.1") || origin.startsWith("http://"));
+                .anyMatch(origin -> origin.contains("localhost") || origin.contains("127.0.0.1"));
             
             if (hasLocalhost) {
-                log.warn("CORS設定警告: 本番環境でlocalhostや127.0.0.1が許可されています。セキュリティリスクがあります。");
-                log.warn("許可されているオリジン: {}", origins);
+                log.error("CORS設定エラー: 本番環境でlocalhostや127.0.0.1が許可されています。");
+                log.error("許可されているオリジン: {}", origins);
+                throw new IllegalStateException(
+                    "本番環境ではlocalhostや127.0.0.1を許可できません。環境変数CORS_ALLOWED_ORIGINSを確認してください。");
             }
             
-            // HTTPSでないオリジンが含まれている場合は警告
+            // HTTPSでないオリジンが含まれている場合は例外をスローして起動を阻止
             boolean hasHttp = origins.stream()
                 .anyMatch(origin -> origin.startsWith("http://") && !origin.startsWith("https://"));
             
             if (hasHttp) {
-                log.warn("CORS設定警告: 本番環境でHTTP（非HTTPS）のオリジンが許可されています。セキュリティリスクがあります。");
+                log.error("CORS設定エラー: 本番環境でHTTP（非HTTPS）のオリジンが許可されています。");
+                throw new IllegalStateException(
+                    "本番環境ではHTTP（非HTTPS）のオリジンを許可できません。環境変数CORS_ALLOWED_ORIGINSを確認してください。");
             }
         }
         

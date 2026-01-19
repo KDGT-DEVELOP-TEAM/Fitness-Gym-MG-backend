@@ -15,6 +15,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.example.fitnessgym_mg.entity.User;
+import com.example.fitnessgym_mg.exception.EntityNotFoundException;
 import com.example.fitnessgym_mg.repository.UserRepository;
 import com.example.fitnessgym_mg.util.JwtTokenUtil;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -114,25 +115,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // ユーザーIDからUserエンティティを取得
             // セキュリティ改善: emailをJWTから削除し、DBから取得することで個人情報漏洩リスクを低減
             // パフォーマンス改善: キャッシュから取得を試み、見つからない場合のみDBアクセス
-            User user = userCache.get(userId, key -> {
-                log.debug("ユーザーキャッシュミス: userId={}, DBから取得", key);
-                return userRepository.findById(key).orElse(null);
-            });
-            
-            // キャッシュにnullが保存される可能性があるため、明示的にチェック
-            if (user == null) {
-                // キャッシュにnullが保存されている可能性があるため、キャッシュを無効化して再取得
-                userCache.invalidate(userId);
-                user = userRepository.findById(userId).orElse(null);
+            // キャッシュにnullが保存されることを防ぐため、ユーザーが存在しない場合はEntityNotFoundExceptionをスロー
+            User user;
+            try {
+                user = userCache.get(userId, key -> {
+                    log.debug("ユーザーキャッシュミス: userId={}, DBから取得", key);
+                    return userRepository.findById(key)
+                        .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + key));
+                });
+            } catch (EntityNotFoundException e) {
+                // ユーザーが存在しない場合
+                log.warn("JWT認証失敗: ユーザーが存在しません. userId={}", userId);
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.sendUnauthorized(response, "JWT_INVALID", "JWTトークンが無効です");
+                return;
             }
 
-            // ユーザーが存在しない、または無効化されている場合はエラー
-            if (user == null || !user.isActive()) {
-                log.warn("JWT認証失敗: ユーザーが無効化されているか存在しません. userId={}", userId);
-                // キャッシュを無効化（無効化されたユーザー情報がキャッシュに残らないようにする）
-                if (user != null) {
-                    userCache.invalidate(userId);
-                }
+            // ユーザーが無効化されている場合はエラー
+            if (!user.isActive()) {
+                log.warn("JWT認証失敗: ユーザーが無効化されています. userId={}", userId);
+                // 無効化されたユーザー情報をキャッシュから削除
+                userCache.invalidate(userId);
                 SecurityContextHolder.clearContext();
                 authenticationEntryPoint.sendUnauthorized(response, "JWT_USER_INACTIVE", "ユーザーアカウントが無効化されています");
                 return;
