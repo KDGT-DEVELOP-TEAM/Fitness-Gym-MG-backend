@@ -15,6 +15,8 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import com.example.fitnessgym_mg.entity.enums.ActionType;
 import com.example.fitnessgym_mg.entity.enums.TargetTableType;
 
@@ -32,6 +34,7 @@ import lombok.ToString;
  */
 @Entity
 @Table(name = "logs")
+@DynamicUpdate
 @Data
 @Builder
 @NoArgsConstructor

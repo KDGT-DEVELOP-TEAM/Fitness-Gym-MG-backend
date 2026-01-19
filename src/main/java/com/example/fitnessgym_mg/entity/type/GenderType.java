@@ -70,62 +70,20 @@ public class GenderType implements JdbcType {
 				@Override
 				protected X doExtract(ResultSet rs, int paramIndex, WrapperOptions options) throws SQLException {
 					String value = rs.getString(paramIndex);
-					if (value == null) {
-						return null;
-					}
-					// まずENUM名として試行
-					try {
-						return (X) Gender.valueOf(value.toUpperCase());
-					} catch (IllegalArgumentException e) {
-						// ENUM名でない場合、日本語ラベルから検索（既存データの互換性のため）
-						for (Gender gender : Gender.values()) {
-							if (gender.getLabel().equals(value)) {
-								return (X) gender;
-							}
-						}
-						throw new IllegalArgumentException("Invalid gender value: " + value, e);
-					}
+					return value == null ? null : (X) Gender.fromString(value);
 				}
 
 				@Override
 				protected X doExtract(CallableStatement statement, int index, WrapperOptions options) throws SQLException {
 					String value = statement.getString(index);
-					if (value == null) {
-						return null;
-					}
-					// まずENUM名として試行
-					try {
-						return (X) Gender.valueOf(value.toUpperCase());
-					} catch (IllegalArgumentException e) {
-						// ENUM名でない場合、日本語ラベルから検索（既存データの互換性のため）
-						for (Gender gender : Gender.values()) {
-							if (gender.getLabel().equals(value)) {
-								return (X) gender;
-							}
-						}
-						throw new IllegalArgumentException("Invalid gender value: " + value, e);
-					}
+					return value == null ? null : (X) Gender.fromString(value);
 				}
 
 				@Override
 				protected X doExtract(CallableStatement statement, String name, WrapperOptions options)
 						throws SQLException {
 					String value = statement.getString(name);
-					if (value == null) {
-						return null;
-					}
-					// まずENUM名として試行
-					try {
-						return (X) Gender.valueOf(value.toUpperCase());
-					} catch (IllegalArgumentException e) {
-						// ENUM名でない場合、日本語ラベルから検索（既存データの互換性のため）
-						for (Gender gender : Gender.values()) {
-							if (gender.getLabel().equals(value)) {
-								return (X) gender;
-							}
-						}
-						throw new IllegalArgumentException("Invalid gender value: " + value, e);
-					}
+					return value == null ? null : (X) Gender.fromString(value);
 				}
 			};
 		}

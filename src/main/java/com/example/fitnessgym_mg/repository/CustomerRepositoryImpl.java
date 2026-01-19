@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
 
 import com.example.fitnessgym_mg.entity.Customer;
 import com.example.fitnessgym_mg.entity.Store;
-import com.example.fitnessgym_mg.entity.converter.GenderConverter;
+import com.example.fitnessgym_mg.entity.enums.Gender;
 import com.example.fitnessgym_mg.repository.specification.CustomerSpecifications;
 
 import jakarta.persistence.EntityManager;
@@ -186,17 +186,14 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 		Object[] row = customerResults.get(0);
 		Customer customer = new Customer();
 		
-		// GenderConverterを使用してgenderを変換
-		GenderConverter genderConverter = new GenderConverter();
-		
 		try {
 			customer.setId(row[0] instanceof UUID ? (UUID) row[0] : UUID.fromString(row[0].toString()));
 			customer.setKana(row[1] != null ? row[1].toString() : null);
 			customer.setName(row[2] != null ? row[2].toString() : null);
 			
-			// gender: String型として取得し、GenderConverterで変換
+			// gender: String型として取得し、Gender.fromString()で変換（ENUM名または日本語ラベルをサポート）
 			if (row[3] != null) {
-				customer.setGender(genderConverter.convertToEntityAttribute(row[3].toString()));
+				customer.setGender(Gender.fromString(row[3].toString()));
 			}
 			
 			// birthday: 様々な型に対応
@@ -351,17 +348,14 @@ public class CustomerRepositoryImpl extends SimpleJpaRepository<Customer, java.u
 		Object[] row = customerResults.get(0);
 		Customer customer = new Customer();
 		
-		// GenderConverterを使用してgenderを変換
-		GenderConverter genderConverter = new GenderConverter();
-		
 		try {
 			customer.setId(row[0] instanceof UUID ? (UUID) row[0] : UUID.fromString(row[0].toString()));
 			customer.setKana(row[1] != null ? row[1].toString() : null);
 			customer.setName(row[2] != null ? row[2].toString() : null);
 			
-			// gender: String型として取得し、GenderConverterで変換
+			// gender: String型として取得し、Gender.fromString()で変換（ENUM名または日本語ラベルをサポート）
 			if (row[3] != null) {
-				customer.setGender(genderConverter.convertToEntityAttribute(row[3].toString()));
+				customer.setGender(Gender.fromString(row[3].toString()));
 			}
 			
 			// birthday: 様々な型に対応

@@ -13,6 +13,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.JdbcType;
 
 import com.example.fitnessgym_mg.entity.enums.PasswordResetStatus;
@@ -32,6 +33,7 @@ import lombok.ToString;
  */
 @Entity
 @Table(name = "password_reset_requests")
+@DynamicUpdate
 @Data
 @Builder
 @NoArgsConstructor

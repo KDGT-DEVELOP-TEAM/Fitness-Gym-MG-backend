@@ -18,6 +18,8 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -31,6 +33,7 @@ import lombok.ToString;
 @Entity
 @Table(name = "posture_groups", 
        uniqueConstraints = @UniqueConstraint(columnNames = { "lesson_id" }))
+@DynamicUpdate
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
