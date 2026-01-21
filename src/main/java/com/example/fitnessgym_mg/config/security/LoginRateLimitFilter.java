@@ -47,7 +47,6 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
     private static final String PASSWORD_RESET_REQUEST_ENDPOINT = "/api/password-reset/request";
     private static final int MAX_ATTEMPTS = 5;
     private static final Duration TIME_WINDOW = Duration.ofMinutes(5);
-    private static final Duration DEFAULT_CLEANUP_INTERVAL = Duration.ofMinutes(5);
 
     private final ObjectMapper objectMapper;
     
