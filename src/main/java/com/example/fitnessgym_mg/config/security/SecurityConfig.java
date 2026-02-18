@@ -12,6 +12,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.core.Ordered;
+import org.springframework.web.filter.ForwardedHeaderFilter;
 
 import com.example.fitnessgym_mg.filter.LoginAttemptFilter;
 
@@ -40,7 +43,8 @@ public class SecurityConfig {
 	private static final int BCRYPT_STRENGTH = 12;
 
 	private static final String[] PUBLIC_API = {
-			"/api/auth/**"
+			"/api/auth/login",  // POST /api/auth/login のみ認証不要
+			"/api/password-reset/request"  // POST /api/password-reset/request は認証不要（パスワードを忘れたユーザーが使用）
 	};
 
 	private static final String[] ADMIN_API = {
@@ -124,5 +128,34 @@ public class SecurityConfig {
 			);
 
 		return http.build();
+	}
+	
+	/**
+	 * ForwardedHeaderFilterをBeanとして登録
+	 * X-Forwarded-Forヘッダーを適切に処理し、信頼できるプロキシからのIPのみを取得
+	 * 
+	 * <p>セキュリティ注意事項:</p>
+	 * <ul>
+	 *   <li>ForwardedHeaderFilterはserver.forward-headers-strategy=frameworkにより自動設定されます</li>
+	 *   <li>信頼できるプロキシのIPアドレスを明示的に設定するには、application.propertiesで
+	 *       server.tomcat.remoteip.internal-proxiesを設定してください</li>
+	 *   <li>本番環境では、環境変数TRUSTED_PROXY_IPSで信頼できるプロキシのIPアドレス（CIDR表記、パイプ区切り）を設定してください</li>
+	 *   <li>開発環境では直接接続を想定し、TRUSTED_PROXY_IPSは空にしてください</li>
+	 * </ul>
+	 * 
+	 * <p>設定方法:</p>
+	 * <ul>
+	 *   <li>application.propertiesでserver.tomcat.remoteip.internal-proxiesを設定することで、
+	 *       TomcatのRemoteIpValveが信頼できるプロキシのIPアドレスのみを受け入れるようになります</li>
+	 *   <li>信頼できないプロキシからのX-Forwarded-Forヘッダーは無視され、元のIPアドレスが使用されます</li>
+	 * </ul>
+	 */
+	@Bean
+	public FilterRegistrationBean<ForwardedHeaderFilter> forwardedHeaderFilter() {
+		ForwardedHeaderFilter filter = new ForwardedHeaderFilter();
+		FilterRegistrationBean<ForwardedHeaderFilter> registration = 
+			new FilterRegistrationBean<>(filter);
+		registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
+		return registration;
 	}
 }

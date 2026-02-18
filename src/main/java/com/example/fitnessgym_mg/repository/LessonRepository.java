@@ -23,28 +23,51 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 
 	/**
 	 * 顧客IDに紐づくレッスン履歴を実施日時の降順で取得（履歴一覧表示用）
+	 * CustomerをJOIN FETCHしないことで、@SQLRestrictionの適用を回避
 	 * 
 	 * <p>このメソッドは{@link com.example.fitnessgym_mg.dto.response.LessonResponse#fromEntity(Lesson)}で使用されることを前提としています。</p>
-	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer）がJOIN FETCH済みである必要があります。</p>
-	 * <p>JOIN FETCHが未使用の場合、{@link LessonResponse#fromEntity(Lesson)}内のnullチェックにより安全に処理されますが、パフォーマンス問題が発生する可能性があります。</p>
+	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer）がJOIN FETCH済みです。</p>
+	 * <p>CustomerはJOIN FETCHしないため、@SQLRestrictionの適用を回避します。Customer情報が必要な場合は、Service層でネイティブSQLクエリで別途取得します。</p>
 	 * 
 	 * @param customerId 顧客ID
 	 * @return レッスンリスト（開始日時の降順）
 	 */
-	List<Lesson> findByCustomerIdOrderByStartDateDesc(UUID customerId);
+	@Query("""
+			SELECT DISTINCT l
+			FROM Lesson l
+			LEFT JOIN FETCH l.store
+			LEFT JOIN FETCH l.trainer
+			WHERE l.customer.id = :customerId
+			ORDER BY l.startDate DESC
+			""")
+	List<Lesson> findByCustomerIdOrderByStartDateDesc(@Param("customerId") UUID customerId);
 
 	/**
 	 * 顧客IDに紐づくレッスン履歴をページネーション対応で取得（実施日時の降順）
+	 * CustomerをJOIN FETCHしないことで、@SQLRestrictionの適用を回避
 	 * 
 	 * <p>このメソッドは{@link com.example.fitnessgym_mg.dto.response.LessonResponse#fromEntity(Lesson)}で使用されることを前提としています。</p>
-	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer）がJOIN FETCH済みである必要があります。</p>
-	 * <p>JOIN FETCHが未使用の場合、{@link LessonResponse#fromEntity(Lesson)}内のnullチェックにより安全に処理されますが、パフォーマンス問題が発生する可能性があります。</p>
+	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer）がJOIN FETCH済みです。</p>
+	 * <p>CustomerはJOIN FETCHしないため、@SQLRestrictionの適用を回避します。Customer情報が必要な場合は、Service層でネイティブSQLクエリで別途取得します。</p>
 	 * 
 	 * @param customerId 顧客ID
 	 * @param pageable ページネーション情報
 	 * @return レッスンページ（開始日時の降順）
 	 */
-	Page<Lesson> findByCustomerIdOrderByStartDateDesc(UUID customerId, Pageable pageable);
+	@Query(value = """
+			SELECT DISTINCT l
+			FROM Lesson l
+			LEFT JOIN FETCH l.store
+			LEFT JOIN FETCH l.trainer
+			WHERE l.customer.id = :customerId
+			ORDER BY l.startDate DESC
+			""",
+			countQuery = """
+			SELECT COUNT(DISTINCT l)
+			FROM Lesson l
+			WHERE l.customer.id = :customerId
+			""")
+	Page<Lesson> findByCustomerIdOrderByStartDateDesc(@Param("customerId") UUID customerId, Pageable pageable);
 
 	// --- 1. レッスン一覧検索 (ページネーション対応) ---
 
@@ -53,28 +76,56 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	 * 実施日時（startDate）で降順ソートする（全店舗対象）
 	 * 
 	 * <p>このメソッドは{@link com.example.fitnessgym_mg.dto.response.LessonResponse#fromEntity(Lesson)}で使用されることを前提としています。</p>
-	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer）がJOIN FETCH済みである必要があります。</p>
-	 * <p>JOIN FETCHが未使用の場合、{@link LessonResponse#fromEntity(Lesson)}内のnullチェックにより安全に処理されますが、パフォーマンス問題が発生する可能性があります。</p>
+	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer）がJOIN FETCH済みです。</p>
 	 * 
 	 * @param endDate 終了日時（この日時より前のレッスンを取得）
 	 * @param pageable ページネーション情報
 	 * @return レッスンページ
 	 */
-	Page<Lesson> findByEndDateBefore(LocalDateTime endDate, Pageable pageable);
+	@Query(value = """
+			SELECT DISTINCT l
+			FROM Lesson l
+			LEFT JOIN FETCH l.store
+			LEFT JOIN FETCH l.trainer
+			LEFT JOIN FETCH l.customer
+			WHERE l.endDate < :endDate
+			ORDER BY l.startDate DESC
+			""",
+			countQuery = """
+			SELECT COUNT(DISTINCT l)
+			FROM Lesson l
+			WHERE l.endDate < :endDate
+			""")
+	Page<Lesson> findByEndDateBefore(@Param("endDate") LocalDateTime endDate, Pageable pageable);
 
 	/**
 	 * 店舗IDで絞り込み、かつ終了日時が指定時刻より前のレッスンを検索する（一覧表示用）
 	 * 
 	 * <p>このメソッドは{@link com.example.fitnessgym_mg.dto.response.LessonResponse#fromEntity(Lesson)}で使用されることを前提としています。</p>
-	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer）がJOIN FETCH済みである必要があります。</p>
-	 * <p>JOIN FETCHが未使用の場合、{@link LessonResponse#fromEntity(Lesson)}内のnullチェックにより安全に処理されますが、パフォーマンス問題が発生する可能性があります。</p>
+	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer）がJOIN FETCH済みです。</p>
 	 * 
 	 * @param storeId 店舗ID
 	 * @param endDate 終了日時（この日時より前のレッスンを取得）
 	 * @param pageable ページネーション情報
 	 * @return レッスンページ
 	 */
-	Page<Lesson> findByStoreIdAndEndDateBefore(UUID storeId, LocalDateTime endDate, Pageable pageable);
+	@Query(value = """
+			SELECT DISTINCT l
+			FROM Lesson l
+			LEFT JOIN FETCH l.store
+			LEFT JOIN FETCH l.trainer
+			LEFT JOIN FETCH l.customer
+			WHERE l.store.id = :storeId
+			  AND l.endDate < :endDate
+			ORDER BY l.startDate DESC
+			""",
+			countQuery = """
+			SELECT COUNT(DISTINCT l)
+			FROM Lesson l
+			WHERE l.store.id = :storeId
+			  AND l.endDate < :endDate
+			""")
+	Page<Lesson> findByStoreIdAndEndDateBefore(@Param("storeId") UUID storeId, @Param("endDate") LocalDateTime endDate, Pageable pageable);
 
 	// --- 2. グラフデータ集計 ---
 
@@ -82,18 +133,19 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	 * PostgreSQL の date_trunc を利用し、
 	 * 期間（週/月など）別にレッスン回数を集計する（全店舗 or 店舗指定）
 	 * 
-	 * <p>DTO Projectionを使用し、Repositoryの返却型への依存を排除。</p>
+	 * <p>型マッピングの問題を回避するため、Object[]で受け取り、Service層で手動マッピングする。</p>
+	 * <p>結果: [periodStart (Timestamp), count (BigInteger)]</p>
 	 */
 	@Query(value = """
-			SELECT date_trunc(:type, l.start_date) AS periodStart, 
-			       COUNT(*) AS count
+			SELECT date_trunc(:type, l.start_date)::timestamptz AS periodStart, 
+			       COUNT(*)::bigint AS count
 			FROM lessons l
 			WHERE l.end_date < :now
 			  AND (:storeId IS NULL OR l.store_id = :storeId)
 			GROUP BY periodStart
 			ORDER BY periodStart DESC
 			""", nativeQuery = true)
-	List<PeriodCount> countLessonsGroupedByPeriod(
+	List<Object[]> countLessonsGroupedByPeriodRaw(
 			@Param("type") String type,
 			@Param("now") LocalDateTime now,
 			@Param("storeId") UUID storeId);
@@ -101,18 +153,19 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 	/**
 	 * 顧客IDでグラフデータを集計（期間別レッスン回数）
 	 * 
-	 * <p>DTO Projectionを使用し、Repositoryの返却型への依存を排除。</p>
+	 * <p>型マッピングの問題を回避するため、Object[]で受け取り、Service層で手動マッピングする。</p>
+	 * <p>結果: [periodStart (Timestamp), count (BigInteger)]</p>
 	 */
 	@Query(value = """
-			SELECT date_trunc(:type, l.start_date) AS periodStart, 
-			       COUNT(*) AS count
+			SELECT date_trunc(:type, l.start_date)::timestamptz AS periodStart, 
+			       COUNT(*)::bigint AS count
 			FROM lessons l
 			WHERE l.end_date < :now
 			  AND l.customer_id = :customerId
 			GROUP BY periodStart
 			ORDER BY periodStart DESC
 			""", nativeQuery = true)
-	List<PeriodCount> countLessonsGroupedByPeriodByCustomerId(
+	List<Object[]> countLessonsGroupedByPeriodByCustomerIdRaw(
 			@Param("type") String type,
 			@Param("now") LocalDateTime now,
 			@Param("customerId") UUID customerId);
@@ -147,6 +200,35 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 			@Param("fromDate") LocalDateTime fromDate);
 
 	/**
+	 * トレーナー別の次回レッスン希望日程一覧を取得
+	 * nextDateが設定されており、かつnextDateが未来の日時のレッスンのみ取得
+	 * 
+	 * <p>このメソッドは{@link com.example.fitnessgym_mg.dto.response.LessonResponse#fromEntity(Lesson)}で使用されることを前提としています。</p>
+	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer、nextStore、nextUser）がJOIN FETCH済みである必要があります。</p>
+	 * <p>JOIN FETCHが未使用の場合、{@link LessonResponse#fromEntity(Lesson)}内のnullチェックにより安全に処理されますが、パフォーマンス問題が発生する可能性があります。</p>
+	 * 
+	 * @param trainerId トレーナーID
+	 * @param now 現在日時（nextDate > now の条件でフィルタ）
+	 * @return 次回レッスン希望日程が設定されているレッスン一覧（nextDateの昇順）
+	 */
+	@Query("""
+			SELECT DISTINCT l
+			FROM Lesson l
+			LEFT JOIN FETCH l.customer
+			LEFT JOIN FETCH l.store
+			LEFT JOIN FETCH l.trainer
+			LEFT JOIN FETCH l.nextStore
+			LEFT JOIN FETCH l.nextUser
+			WHERE l.trainer.id = :trainerId
+			  AND l.nextDate IS NOT NULL
+			  AND l.nextDate > :now
+			ORDER BY l.nextDate ASC
+			""")
+	List<Lesson> findNextLessonsByTrainerId(
+			@Param("trainerId") UUID trainerId,
+			@Param("now") LocalDateTime now);
+
+	/**
 	 * トレーナーIDで指定期間内のレッスンを取得する
 	 * 開始日時がfromDate以上かつtoDate未満のものを開始日時昇順で返す
 	 */
@@ -162,6 +244,113 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 			@Param("trainerId") UUID trainerId,
 			@Param("fromDate") LocalDateTime fromDate,
 			@Param("toDate") LocalDateTime toDate);
+
+	/**
+	 * トレーナーIDで指定期間内のレッスンを取得する（ページネーション対応）
+	 * 開始日時がfromDate以上かつtoDate未満のものを開始日時昇順で返す
+	 */
+	@Query("""
+			SELECT l
+			FROM Lesson l
+			WHERE l.trainer.id = :trainerId
+			  AND l.startDate >= :fromDate
+			  AND l.startDate < :toDate
+			ORDER BY l.startDate ASC
+			""")
+	org.springframework.data.domain.Page<Lesson> findUpcomingLessonsByTrainerIdBetween(
+			@Param("trainerId") UUID trainerId,
+			@Param("fromDate") LocalDateTime fromDate,
+			@Param("toDate") LocalDateTime toDate,
+			org.springframework.data.domain.Pageable pageable);
+
+	/**
+	 * トレーナーIDで次回レッスン希望を取得する（ページネーション対応）
+	 * nextDateが現在日時より未来のものをnextDate昇順で返す
+	 * 
+	 * <p>レッスンを登録したトレーナー（l.trainer.id）または次回担当トレーナー（l.nextUser.id）のどちらかに
+	 * 一致するレッスンを取得します。</p>
+	 * 
+	 * <p>退会済み顧客（deletedAt IS NOT NULL）のレッスンは除外されます。</p>
+	 * 
+	 * <p>このメソッドは{@link com.example.fitnessgym_mg.dto.response.LessonResponse#fromEntity(Lesson)}で使用されることを前提としています。</p>
+	 * <p><strong>設計上の前提</strong>: このメソッドで取得したLessonエンティティは、関連エンティティ（Store、Trainer、Customer、nextStore、nextUser）がJOIN FETCH済みである必要があります。</p>
+	 * <p>JOIN FETCHが未使用の場合、{@link LessonResponse#fromEntity(Lesson)}内のnullチェックにより安全に処理されますが、パフォーマンス問題が発生する可能性があります。</p>
+	 * 
+	 * <p>注意: JOIN FETCHとページネーションを組み合わせる場合、カウントクエリを明示的に定義する必要があります。</p>
+	 * 
+	 * @param trainerId トレーナーID（trainer.idまたはnextUser.id）
+	 * @param now 現在日時（nextDate > now の条件でフィルタ）
+	 * @param pageable ページネーション情報
+	 * @return 次回レッスン希望日程が設定されているレッスンページ（nextDateの昇順）
+	 */
+	@Query(value = """
+			SELECT DISTINCT l
+			FROM Lesson l
+			JOIN FETCH l.customer c
+			LEFT JOIN FETCH l.store
+			LEFT JOIN FETCH l.trainer
+			LEFT JOIN FETCH l.nextStore
+			LEFT JOIN FETCH l.nextUser
+			WHERE (l.trainer.id = :trainerId OR l.nextUser.id = :trainerId)
+			  AND l.nextDate IS NOT NULL
+			  AND l.nextDate > :now
+			  AND c.deletedAt IS NULL
+			ORDER BY l.nextDate ASC
+			""",
+			countQuery = """
+			SELECT COUNT(DISTINCT l)
+			FROM Lesson l
+			JOIN l.customer c
+			WHERE (l.trainer.id = :trainerId OR l.nextUser.id = :trainerId)
+			  AND l.nextDate IS NOT NULL
+			  AND l.nextDate > :now
+			  AND c.deletedAt IS NULL
+			""")
+	org.springframework.data.domain.Page<Lesson> findNextLessonsByTrainerIdOrNextTrainerId(
+			@Param("trainerId") UUID trainerId,
+			@Param("now") LocalDateTime now,
+			org.springframework.data.domain.Pageable pageable);
+
+	/**
+	 * レッスンIDからCustomerのIDと名前を取得（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * <p>データベースに`deleted_at`カラムが存在しない場合でも、エラーが発生しません。</p>
+	 * <p>重要: 論理削除条件（AND c.deleted_at IS NULL）を必ず含めること。</p>
+	 * 
+	 * @param lessonId レッスンID
+	 * @return CustomerのIDと名前のペア（存在しない場合はnull）
+	 */
+	@Query(nativeQuery = true, value = "SELECT c.id, c.name FROM lessons l JOIN customers c ON l.customer_id = c.id WHERE l.id = :lessonId AND c.deleted_at IS NULL")
+	java.util.Optional<Object[]> findCustomerIdAndNameByLessonId(@Param("lessonId") UUID lessonId);
+
+	/**
+	 * 複数のレッスンIDからCustomerのIDと名前を一括取得（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * <p>N+1問題を回避するため、複数のレッスンIDに対して一度のクエリでCustomer情報を取得します。</p>
+	 * <p>重要: 論理削除条件（AND c.deleted_at IS NULL）を必ず含めること。</p>
+	 * 
+	 * @param lessonIds レッスンIDのリスト
+	 * @return レッスンIDとCustomerのID、名前のマッピング（レッスンID -> [Customer ID, Customer Name]）
+	 */
+	@Query(nativeQuery = true, value = "SELECT l.id as lesson_id, c.id as customer_id, c.name as customer_name FROM lessons l JOIN customers c ON l.customer_id = c.id WHERE l.id IN :lessonIds AND c.deleted_at IS NULL")
+	java.util.List<Object[]> findCustomerIdAndNameByLessonIds(@Param("lessonIds") java.util.List<UUID> lessonIds);
+
+	/**
+	 * 複数のレッスンIDからCustomerのID、名前、削除状態を一括取得（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * <p>N+1問題を回避するため、複数のレッスンIDに対して一度のクエリでCustomer情報を取得します。</p>
+	 * <p>論理削除された顧客も含めて取得します（deleted_at条件を含まない）。</p>
+	 * <p>統計画面など、論理削除された顧客のレッスンも表示する必要がある場合に使用します。</p>
+	 * 
+	 * @param lessonIds レッスンIDのリスト
+	 * @return レッスンIDとCustomerのID、名前、削除状態のマッピング（レッスンID -> [Customer ID, Customer Name, Customer Deleted]）
+	 *         削除状態はboolean型（deleted_at IS NOT NULLの場合true）
+	 */
+	@Query(nativeQuery = true, value = "SELECT l.id as lesson_id, c.id as customer_id, c.name as customer_name, (c.deleted_at IS NOT NULL) as customer_deleted FROM lessons l JOIN customers c ON l.customer_id = c.id WHERE l.id IN :lessonIds")
+	java.util.List<Object[]> findCustomerIdNameAndDeletedByLessonIds(@Param("lessonIds") java.util.List<UUID> lessonIds);
 
 	/**
 	 * レッスンIDでレッスンを取得し、関連エンティティもJOIN FETCHで取得（N+1問題を回避）
@@ -222,9 +411,10 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 		        AND ms.id = cs.id
 		    )
 		    OR EXISTS (
-		      SELECT 1 FROM UserCustomer uc
-		      WHERE uc.id.userId = :userId
-		        AND uc.id.customerId = c.id
+		      SELECT 1 FROM Lesson l2
+		      WHERE l2.nextUser.id = :userId
+		        AND l2.customer.id = c.id
+		        AND l2.nextDate IS NOT NULL
 		    )
 		  )
 		""")
@@ -244,4 +434,29 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 			ORDER BY l.startDate DESC
 			""")
 	java.util.List<Lesson> findLatestLessonsWithWeightByCustomerId(@Param("customerId") UUID customerId, org.springframework.data.domain.Pageable pageable);
+
+	/**
+	 * トレーナーが指定された顧客の次回レッスン希望日程の担当として設定されているか確認（存在確認専用クエリ）
+	 * 
+	 * <p>認可用クエリはexists系のみを使用し、「取得」と「可否判定」を混ぜない。</p>
+	 * <p>トレーナーが顧客にアクセスできるかどうかを判断する際に使用される。</p>
+	 * <p>user_customersテーブルにレコードがなくても、次回レッスン希望日程の担当として設定されていればアクセス可能とする。</p>
+	 * 
+	 * @param trainerId トレーナーID（nextUser.id）
+	 * @param customerId 顧客ID
+	 * @return 次回レッスン希望日程が存在する場合 true
+	 */
+	@Query("""
+		SELECT CASE WHEN EXISTS (
+			SELECT 1
+			FROM Lesson l
+			WHERE l.nextUser.id = :trainerId
+			  AND l.customer.id = :customerId
+			  AND l.nextDate IS NOT NULL
+		) THEN true ELSE false END
+		""")
+	boolean existsNextLessonByTrainerIdAndCustomerId(
+		@Param("trainerId") UUID trainerId,
+		@Param("customerId") UUID customerId
+	);
 }

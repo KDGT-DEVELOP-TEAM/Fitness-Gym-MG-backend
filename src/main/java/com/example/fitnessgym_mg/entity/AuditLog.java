@@ -15,6 +15,8 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import com.example.fitnessgym_mg.entity.enums.ActionType;
 import com.example.fitnessgym_mg.entity.enums.TargetTableType;
 
@@ -32,6 +34,7 @@ import lombok.ToString;
  */
 @Entity
 @Table(name = "logs")
+@DynamicUpdate
 @Data
 @Builder
 @NoArgsConstructor
@@ -67,10 +70,10 @@ public class AuditLog {
 	private TargetTableType targetTable;
 
 	/**
-	 * 対象レコードID（文字列形式）
+	 * 対象レコードID（UUID形式）
 	 */
 	@Column(name = "target_id", nullable = false)
-	private String targetId;
+	private UUID targetId;
 
 	/**
 	 * 作成日時（DB登録時に自動設定、更新不可）

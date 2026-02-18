@@ -31,20 +31,33 @@ public interface PostureImageRepository extends JpaRepository<PostureImage, UUID
 	/**
 	 * 姿勢グループIDと位置で姿勢画像を検索
 	 * 
+	 * <p>注意: ネイティブクエリを使用している理由は、JPQLクエリでPostureImagePosition型のパラメータを
+	 * 直接比較する際にHibernateが正しく型変換できないためです。PostgreSQLのposture_position型に
+	 * キャストする必要があります。</p>
+	 * 
 	 * @param postureGroupId 姿勢グループID
-	 * @param position 画像位置（FRONT, SIDE, BACK）
+	 * @param positionCode 画像位置のコード値（"front", "right", "back", "left"）
 	 * @return 姿勢画像（存在する場合）
 	 */
-    @Query("SELECT pi FROM PostureImage pi WHERE pi.postureGroup.id = :postureGroupId AND pi.position = :position")
-    Optional<PostureImage> findByPostureGroupIdAndPosition(@Param("postureGroupId") UUID postureGroupId, @Param("position") PostureImagePosition position);
+    @Query(value = "SELECT * FROM posture_images WHERE posture_group_id = :postureGroupId AND position = CAST(:positionCode AS posture_position)", nativeQuery = true)
+    Optional<PostureImage> findByPostureGroupIdAndPosition(@Param("postureGroupId") UUID postureGroupId, @Param("positionCode") String positionCode);
     
-	/**
-	 * IDのリストで姿勢画像を一括取得
-	 * 
-	 * @param ids 姿勢画像IDのリスト
-	 * @return 姿勢画像のリスト
-	 */
+    /**
+     * IDのリストで姿勢画像を一括取得
+     * 
+     * @param ids 姿勢画像IDのリスト
+     * @return 姿勢画像のリスト
+     */
     List<PostureImage> findAllByIdIn(List<UUID> ids);
+    
+    /**
+     * 姿勢画像IDから顧客IDを取得（認可チェック用）
+     * 
+     * @param imageId 姿勢画像ID
+     * @return 顧客ID（存在する場合）
+     */
+    @Query("SELECT l.customer.id FROM PostureImage pi JOIN pi.postureGroup pg JOIN pg.lesson l WHERE pi.id = :imageId")
+    Optional<UUID> findCustomerIdByImageId(@Param("imageId") UUID imageId);
     
     /**
      * 画像IDからPostureGroupIDを取得
@@ -94,11 +107,6 @@ public interface PostureImageRepository extends JpaRepository<PostureImage, UUID
 			      WHERE u.id = :userId
 			        AND ms.id = cs.id
 			    )
-			    OR EXISTS (
-			      SELECT 1 FROM UserCustomer uc
-			      WHERE uc.id.userId = :userId
-			        AND uc.id.customerId = c.id
-			    )
 			  )
 		) THEN true ELSE false END
 		""")
@@ -147,11 +155,6 @@ public interface PostureImageRepository extends JpaRepository<PostureImage, UUID
 		      JOIN c.stores cs
 		      WHERE u.id = :userId
 		        AND ms.id = cs.id
-		    )
-		    OR EXISTS (
-		      SELECT 1 FROM UserCustomer uc
-		      WHERE uc.id.userId = :userId
-		        AND uc.id.customerId = c.id
 		    )
 		  )
 		""")

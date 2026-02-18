@@ -10,12 +10,16 @@ import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.UserRole;
 
 import lombok.Data;
+import lombok.ToString;
 
 /**
  * ユーザーレスポンスDTO
  * ユーザー情報をAPIレスポンスとして返す際に使用
+ * 
+ * <p>セキュリティ: メールアドレスはログ出力から除外します。</p>
  */
 @Data
+@ToString(exclude = "email") // セキュリティ: メールアドレスをログに出力しない
 public class UserResponse {
 
 	private UUID id;
@@ -40,12 +44,13 @@ public class UserResponse {
 		r.setRole(u.getRole());
 		r.setActive(u.isActive());
 
-		if (u.getStores() != null) {
+		// stores関係が設定されているかチェック
+		if (u.getStores() != null && !u.getStores().isEmpty()) {
 			r.setStoreIds(u.getStores().stream()
 					.map(Store::getId) // StoreエンティティからIDを抽出
 					.collect(Collectors.toSet())); // Setとして格納
 		} else {
-			// u.getStores()がnullの場合、空Set（関連なし）を設定
+			// u.getStores()がnullまたは空の場合、空Set（関連なし）を設定
 			r.setStoreIds(Set.of());
 		}
 

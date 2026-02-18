@@ -1,5 +1,6 @@
 package com.example.fitnessgym_mg.controller.api;
 
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
@@ -23,8 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.fitnessgym_mg.dto.request.CustomerRequest;
 import com.example.fitnessgym_mg.dto.response.CustomerResponse;
 import com.example.fitnessgym_mg.entity.enums.CustomerSort;
-import com.example.fitnessgym_mg.exception.EntityNotFoundException;
 import com.example.fitnessgym_mg.service.CustomerService;
+import com.example.fitnessgym_mg.util.EmailHashUtil;
+import com.example.fitnessgym_mg.validation.ValidPage;
+import com.example.fitnessgym_mg.validation.ValidPageSize;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,19 +47,46 @@ public class CustomerApiController {
 	// ========== REST API エンドポイント ==========
 
 	/**
+	 * GET /api/customers
+	 * 顧客一覧取得（オプション選択用）
+	 * 認証済みユーザー全員がアクセス可能
+	 * 最大1000件まで取得可能（パフォーマンス対策）
+	 * 
+	 * <p>注意: @SQLRestrictionを回避するために、ネイティブSQLクエリを使用して
+	 * idとnameのみを取得し、直接CustomerResponseを作成します。</p>
+	 * 
+	 * @param limit 取得件数の上限（デフォルト: 1000、最大: 1000）
+	 */
+	@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
+	@GetMapping("/customers")
+	public ResponseEntity<List<CustomerResponse>> getCustomersForOptions(
+			@RequestParam(defaultValue = "1000") 
+			@jakarta.validation.constraints.Min(value = 1, message = "Limit must be at least 1") 
+			@jakarta.validation.constraints.Max(value = 1000, message = "Limit must not exceed 1000") int limit) {
+		log.debug("顧客一覧取得（オプション選択用）リクエスト: limit={}", limit);
+		
+		List<CustomerResponse> customers = service.getAllCustomersForOptions(limit);
+		
+		log.info("顧客一覧取得（オプション選択用）成功: count={}", customers.size());
+		return ResponseEntity.ok(customers);
+	}
+
+	/**
 	 * GET /api/admin/customers
 	 * 顧客一覧取得
 	 */
+	@PreAuthorize("hasRole('ADMIN')")
 	@GetMapping("/admin/customers")
 	public ResponseEntity<Page<CustomerResponse>> getAdminCustomers(
 			@RequestParam(required = false) @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") String name,
 			@RequestParam(defaultValue = "created") String sort,
-			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
-			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
+			@RequestParam(required = false) UUID storeId,
+			@RequestParam(defaultValue = "0") @ValidPage int page,
+			@RequestParam(defaultValue = "10") @ValidPageSize int size) {
 
 		Pageable pageable = PageRequest.of(page, size);
 		CustomerSort sortEnum = CustomerSort.fromString(sort);
-		Page<CustomerResponse> customerPage = service.searchCustomers(name, sortEnum, null, pageable);
+		Page<CustomerResponse> customerPage = service.searchCustomers(name, sortEnum, storeId, pageable);
 		return ResponseEntity.ok(customerPage);
 	}
 
@@ -68,10 +98,18 @@ public class CustomerApiController {
 	/**
 	 * POST /api/admin/customers
 	 * 顧客の新規登録
+	 * 
+	 * <p>ADMINが顧客を作成する場合、リクエストボディのstoreIdを使用して店舗に紐付けます。</p>
+	 * <p>storeIdが指定されている場合、その店舗に紐付けてstore_customersテーブルに保存します。</p>
+	 * <p>storeIdがnullの場合、店舗に紐付けずに作成します。</p>
 	 */
+	@PreAuthorize("hasRole('ADMIN')")
 	@PostMapping("/admin/customers")
 	public ResponseEntity<Void> createAdminCustomer(@Valid @RequestBody CustomerRequest request) {
-		service.create(request, null);
+		log.debug("顧客作成リクエスト受信: name={}, emailHash={}, storeId={}", request.getName(), EmailHashUtil.hashEmail(request.getEmail()), request.getStoreId());
+		// ADMINの場合、リクエストボディのstoreIdを使用（nullの場合は店舗に紐付けない）
+		service.create(request, request.getStoreId());
+		log.info("顧客作成成功: name={}, emailHash={}, storeId={}", request.getName(), EmailHashUtil.hashEmail(request.getEmail()), request.getStoreId());
 		return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
 	}
 
@@ -79,6 +117,7 @@ public class CustomerApiController {
 	 * PATCH /api/admin/customers/{customer_id}/disable
 	 * 顧客の無効化
 	 */
+	@PreAuthorize("hasRole('ADMIN')")
 	@PatchMapping("/admin/customers/{customer_id}/disable")
 	public ResponseEntity<Void> disableAdminCustomer(@PathVariable("customer_id") UUID customerId) {
 		service.disableActive(customerId);
@@ -89,6 +128,7 @@ public class CustomerApiController {
 	 * PATCH /api/admin/customers/{customer_id}/enable
 	 * 顧客の再有効化
 	 */
+	@PreAuthorize("hasRole('ADMIN')")
 	@PatchMapping("/admin/customers/{customer_id}/enable")
 	public ResponseEntity<Void> enableAdminCustomer(@PathVariable("customer_id") UUID customerId) {
 		service.enableActive(customerId);
@@ -99,6 +139,7 @@ public class CustomerApiController {
 	 * DELETE /api/admin/customers/{customer_id}
 	 * 顧客の削除
 	 */
+	@PreAuthorize("hasRole('ADMIN')")
 	@DeleteMapping("/admin/customers/{customer_id}")
 	public ResponseEntity<Void> deleteAdminCustomer(@PathVariable("customer_id") UUID customerId) {
 		service.delete(customerId);
@@ -115,8 +156,8 @@ public class CustomerApiController {
 			@PathVariable("store_id") UUID storeId,
 			@RequestParam(required = false) @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") String name,
 			@RequestParam(defaultValue = "created") String sort,
-			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
-			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
+			@RequestParam(defaultValue = "0") @ValidPage int page,
+			@RequestParam(defaultValue = "10") @ValidPageSize int size) {
 
 		Pageable pageable = PageRequest.of(page, size);
 		CustomerSort sortEnum = CustomerSort.fromString(sort);
@@ -130,15 +171,24 @@ public class CustomerApiController {
 	 */
 
 	/**
-	 * POST /api/stores/{store_id}/manager/customers
+	 * POST /api/manager/customers
 	 * 顧客の新規登録(店舗内管轄)
+	 * 
+	 * <p>MANAGERが顧客を作成する場合、リクエストボディのstoreIdを使用して店舗に紐付けます。</p>
+	 * <p>storeIdが指定されている場合、その店舗に紐付けてstore_customersテーブルに保存します。</p>
+	 * 
+	 * <p>セキュリティ: リクエストボディのstoreIdに対する認可チェックを@PreAuthorizeで実施し、
+	 * Service層でも二重チェック（Defense in Depth）を実施します。</p>
 	 */
-	@PreAuthorize("hasRole('MANAGER') and @authorizationFacade.canAccessStore(authentication, #storeId)")
-	@PostMapping("/stores/{store_id}/manager/customers")
+	@PreAuthorize("hasRole('MANAGER') and (#request.storeId == null or @authorizationFacade.canAccessStore(authentication, #request.storeId))")
+	@PostMapping("/manager/customers")
 	public ResponseEntity<Void> createManagerCustomer(
-			@PathVariable("store_id") UUID storeId,
 			@Valid @RequestBody CustomerRequest request) {
-		service.create(request, storeId);
+		log.debug("顧客作成リクエスト受信: name={}, emailHash={}, storeId={}", request.getName(), EmailHashUtil.hashEmail(request.getEmail()), request.getStoreId());
+		// MANAGERの場合、リクエストボディのstoreIdを使用（nullの場合は店舗に紐付けない）
+		// 認可チェックは@PreAuthorizeとCustomerService内で二重に実施（Defense in Depth）
+		service.create(request, request.getStoreId());
+		log.info("顧客作成成功: name={}, emailHash={}, storeId={}", request.getName(), EmailHashUtil.hashEmail(request.getEmail()), request.getStoreId());
 		return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build();
 	}
 
@@ -182,48 +232,48 @@ public class CustomerApiController {
 	}
 
 	/**
-	 * GET /api/stores/{store_id}/trainers/customers
-	 * 担当顧客の一覧取得
+	 * GET /api/trainers/customers
+	 * 担当顧客の一覧取得（storeId不要版）
+	 * 現在ログイン中のトレーナーが所属する店舗の全ての顧客リストを取得
+	 * 
+	 * @param storeId - 店舗ID（オプショナル）。指定された場合は該当店舗の顧客のみを返す
 	 */
-	@PreAuthorize("hasRole('TRAINER') and @authorizationFacade.canAccessStore(authentication, #storeId)")
-	@GetMapping("/stores/{store_id}/trainers/customers")
-	public ResponseEntity<java.util.List<CustomerResponse>> getTrainerCustomers(
-			@PathVariable("store_id") UUID storeId) {
-		// 現在ログイン中のトレーナーを取得（Service層で実施されるため、ここでは不要）
-		java.util.List<CustomerResponse> customers = service.getMyCustomers();
+	@PreAuthorize("hasRole('TRAINER')")
+	@GetMapping("/trainers/customers")
+	public ResponseEntity<java.util.List<CustomerResponse>> getTrainerCustomersWithoutStoreId(
+			@RequestParam(required = false) UUID storeId) {
+		java.util.List<CustomerResponse> customers = service.getAllCustomersForTrainerStores(storeId);
 		return ResponseEntity.ok(customers);
 	}
 
 	/**
 	 * GET /api/customers/{customer_id}/profile
 	 * 顧客の基本プロフィール情報取得
+	 * 
+	 * <p>有効な顧客（isActive=true かつ isDeleted=false）のみアクセス可能。</p>
 	 */
-	@PreAuthorize("@authorizationFacade.canAccessCustomer(authentication, #customerId)")
+	@PreAuthorize("@authorizationFacade.canAccessActiveCustomer(authentication, #customerId)")
 	@GetMapping("/customers/{customer_id}/profile")
 	public ResponseEntity<CustomerResponse> getCustomerProfile(@PathVariable("customer_id") UUID customerId) {
-		try {
-			CustomerResponse customer = service.getCustomerById(customerId);
-			if (customer == null) {
-				return ResponseEntity.notFound().build();
-			}
-			return ResponseEntity.ok(customer);
-		} catch (EntityNotFoundException e) {
-			return ResponseEntity.notFound().build();
-		} catch (Exception e) {
-			log.error("顧客プロフィール取得エラー", e);
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-		}
+		CustomerResponse customer = service.getCustomerById(customerId);
+		return ResponseEntity.ok(customer);
 	}
 
 	/**
 	 * PATCH /api/customers/{customer_id}/profile
-	 * 顧客プロフィールの更新
+	 * 顧客プロフィールの更新（部分更新対応）
+	 * 
+	 * <p>部分更新（PATCH）のため、nullフィールドは既存値を保持します。</p>
+	 * <p>バリデーションは、送信されたフィールドのみを検証します。</p>
+	 * <p>有効な顧客（isActive=true かつ isDeleted=false）のみアクセス可能。</p>
 	 */
-	@PreAuthorize("@authorizationFacade.canAccessCustomer(authentication, #customerId)")
+	@PreAuthorize("@authorizationFacade.canAccessActiveCustomer(authentication, #customerId)")
 	@PatchMapping("/customers/{customer_id}/profile")
 	public ResponseEntity<Void> updateCustomerProfile(
 			@PathVariable("customer_id") UUID customerId,
-			@Valid @RequestBody CustomerRequest request) {
+			@RequestBody CustomerRequest request) {
+		// 部分更新のため、@Validは使用しない（nullフィールドのバリデーションをスキップ）
+		// Service層で既存値とマージしてからバリデーションを行う
 		service.update(customerId, request);
 		return ResponseEntity.ok().build();
 	}

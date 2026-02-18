@@ -13,6 +13,8 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -25,6 +27,7 @@ import lombok.ToString;
  */
 @Entity
 @Table(name = "stores")
+@DynamicUpdate
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -80,6 +83,10 @@ public class Store {
 	/**
 	 * ユーザーとの関連を追加（双方向関連を同期）
 	 * 
+	 * <p>注意: このメソッドはエンティティ層で双方向関連を同期します。
+	 * JPAのベストプラクティスに従い、エンティティ層で双方向関連の整合性を保ちます。
+	 * プロジェクト全体でこの方針を統一しています。</p>
+	 * 
 	 * @param user 追加するユーザー
 	 */
 	public void addUser(User user) {
@@ -99,6 +106,10 @@ public class Store {
 
 	/**
 	 * 顧客との関連を追加（双方向関連を同期）
+	 * 
+	 * <p>注意: このメソッドはエンティティ層で双方向関連を同期します。
+	 * JPAのベストプラクティスに従い、エンティティ層で双方向関連の整合性を保ちます。
+	 * プロジェクト全体でこの方針を統一しています。</p>
 	 * 
 	 * @param customer 追加する顧客
 	 */

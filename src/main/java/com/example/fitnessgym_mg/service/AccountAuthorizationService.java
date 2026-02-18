@@ -178,6 +178,20 @@ public class AccountAuthorizationService {
 	}
 
 	/**
+	 * パスワードリセットリクエスト管理の認可チェック
+	 * 
+	 * <p>パスワードリセットリクエストの管理はADMINロールのみ可能。</p>
+	 * 
+	 * @param currentUser 現在のユーザー
+	 * @throws AccessDeniedException ADMINロールでない場合
+	 */
+	public void checkCanManagePasswordResetRequests(User currentUser) {
+		if (currentUser.getRole() != UserRole.ADMIN) {
+			throw new AccessDeniedException("パスワードリセットリクエストの管理はADMINロールのみ可能です");
+		}
+	}
+
+	/**
 	 * SpEL用: ユーザー作成の認可チェック
 	 * 
 	 * <p>@PreAuthorizeのSpELから呼び出すためのメソッド。

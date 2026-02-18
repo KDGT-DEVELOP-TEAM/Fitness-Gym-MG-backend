@@ -6,6 +6,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 /**
  * 認証エラーが発生した場合にスローされる例外
  * HTTPステータスコード401 Unauthorizedに対応
+ * 
+ * <p>注意: {@code @ResponseStatus}アノテーションは、{@link GlobalExceptionHandler}が
+ * 設定されていない場合のフォールバックとして機能します。
+ * 通常は{@link GlobalExceptionHandler}がHTTPステータスコードを設定するため、
+ * このアノテーションは実質的に使用されませんが、明示的なドキュメントとして残しています。</p>
  */
 @ResponseStatus(HttpStatus.UNAUTHORIZED)
 public class AuthenticationException extends RuntimeException {
@@ -29,23 +34,49 @@ public class AuthenticationException extends RuntimeException {
      * メールアドレスとリクエスト情報を保持するコンストラクタ
      * セキュリティログや監査の観点で、どのメールアドレスやリクエストが認証に失敗したかをトレース可能にする
      * 
+     * <p>セキュリティ考慮: 例外メッセージにはマスク済みのメールアドレスを含めます。
+     * これにより、スタックトレースやログに完全なメールアドレスが露出することを防ぎます。</p>
+     * 
      * @param email 認証を試みたメールアドレス（null許容）
      * @param requestInfo リクエスト情報（例: IPアドレス、User-Agentなど）
      */
     public AuthenticationException(String email, String requestInfo) {
-        super("Authentication failed for email: " + (email != null ? email : "unknown") + 
-              (requestInfo != null ? ", request: " + requestInfo : ""));
+        // セキュリティ: 例外メッセージにはマスク済みのメールアドレスを含める
+        // GlobalExceptionHandlerのmaskEmail()と同じロジックを適用
+        // 注意: super()の前にメソッド呼び出しはできないため、staticメソッドとして実装するか、
+        // またはヘルパーメソッドを呼び出す前にメッセージを構築する必要がある
+        super(buildMessage(email, requestInfo));
         this.email = email;
         this.requestInfo = requestInfo;
     }
     
     /**
-     * メールアドレスを取得
+     * 例外メッセージを構築（コンストラクタから呼び出し可能なstaticメソッド）
      * 
-     * @return メールアドレス（設定されていない場合はnull）
+     * <p>セキュリティ: メールアドレスはSecurityUtil.maskEmail()を使用してマスクします。</p>
+     * 
+     * @param email 認証を試みたメールアドレス（null許容）
+     * @param requestInfo リクエスト情報（例: IPアドレス、User-Agentなど）
+     * @return 構築された例外メッセージ
+     */
+    private static String buildMessage(String email, String requestInfo) {
+        String maskedEmail = com.example.fitnessgym_mg.util.SecurityUtil.maskEmail(email);
+        return "Authentication failed for email: " + (maskedEmail != null ? maskedEmail : "unknown") + 
+               (requestInfo != null ? ", request: " + requestInfo : "");
+    }
+    
+    
+    /**
+     * メールアドレスを取得（マスク済み）
+     * 
+     * <p>セキュリティ: 機密情報漏洩を防ぐため、マスク済みのメールアドレスのみを返します。
+     * これにより、スタックトレースやログに例外オブジェクトが出力される場合でも、
+     * 生のメールアドレスが漏洩することを防ぎます。</p>
+     * 
+     * @return マスク済みのメールアドレス（設定されていない場合はnull）
      */
     public String getEmail() {
-        return email;
+        return email != null ? com.example.fitnessgym_mg.util.SecurityUtil.maskEmail(email) : null;
     }
     
     /**

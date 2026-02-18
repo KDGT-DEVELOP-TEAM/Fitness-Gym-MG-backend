@@ -45,6 +45,42 @@ public class SupabaseStorageService implements StorageService {
     private final RestTemplate restTemplate;
     
     /**
+     * storageKeyを正規化（postures/プレフィックスを削除）
+     * 
+     * <p>後方互換性のため、新旧どちらの形式のstorageKeyでも動作するようにする。</p>
+     * <p>正規化ルール:</p>
+     * <ul>
+     *   <li>storageKeyがnullの場合はnullを返す</li>
+     *   <li>storageKeyが"postures/"で始まる場合は、プレフィックスを削除</li>
+     *   <li>それ以外の場合はそのまま返す</li>
+     * </ul>
+     * 
+     * @param storageKey 元のstorageKey
+     * @return 正規化されたstorageKey（nullの場合はnull）
+     */
+    private String normalizeStorageKey(String storageKey) {
+        if (storageKey == null) {
+            return null;
+        }
+        
+        // 空文字列の場合はそのまま返す（防御的プログラミング）
+        if (storageKey.isEmpty()) {
+            return storageKey;
+        }
+        
+        // postures/プレフィックスが含まれている場合は削除
+        if (storageKey.startsWith("postures/")) {
+            String normalized = storageKey.substring("postures/".length());
+            // セキュリティ: 完全なパスは出力しない（最初の50文字のみ）
+            String logKey = storageKey.length() > 50 ? storageKey.substring(0, 50) + "..." : storageKey;
+            log.debug("Normalized storageKey: {} -> {}", logKey, normalized.length() > 50 ? normalized.substring(0, 50) + "..." : normalized);
+            return normalized;
+        }
+        
+        return storageKey;
+    }
+    
+    /**
      * Supabase Storageにファイルをアップロード
      * @param file アップロードするファイル
      * @param storageKey Storage内のパス（例: postures/{customerId}/{groupId}/front.jpg）
@@ -116,12 +152,21 @@ public class SupabaseStorageService implements StorageService {
      * 署名付きURLを生成
      * @param storageKey Storage内のパス
      * @param expiresInSeconds 有効期限（秒）
-     * @return 署名付きURL
+     * @return 署名付きURL（ファイルが存在しない場合はnullを返す）
      */
     public String generateSignedUrl(String storageKey, int expiresInSeconds) {
+        // storageKeyを正規化（postures/プレフィックスの削除）
+        String normalizedStorageKey = normalizeStorageKey(storageKey);
+        
+        // 正規化後のstorageKeyがnullの場合はnullを返す
+        if (normalizedStorageKey == null) {
+            log.warn("Storage key is null, cannot generate signed URL");
+            return null;
+        }
+        
         try {
             String url = String.format("%s/storage/v1/object/sign/%s/%s",
-                properties.getUrl(), properties.getBucket(), storageKey);
+                properties.getUrl(), properties.getBucket(), normalizedStorageKey);
             
             HttpHeaders headers = new HttpHeaders();
             headers.set("Authorization", "Bearer " + properties.getServiceKey());
@@ -136,15 +181,81 @@ public class SupabaseStorageService implements StorageService {
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 String signedUrl = (String) response.getBody().get("signedURL");
-                log.info("Successfully generated signed URL for: {}", storageKey);
-                return signedUrl;
+                
+                if (signedUrl == null || signedUrl.isEmpty()) {
+                    log.warn("Generated signedUrl is null or empty: storageKey={}, normalizedStorageKey={}", 
+                        storageKey.length() > 50 ? storageKey.substring(0, 50) + "..." : storageKey,
+                        normalizedStorageKey.length() > 50 ? normalizedStorageKey.substring(0, 50) + "..." : normalizedStorageKey);
+                    return null;
+                }
+                
+                // Supabase APIが相対パスを返す場合、完全なURLに変換
+                String finalSignedUrl = signedUrl;
+                if (signedUrl.startsWith("/")) {
+                    // 相対パスの場合は、SupabaseのベースURLと結合して完全なURLを生成
+                    // Supabase APIは `/object/sign/...` という形式を返すが、
+                    // 実際のアクセスには `/storage/v1/object/sign/...` が必要
+                    if (signedUrl.startsWith("/object/sign/")) {
+                        // `/object/sign/` を `/storage/v1/object/sign/` に変換
+                        finalSignedUrl = properties.getUrl() + "/storage/v1" + signedUrl;
+                    } else {
+                        // その他の相対パスの場合はそのまま結合
+                        finalSignedUrl = properties.getUrl() + signedUrl;
+                    }
+                    log.info("Converted relative signedUrl to absolute URL: relative={}, absolutePrefix={}", 
+                        signedUrl.length() > 100 ? signedUrl.substring(0, 100) + "..." : signedUrl,
+                        finalSignedUrl.length() > 150 ? finalSignedUrl.substring(0, 150) + "..." : finalSignedUrl);
+                } else if (signedUrl.startsWith("http://") || signedUrl.startsWith("https://")) {
+                    // 既に絶対URLの場合は、`/object/sign/` を `/storage/v1/object/sign/` に変換
+                    if (signedUrl.contains("/object/sign/") && !signedUrl.contains("/storage/v1/object/sign/")) {
+                        finalSignedUrl = signedUrl.replace("/object/sign/", "/storage/v1/object/sign/");
+                        log.info("Converted absolute signedUrl path: from={}, to={}", 
+                            signedUrl.length() > 150 ? signedUrl.substring(0, 150) + "..." : signedUrl,
+                            finalSignedUrl.length() > 150 ? finalSignedUrl.substring(0, 150) + "..." : finalSignedUrl);
+                    }
+                }
+                
+                // 検証ログ: signedUrlが正しく生成されたかを確認（INFOレベルで出力）
+                boolean isAbsolute = finalSignedUrl.startsWith("http://") || finalSignedUrl.startsWith("https://");
+                if (!isAbsolute) {
+                    log.warn("Generated signedUrl is not absolute: storageKey={}, signedUrlPrefix={}", 
+                        storageKey.length() > 50 ? storageKey.substring(0, 50) + "..." : storageKey,
+                        finalSignedUrl.length() > 100 ? finalSignedUrl.substring(0, 100) + "..." : finalSignedUrl);
+                } else {
+                    log.debug("Successfully generated absolute signedUrl: storageKey={}, normalizedStorageKey={}, signedUrlPrefix={}", 
+                        storageKey.length() > 50 ? storageKey.substring(0, 50) + "..." : storageKey,
+                        normalizedStorageKey.length() > 50 ? normalizedStorageKey.substring(0, 50) + "..." : normalizedStorageKey,
+                        finalSignedUrl.length() > 100 ? finalSignedUrl.substring(0, 100) + "..." : finalSignedUrl);
+                }
+                
+                return finalSignedUrl;
             }
             
             throw new StorageException("Failed to generate signed URL");
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+            // ファイルが存在しない場合（404エラー）は警告ログを出力してnullを返す
+            log.warn("File not found in Storage (404): {}. This may indicate DB-Storage inconsistency.", 
+                normalizedStorageKey.length() > 100 ? normalizedStorageKey.substring(0, 100) + "..." : normalizedStorageKey);
+            return null;
+        } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
+            // 400エラーのレスポンスボディを確認して、404エラーかどうかを判定
+            String responseBody = e.getResponseBodyAsString();
+            if (responseBody != null && (responseBody.contains("\"statusCode\":\"404\"") 
+                || responseBody.contains("\"error\":\"not_found\""))) {
+                // 実際には404エラーだが、Supabaseが400として返している場合
+                log.warn("File not found in Storage (404 via 400): {}. This may indicate DB-Storage inconsistency.", 
+                    normalizedStorageKey.length() > 100 ? normalizedStorageKey.substring(0, 100) + "..." : normalizedStorageKey);
+                return null;
+            }
+            // その他の400エラーは例外として処理
+            log.error("Bad request when generating signed URL: {}", 
+                normalizedStorageKey.length() > 100 ? normalizedStorageKey.substring(0, 100) + "..." : normalizedStorageKey, e);
+            throw new StorageException("Signed URL generation failed: Bad request", e);
         } catch (StorageException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Error generating signed URL: {}", storageKey, e);
+            log.error("Error generating signed URL: {}", 
+                normalizedStorageKey.length() > 100 ? normalizedStorageKey.substring(0, 100) + "..." : normalizedStorageKey, e);
             throw new StorageException("Signed URL generation failed", e);
         }
     }

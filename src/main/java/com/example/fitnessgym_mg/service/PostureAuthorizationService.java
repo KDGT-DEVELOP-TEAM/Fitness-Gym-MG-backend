@@ -5,7 +5,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.fitnessgym_mg.entity.Customer;
 import com.example.fitnessgym_mg.entity.User;
+import com.example.fitnessgym_mg.entity.enums.UserRole;
+import com.example.fitnessgym_mg.repository.CustomerRepository;
+import com.example.fitnessgym_mg.repository.CustomerRepositoryCustom;
 import com.example.fitnessgym_mg.repository.PostureImageRepository;
 import com.example.fitnessgym_mg.service.policy.RolePolicy;
 
@@ -31,6 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PostureAuthorizationService {
     
     private final PostureImageRepository postureImageRepository;
+    private final CustomerRepository customerRepository;
     private final RolePolicy rolePolicy;
     
     /**
@@ -61,10 +66,69 @@ public class PostureAuthorizationService {
             return true;
         }
         
+        // MANAGER: 全店舗の姿勢画像にアクセス可能（トレーナーと同様のロジック）
+        // 姿勢画像が属する顧客が存在し、論理削除されていない、かつ有効な場合にアクセス可能
+        if (currentUser.getRole() == UserRole.MANAGER) {
+            boolean result = canManagerAccessPostureImage(currentUser, imageId);
+            log.debug("Authorization check: MANAGER access={} for imageId={}", result, imageId);
+            return result;
+        }
+        
         // RepositoryレベルのEXISTSクエリで、ユーザーが姿勢画像にアクセス可能か確認
         return postureImageRepository.existsAccessiblePostureImage(currentUser.getId(), imageId);
     }
     
+    /**
+     * マネージャーが姿勢画像にアクセス可能か確認
+     * 
+     * <p>マネージャーは全店舗の姿勢画像にアクセス可能（トレーナーと同様のロジック）</p>
+     * <p>姿勢画像が属する顧客が存在し、論理削除されていない、かつ有効な場合にアクセス可能</p>
+     * 
+     * @param manager マネージャー
+     * @param imageId 姿勢画像ID
+     * @return アクセス可能な場合 true
+     */
+    private boolean canManagerAccessPostureImage(User manager, UUID imageId) {
+        // マネージャーは全店舗の姿勢画像にアクセス可能（トレーナーと同様のロジック）
+        // 姿勢画像が属する顧客が存在し、論理削除されていない、かつ有効な場合にアクセス可能
+        try {
+            // 姿勢画像から顧客IDを取得
+            UUID customerId = postureImageRepository.findCustomerIdByImageId(imageId)
+                    .orElse(null);
+            
+            if (customerId == null) {
+                log.debug("canManagerAccessPostureImage: customer not found for image - managerId={}, imageId={}", 
+                        manager.getId(), imageId);
+                return false;
+            }
+            
+            // 顧客が存在し、論理削除されていない、かつ有効かを確認
+            if (customerRepository instanceof CustomerRepositoryCustom) {
+                java.util.Optional<Customer> customerOpt = ((CustomerRepositoryCustom) customerRepository)
+                        .findByIdWithStoresNative(customerId);
+                
+                if (customerOpt.isEmpty()) {
+                    log.debug("canManagerAccessPostureImage: customer not found - managerId={}, imageId={}, customerId={}", 
+                            manager.getId(), imageId, customerId);
+                    return false;
+                }
+                
+                Customer customer = customerOpt.get();
+                // 顧客が有効で、論理削除されていない場合にアクセス可能
+                boolean result = customer.isActive() && !customer.isDeleted();
+                log.debug("canManagerAccessPostureImage: managerId={}, imageId={}, customerId={}, active={}, deleted={}, result={}", 
+                        manager.getId(), imageId, customerId, customer.isActive(), customer.isDeleted(), result);
+                return result;
+            } else {
+                log.error("CustomerRepository does not implement CustomerRepositoryCustom");
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("canManagerAccessPostureImage failed: managerId={}, imageId={}", 
+                    manager.getId(), imageId, e);
+            return false;
+        }
+    }
     
 }
 

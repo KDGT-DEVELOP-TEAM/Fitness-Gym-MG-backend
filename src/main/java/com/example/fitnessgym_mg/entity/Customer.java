@@ -11,16 +11,18 @@ import java.util.UUID;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import jakarta.persistence.Version;
 
 import org.hibernate.annotations.DynamicUpdate;
-import org.hibernate.annotations.SQLRestriction;
+import org.hibernate.annotations.JdbcType;
+
+import com.example.fitnessgym_mg.entity.type.GenderType;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -35,12 +37,11 @@ import lombok.ToString;
 @Entity
 @Table(name = "customers")
 @DynamicUpdate
-@SQLRestriction("deleted_at IS NULL")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = { "stores" })
+@EqualsAndHashCode(onlyExplicitlyIncluded = true) // セキュリティ: 個人情報・機密情報は@EqualsAndHashCode.Excludeで個別に除外
+@ToString(exclude = {"stores", "email", "phone", "medical", "taboo", "memo"}) // セキュリティ: リレーションと個人情報・機密情報をログに出力しない
 public class Customer {
 
 	@EqualsAndHashCode.Include
@@ -61,8 +62,10 @@ public class Customer {
 
 	/**
 	 * 性別
+	 * <p>PostgreSQL ENUM型（customer_gender）としてマッピング</p>
+	 * <p>カスタム型（GenderType）を使用してENUM名（"MALE"、"FEMALE"）でマッピングします。</p>
 	 */
-	@jakarta.persistence.Convert(converter = com.example.fitnessgym_mg.entity.converter.GenderConverter.class)
+	@JdbcType(GenderType.class)
 	@Column(nullable = false, columnDefinition = "customer_gender")
 	private com.example.fitnessgym_mg.entity.enums.Gender gender;
 
@@ -80,12 +83,14 @@ public class Customer {
 
 	/**
 	 * メールアドレス（ユニーク制約あり）
+	 * セキュリティ: onlyExplicitlyIncluded=trueのため、@Includeが付いていないフィールドは自動的に除外される
 	 */
 	@Column(unique = true, nullable = false, length = 255)
 	private String email;
 
 	/**
 	 * 電話番号
+	 * セキュリティ: onlyExplicitlyIncluded=trueのため、@Includeが付いていないフィールドは自動的に除外される
 	 */
 	@Column(nullable = false, length = 12)
 	private String phone;
@@ -98,12 +103,14 @@ public class Customer {
 
 	/**
 	 * 医療・既往歴（任意）
+	 * セキュリティ: onlyExplicitlyIncluded=trueのため、@Includeが付いていないフィールドは自動的に除外される
 	 */
 	@Column(length = 500)
 	private String medical;
 
 	/**
 	 * 禁忌事項（任意）
+	 * セキュリティ: onlyExplicitlyIncluded=trueのため、@Includeが付いていないフィールドは自動的に除外される
 	 */
 	@Column(length = 500)
 	private String taboo;
@@ -116,6 +123,7 @@ public class Customer {
 
 	/**
 	 * メモ（任意）
+	 * セキュリティ: onlyExplicitlyIncluded=trueのため、@Includeが付いていないフィールドは自動的に除外される
 	 */
 	@Column(length = 1000)
 	private String memo;
@@ -133,13 +141,6 @@ public class Customer {
 	private boolean active = true;
 
 	/**
-	 * 楽観ロック用バージョンフィールド
-	 */
-	@Version
-	@Column(name = "version")
-	private Long version;
-
-	/**
 	 * 論理削除日時（nullの場合は削除されていない）
 	 */
 	@Column(name = "deleted_at")
@@ -150,7 +151,7 @@ public class Customer {
 		this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
 	}
 
-	@ManyToMany
+	@ManyToMany(fetch = FetchType.LAZY)
 	@JoinTable(name = "store_customers", // 中間テーブル名
 			joinColumns = @JoinColumn(name = "customer_id", nullable = false), // Customer側のFK
 			inverseJoinColumns = @JoinColumn(name = "store_id", nullable = false), // Store側のFK
@@ -177,18 +178,5 @@ public class Customer {
 			this.stores = new java.util.HashSet<>();
 		}
 		this.stores.add(store);
-	}
-
-	/**
-	 * 削除可能かどうかを検証
-	 * 
-	 * <p>有効（active=true）の顧客は削除できない。</p>
-	 * 
-	 * @throws InvalidRequestException 削除不可の場合
-	 */
-	public void validateDeletable() {
-		if (this.isActive()) {
-			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("有効な顧客は削除できません");
-		}
 	}
 }

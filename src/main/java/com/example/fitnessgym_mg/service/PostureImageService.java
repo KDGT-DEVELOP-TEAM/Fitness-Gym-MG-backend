@@ -17,11 +17,13 @@ import com.example.fitnessgym_mg.dto.request.PostureImageUploadRequest;
 import com.example.fitnessgym_mg.dto.response.BatchSignedUrlResponse;
 import com.example.fitnessgym_mg.dto.response.PostureImageUploadResponse;
 import com.example.fitnessgym_mg.dto.response.SignedUrlResponse;
+import com.example.fitnessgym_mg.entity.Customer;
 import com.example.fitnessgym_mg.entity.PostureGroup;
 import com.example.fitnessgym_mg.entity.PostureImage;
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.PostureImagePosition;
 import com.example.fitnessgym_mg.exception.StorageException;
+import com.example.fitnessgym_mg.repository.CustomerRepository;
 import com.example.fitnessgym_mg.repository.PostureGroupRepository;
 import com.example.fitnessgym_mg.repository.PostureImageRepository;
 
@@ -39,6 +41,7 @@ public class PostureImageService {
 
 	private final PostureImageRepository postureImageRepository;
 	private final PostureGroupRepository postureGroupRepository;
+	private final CustomerRepository customerRepository;
 	private final StorageService storageService;
 	private final AuthorizationFacade authorizationFacade;
 
@@ -148,7 +151,8 @@ public class PostureImageService {
 		// 2. PostureGroupからcustomerIdを取得
 		PostureGroup group = postureGroupRepository.findById(request.getPostureGroupId())
 				.orElseThrow(
-						() -> new IllegalArgumentException("PostureGroup not found: " + request.getPostureGroupId()));
+						() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException(
+							"PostureGroup not found: " + request.getPostureGroupId()));
 		UUID customerId = group.getCustomer().getId();
 
 		// 3. positionの取得（既にPostureImagePosition型）
@@ -158,8 +162,9 @@ public class PostureImageService {
 		String storageKey = generateStorageKey(customerId, request.getPostureGroupId(), position);
 
 		// 5. 既存画像を検索・削除
+		// 注意: ネイティブクエリを使用しているため、positionのcode値を渡す必要がある
 		Optional<PostureImage> existingImage = postureImageRepository
-				.findByPostureGroupIdAndPosition(request.getPostureGroupId(), position);
+				.findByPostureGroupIdAndPosition(request.getPostureGroupId(), position.getCode());
 
 		if (existingImage.isPresent()) {
 			log.info("Deleting existing image: position={}, storageKey={}",
@@ -205,7 +210,16 @@ public class PostureImageService {
 						uploadedStorageKey);
 				// 削除に失敗しても例外を再スローしない（不整合は定期ジョブで解消）
 			}
-			throw new RuntimeException("Failed to save image metadata", e);
+			throw new com.example.fitnessgym_mg.exception.SystemException("Failed to save image metadata", e);
+		}
+
+		// 7.5. 顧客のfirstPostureGroupIdがnullの場合、この画像のグループを初回姿勢グループとして設定
+		Customer customer = group.getCustomer();
+		if (customer.getFirstPostureGroupId() == null) {
+			customer.setFirstPostureGroupId(group.getId());
+			customerRepository.save(customer);
+			log.info("Set firstPostureGroupId for customer on first image upload: customerId={}, postureGroupId={}",
+					customer.getId(), group.getId());
 		}
 
 		// 8. 署名付きURL生成
@@ -269,7 +283,8 @@ public class PostureImageService {
 	 */
 	private SignedUrlResponse doGenerateSignedUrl(UUID imageId, int expiresIn) {
 		PostureImage image = postureImageRepository.findById(imageId)
-				.orElseThrow(() -> new IllegalArgumentException("PostureImage not found: " + imageId));
+				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException(
+					"PostureImage not found: " + imageId));
 
 		String signedUrl = storageService.generateSignedUrl(image.getStorageKey(), expiresIn);
 		OffsetDateTime expiresAt = OffsetDateTime.now(ZoneOffset.UTC).plusSeconds(expiresIn);
@@ -308,12 +323,22 @@ public class PostureImageService {
 			Integer expiresIn) {
 		// バッチ認可チェック: すべての画像へのアクセス権限を一度に確認（N+1問題を回避）
 		if (imageIds == null || imageIds.isEmpty()) {
-			throw new IllegalArgumentException("画像IDリストが空です");
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("画像IDリストが空です");
 		}
 
-		boolean allAccessible = postureImageRepository.existsAllAccessiblePostureImages(
-				currentUser.getId(),
-				imageIds);
+		// MANAGERの場合は各画像に対して個別にチェック（全店舗の姿勢画像にアクセス可能なため）
+		// それ以外のロールはバッチ認可チェックを使用
+		boolean allAccessible;
+		if (currentUser.getRole() == com.example.fitnessgym_mg.entity.enums.UserRole.MANAGER) {
+			// MANAGERの場合は各画像に対して個別にチェック
+			allAccessible = imageIds.stream()
+					.allMatch(imageId -> authorizationFacade.canAccessPostureImage(currentUser, imageId));
+		} else {
+			// それ以外のロールはバッチ認可チェックを使用
+			allAccessible = postureImageRepository.existsAllAccessiblePostureImages(
+					currentUser.getId(),
+					imageIds);
+		}
 
 		if (!allAccessible) {
 			throw new org.springframework.security.access.AccessDeniedException(
@@ -399,7 +424,8 @@ public class PostureImageService {
 	@Transactional
 	private void doDeleteImageWithStorage(UUID imageId) {
 		PostureImage image = postureImageRepository.findById(imageId)
-				.orElseThrow(() -> new IllegalArgumentException("PostureImage not found: " + imageId));
+				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException(
+					"PostureImage not found: " + imageId));
 
 		// Storageから削除
 		boolean deleted = storageService.deleteFile(image.getStorageKey());
@@ -426,12 +452,12 @@ public class PostureImageService {
 	private void validateImageFile(MultipartFile file) {
 		// 空ファイルチェック
 		if (file == null || file.isEmpty()) {
-			throw new IllegalArgumentException("File is required");
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("File is required");
 		}
 
 		// ファイルサイズチェック
 		if (file.getSize() > MAX_FILE_SIZE) {
-			throw new IllegalArgumentException(
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
 					String.format("File size exceeds limit: %dMB",
 							com.example.fitnessgym_mg.config.ApplicationConstants.MAX_FILE_SIZE_MB));
 		}
@@ -439,7 +465,7 @@ public class PostureImageService {
 		// Content-Typeチェック
 		String contentType = file.getContentType();
 		if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
-			throw new IllegalArgumentException("Only JPEG, PNG, and WebP images are allowed");
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("Only JPEG, PNG, and WebP images are allowed");
 		}
 
 		// 拡張子チェック
@@ -447,7 +473,7 @@ public class PostureImageService {
 		if (originalFilename != null) {
 			String extension = getFileExtension(originalFilename).toLowerCase();
 			if (!ALLOWED_EXTENSIONS.contains(extension)) {
-				throw new IllegalArgumentException("File extension must be jpg, jpeg, png, or webp");
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException("File extension must be jpg, jpeg, png, or webp");
 			}
 		}
 	}
@@ -465,10 +491,11 @@ public class PostureImageService {
 
 	/**
 	 * storageKey生成
-	 * パターン: postures/{customerId}/{groupId}/{position}.jpg
+	 * パターン: {customerId}/{groupId}/{position}.jpg
+	 * 注意: バケット名（postures）は含めない。SupabaseStorageServiceでバケット名と結合される。
 	 */
 	private String generateStorageKey(UUID customerId, UUID groupId, PostureImagePosition position) {
-		return String.format("postures/%s/%s/%s.jpg",
+		return String.format("%s/%s/%s.jpg",
 				customerId, groupId, position.getCode());
 	}
 }

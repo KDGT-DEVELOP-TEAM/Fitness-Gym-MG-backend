@@ -35,10 +35,10 @@ public class LessonRequest {
     /**
      * 体重（kg）
      * 
-     * <p>有効範囲: 0.0kg以上、500.0kg以下</p>
+     * <p>有効範囲: 30.0kg以上、300.0kg以下</p>
      */
-    @DecimalMin(value = "0.0", inclusive = true, message = "体重は0kg以上である必要があります")
-    @DecimalMax(value = "500.0", inclusive = true, message = "体重は500kg以下である必要があります")
+    @DecimalMin(value = "30.0", inclusive = true, message = "体重は30kg以上である必要があります")
+    @DecimalMax(value = "300.0", inclusive = true, message = "体重は300kg以下である必要があります")
     private BigDecimal weight;
     
     @Size(max = 500, message = "食事内容は500文字以内で入力してください")
@@ -82,6 +82,60 @@ public class LessonRequest {
         return endDate.isAfter(startDate);
     }
     
+    /**
+     * 開始日時が未来でないことを検証
+     * 
+     * <p>レッスンの開始日時は現在の日時より未来に設定できません。
+     * これは業務ルールとして、レッスンは実施済み（過去または現在）のものを記録することを前提としています。</p>
+     * 
+     * <p>タイムゾーン: Asia/Tokyo（日本時間）基準で検証します。
+     * フロントエンドから送信される日時はローカルタイムゾーン（日本時間）であり、
+     * それをサーバー側でも日本時間として比較します。</p>
+     * 
+     * <p>セキュリティ: Bean Validationによる第一層の防御として機能します。
+     * サービス層でも再チェックを行うことで、二重の防御を実現します。</p>
+     * 
+     * <p>Bean Validation仕様に準拠するため、このメソッドはpublicである必要があります。</p>
+     * 
+     * @return True if startDate is null or not in the future
+     */
+    @AssertTrue(message = "開始日時は現在の日時より未来に設定できません")
+    public boolean isValidStartDateNotFuture() {
+        if (startDate == null) {
+            return true; // @NotNullでチェックされるため
+        }
+        // 日本時間（Asia/Tokyo）基準で現在時刻を取得して比較
+        LocalDateTime now = LocalDateTime.now(ApplicationConstants.DEFAULT_TIMEZONE);
+        return !startDate.isAfter(now);
+    }
+
+    /**
+     * 終了日時が未来でないことを検証
+     * 
+     * <p>レッスンの終了日時は現在の日時より未来に設定できません。
+     * これは業務ルールとして、レッスンは実施済み（過去または現在）のものを記録することを前提としています。</p>
+     * 
+     * <p>タイムゾーン: Asia/Tokyo（日本時間）基準で検証します。
+     * フロントエンドから送信される日時はローカルタイムゾーン（日本時間）であり、
+     * それをサーバー側でも日本時間として比較します。</p>
+     * 
+     * <p>セキュリティ: Bean Validationによる第一層の防御として機能します。
+     * サービス層でも再チェックを行うことで、二重の防御を実現します。</p>
+     * 
+     * <p>Bean Validation仕様に準拠するため、このメソッドはpublicである必要があります。</p>
+     * 
+     * @return True if endDate is null or not in the future
+     */
+    @AssertTrue(message = "終了日時は現在の日時より未来に設定できません")
+    public boolean isValidEndDateNotFuture() {
+        if (endDate == null) {
+            return true; // @NotNullでチェックされるため
+        }
+        // 日本時間（Asia/Tokyo）基準で現在時刻を取得して比較
+        LocalDateTime now = LocalDateTime.now(ApplicationConstants.DEFAULT_TIMEZONE);
+        return !endDate.isAfter(now);
+    }
+
     /**
      * 次回予約フィールドの相関制約を検証
      * 

@@ -21,9 +21,9 @@ import lombok.NoArgsConstructor;
  *   </li>
  *   <li><strong>Trainer用</strong>:
  *     <ul>
- *       <li>{@link #upcomingLessons}: 直近1週間のレッスン概要</li>
+ *       <li>{@link #upcomingLessons}: 1週間後～1ヶ月後までのレッスン予定</li>
  *       <li>{@link #recentLessons}: null（使用しない）</li>
- *       <li>{@link #totalLessonCount}: 0（統計情報は表示しない）</li>
+ *       <li>{@link #totalLessonCount}: 1週間後～1ヶ月後までのレッスン予定の総件数（ページネーション用）</li>
  *       <li>{@link #chartData}: null（使用しない）</li>
  *     </ul>
  *   </li>
@@ -53,7 +53,7 @@ public class HomeResponse {
      * <p>ロール別の使用状況:</p>
      * <ul>
      *   <li>Admin/Manager: レッスン履歴の総件数を設定</li>
-     *   <li>Trainer: 0を設定（統計情報は表示しない）</li>
+     *   <li>Trainer: 1週間後～1ヶ月後までのレッスン予定の総件数を設定（ページネーション用）</li>
      * </ul>
      */
     private long totalLessonCount;
@@ -67,9 +67,9 @@ public class HomeResponse {
     private LessonResponse.LessonChartData chartData;
     
     /**
-     * 直近1週間のレッスン概要（Trainer用）
+     * 1週間後～1ヶ月後までのレッスン予定（Trainer用）
      * 
-     * <p>Trainer用: 当日・直近1週間以内の予約状況/レッスン概要を表示するために使用</p>
+     * <p>Trainer用: 1週間後～1ヶ月後までの予約状況/レッスン概要を表示するために使用（ページネーション対応）</p>
      * <p>Admin/Manager用: null（使用しない）</p>
      */
     private List<LessonResponse> upcomingLessons;

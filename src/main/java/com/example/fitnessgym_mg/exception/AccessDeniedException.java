@@ -7,6 +7,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  * 認可エラーが発生した場合にスローされる例外
  * 認証済みユーザーがリソースにアクセスする権限がない場合に使用
  * HTTPステータスコード403 Forbiddenに対応
+ * 
+ * <p>注意: {@code @ResponseStatus}アノテーションは、{@link GlobalExceptionHandler}が
+ * 設定されていない場合のフォールバックとして機能します。
+ * 通常は{@link GlobalExceptionHandler}がHTTPステータスコードを設定するため、
+ * このアノテーションは実質的に使用されませんが、明示的なドキュメントとして残しています。</p>
  */
 @ResponseStatus(HttpStatus.FORBIDDEN)
 public class AccessDeniedException extends RuntimeException {

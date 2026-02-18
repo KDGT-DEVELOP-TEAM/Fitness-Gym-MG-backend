@@ -12,12 +12,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.fitnessgym_mg.config.ApplicationConstants;
 import com.example.fitnessgym_mg.dto.response.AuditLogResponse;
 import com.example.fitnessgym_mg.service.AuditLogService;
-
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
+import com.example.fitnessgym_mg.validation.ValidPage;
+import com.example.fitnessgym_mg.validation.ValidPageSize;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -54,13 +52,8 @@ public class AuditLogApiController {
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ResponseEntity<Page<AuditLogResponse>> getAuditLogs(
-            @RequestParam(defaultValue = "0") 
-            @Min(value = 0, message = "Page must be 0 or greater") 
-            int page,
-            @RequestParam(defaultValue = "10") 
-            @Min(value = ApplicationConstants.MIN_PAGE_SIZE, message = "Size must be at least 1") 
-            @Max(value = ApplicationConstants.MAX_PAGE_SIZE, message = "Invalid page size") 
-            int size) {
+            @RequestParam(defaultValue = "0") @ValidPage int page,
+            @RequestParam(defaultValue = "10") @ValidPageSize int size) {
         
         // 監査ログは時系列（作成日時の降順）で表示
         Pageable pageable = PageRequest.of(

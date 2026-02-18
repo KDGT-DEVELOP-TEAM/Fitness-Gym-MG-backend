@@ -5,7 +5,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.fitnessgym_mg.entity.Customer;
 import com.example.fitnessgym_mg.entity.User;
+import com.example.fitnessgym_mg.entity.enums.UserRole;
+import com.example.fitnessgym_mg.repository.CustomerRepository;
+import com.example.fitnessgym_mg.repository.CustomerRepositoryCustom;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.service.policy.RolePolicy;
 
@@ -32,13 +36,16 @@ public class LessonAuthorizationService {
     
     private final LessonRepository lessonRepository;
     private final RolePolicy rolePolicy;
+    private final CustomerAuthorizationService customerAuthorizationService;
+    private final CustomerRepository customerRepository;
     
     /**
      * 現在のユーザーが指定されたレッスンにアクセス可能か確認（内部実装）
      * 
      * <p>このメソッドは内部実装用。外部からはAuthorizationFacade経由でアクセスすること。</p>
      * 
-     * <p>RepositoryレベルのEXISTSクエリを使用し、「取得」と「可否判定」を混ぜない。</p>
+     * <p>レッスン履歴一覧と同じ認可ロジックを使用するため、レッスンIDから顧客IDを取得し、
+     * 顧客へのアクセス権限をチェックする。</p>
      * 
      * @param currentUser 現在のユーザー
      * @param lessonId レッスンID
@@ -56,13 +63,56 @@ public class LessonAuthorizationService {
             return false;
         }
         
-        // スーパーユーザー（ADMIN）は全レッスンにアクセス可能
-        if (rolePolicy.isSuperUser(currentUser)) {
-            return true;
+        // レッスンIDから顧客IDを取得
+        UUID customerId = lessonRepository.findCustomerIdByLessonId(lessonId)
+            .orElse(null);
+        
+        if (customerId == null) {
+            log.warn("Authorization check failed: Lesson not found. lessonId={}", lessonId);
+            return false;
         }
         
-        // RepositoryレベルのEXISTSクエリで、ユーザーがレッスンにアクセス可能か確認
-        return lessonRepository.existsAccessibleLesson(currentUser.getId(), lessonId);
+        // すべてのロール（ADMIN、MANAGER、TRAINER）で削除された顧客のレッスンも閲覧可能
+        // 顧客が存在するかどうかのみを確認し、削除状態はチェックしない
+        return canAccessLessonForDeletedCustomer(currentUser, customerId);
+    }
+    
+    /**
+     * 削除された顧客のレッスンにアクセス可能か確認（すべてのロール共通）
+     * 
+     * <p>顧客が存在するかどうかのみを確認し、削除状態はチェックしない。</p>
+     * <p>すべてのロール（ADMIN、MANAGER、TRAINER）で削除された顧客のレッスンも閲覧可能とする。</p>
+     * 
+     * @param currentUser 現在のユーザー
+     * @param customerId 顧客ID
+     * @return アクセス可能な場合 true
+     */
+    private boolean canAccessLessonForDeletedCustomer(User currentUser, UUID customerId) {
+        // 顧客が存在するかどうかのみを確認（削除状態はチェックしない）
+        try {
+            if (customerRepository instanceof CustomerRepositoryCustom) {
+                java.util.Optional<Customer> customerOpt = ((CustomerRepositoryCustom) customerRepository)
+                        .findByIdWithStoresNativeIncludingDeleted(customerId);
+                
+                if (customerOpt.isEmpty()) {
+                    log.debug("canAccessLessonForDeletedCustomer: customer not found - userId={}, role={}, customerId={}", 
+                            currentUser.getId(), currentUser.getRole(), customerId);
+                    return false;
+                }
+                
+                // 顧客が存在する場合はアクセス可能（削除状態はチェックしない）
+                log.debug("canAccessLessonForDeletedCustomer: userId={}, role={}, customerId={}, access granted", 
+                        currentUser.getId(), currentUser.getRole(), customerId);
+                return true;
+            } else {
+                log.error("CustomerRepository does not implement CustomerRepositoryCustom");
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("canAccessLessonForDeletedCustomer failed: userId={}, role={}, customerId={}", 
+                    currentUser.getId(), currentUser.getRole(), customerId, e);
+            return false;
+        }
     }
     
     

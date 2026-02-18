@@ -5,6 +5,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import org.hibernate.Hibernate;
+import org.hibernate.proxy.HibernateProxy;
+
 import com.example.fitnessgym_mg.entity.Lesson;
 
 import lombok.Data;
@@ -36,6 +39,7 @@ public class LessonResponse {
 	// 顧客
 	private UUID customerId;
 	private String customerName;
+	private Boolean customerDeleted; // 顧客が論理削除されているかどうか
 
 	// 詳細表示用フィールド
 	private String condition;
@@ -88,9 +92,16 @@ public class LessonResponse {
 		if (lesson.getTrainer() != null) {
 			r.setTrainerName(lesson.getTrainer().getName());
 		}
+		// Customerがプロキシで初期化されていない場合は、Customerの情報を設定しない
+		// （@SQLRestrictionによるエラーを回避するため）
 		if (lesson.getCustomer() != null) {
+			// Hibernateプロキシが初期化されているかチェック
+			if (Hibernate.isInitialized(lesson.getCustomer())) {
 			r.setCustomerId(lesson.getCustomer().getId());
 			r.setCustomerName(lesson.getCustomer().getName());
+			}
+			// プロキシが初期化されていない場合は、Customerの情報は設定しない
+			// （外部から設定されることを想定）
 		}
 
 		return r;

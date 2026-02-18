@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,7 +38,9 @@ public class PostureGroupApiController {
 	 * 
 	 * <p>Controllerの責務: HTTPリクエスト/レスポンスの制御のみ。
 	 * 認可チェックとDTO変換はService層で実施される。</p>
+	 * <p>有効な顧客（isActive=true かつ isDeleted=false）のみアクセス可能。</p>
 	 */
+	@PreAuthorize("@authorizationFacade.canAccessActiveCustomer(authentication, #customerId)")
 	@GetMapping("/customers/{customer_id}/posture_groups")
 	public ResponseEntity<List<PostureGroupResponse>> listGroups(@PathVariable("customer_id") UUID customerId) {
 		// 現在のユーザーを取得
@@ -56,6 +59,7 @@ public class PostureGroupApiController {
 	 * <p>Controllerの責務: HTTPリクエスト/レスポンスの制御のみ。
 	 * 認可チェックとDTO変換はService層で実施される。</p>
 	 */
+	@PreAuthorize("@authorizationFacade.canAccessLesson(authentication, #lessonId)")
 	@PostMapping("/lessons/{lesson_id}/posture_groups")
 	public ResponseEntity<PostureGroupResponse> createPostureGroup(@PathVariable("lesson_id") UUID lessonId) {
 		// 現在のユーザーを取得

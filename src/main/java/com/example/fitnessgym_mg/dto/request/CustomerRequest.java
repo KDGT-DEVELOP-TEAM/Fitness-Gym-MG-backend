@@ -17,8 +17,15 @@ import com.example.fitnessgym_mg.entity.enums.Gender;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
+/**
+ * 顧客リクエストDTO
+ * 
+ * <p>セキュリティ: 個人情報（email、phone）と機密情報（medical、taboo、memo）はログ出力から除外します。</p>
+ */
 @Data
+@ToString(exclude = {"email", "phone", "medical", "taboo", "memo"}) // セキュリティ: 個人情報と機密情報をログに出力しない
 @NoArgsConstructor
 public class CustomerRequest {
 
@@ -62,16 +69,17 @@ public class CustomerRequest {
 	/**
 	 * 電話番号
 	 * 
-	 * <p>数字とハイフンのみで入力してください。</p>
-	 * <p>日本の一般的な形式（例: 090-1234-5678）に対応するため、最大13文字まで許可します。</p>
+	 * <p>数字のみで入力してください（ハイフンは含めません）。</p>
+	 * <p>10文字以上15文字以下で入力してください。</p>
+	 * <p>注意: 部分更新（PATCH）時は、Service層でハイフンチェックと文字数チェックを実施します。</p>
 	 */
 	@NotBlank(message = "電話番号は必須です")
-	@Pattern(regexp = "^[0-9-]+$", message = "電話番号は数字とハイフンのみで入力してください")
-	@Size(max = 13, message = "電話番号は最大13文字まで入力できます")
+	@Pattern(regexp = "^[0-9]{10,15}$", message = "電話番号は10文字以上15文字以下の数字のみで入力してください")
+	@Size(max = 15, message = "電話番号は最大15文字まで入力できます")
 	private String phone;
 
 	@NotBlank(message = "住所は必須です")
-	@Size(max = 200)
+	@Size(max = 500)
 	private String address;
 
 	// ★★ 任意項目 ★★
@@ -91,7 +99,13 @@ public class CustomerRequest {
 	// 有効/無効（新規作成時は必ず true で送信）
 	private boolean active = true;
 
-	// 店舗ID（ADMINの場合は必須、MANAGERの場合はパス変数から取得）
-	@NotNull(message = "店舗IDは必須です")
+	/**
+	 * 店舗ID
+	 * 
+	 * <p>ADMINの場合: 不要（null可）。顧客は店舗に紐づかない。</p>
+	 * <p>MANAGERの場合: パス変数から取得されるため、リクエストボディでは不要。</p>
+	 * <p>店舗と紐付くのはLessonであり、顧客自体は店舗に紐づかない。</p>
+	 * <p>ただし、MANAGERが作成する顧客は検索・フィルタリングのため店舗と紐付ける。</p>
+	 */
 	private UUID storeId;
 }

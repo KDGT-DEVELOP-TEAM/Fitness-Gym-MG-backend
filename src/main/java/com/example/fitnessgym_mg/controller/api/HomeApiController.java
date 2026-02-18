@@ -3,9 +3,10 @@ package com.example.fitnessgym_mg.controller.api;
 import java.util.List;
 import java.util.UUID;
 
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
+import com.example.fitnessgym_mg.validation.ValidPage;
+import com.example.fitnessgym_mg.validation.ValidPageSize;
 
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -18,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.fitnessgym_mg.config.ApplicationConstants;
 import com.example.fitnessgym_mg.dto.response.HomeResponse;
 import com.example.fitnessgym_mg.dto.response.LessonResponse;
 import com.example.fitnessgym_mg.entity.User;
@@ -48,20 +48,26 @@ public class HomeApiController {
 
 	/**
 	 * GET /api/trainers/home
-	 * 当日・直近(1週間以内)の予約状況/レッスン概要の取得
+	 * 1週間後～1ヶ月後までの次回レッスン希望の取得（ページネーション対応）
+	 * トレーナーホームページ用
 	 */
 	@PreAuthorize("hasRole('TRAINER')")
 	@GetMapping("/trainers/home")
-	public ResponseEntity<HomeResponse> getTrainerHome() {
+	public ResponseEntity<HomeResponse> getTrainerHome(
+			@RequestParam(defaultValue = "0") @ValidPage int page,
+			@RequestParam(defaultValue = "10") @ValidPageSize int size) {
 		// 現在ログイン中のトレーナーを取得
 		UUID trainerId = securityUtil.getCurrentUserOrThrow().getId();
 
-		// 直近1週間のレッスンを取得
-		List<LessonResponse> upcomingLessons = lessonService.getUpcomingLessonsByTrainerId(trainerId);
+		// ページネーション情報を設定（nextDateでソート）
+		Pageable pageable = PageRequest.of(page, size, Sort.by("nextDate").ascending());
+
+		// 1週間後～1ヶ月後の次回レッスン希望を取得（ページネーション対応）
+		Page<LessonResponse> lessonPage = lessonService.getNextLessonsByTrainerId(trainerId, pageable);
 
 		HomeResponse response = HomeResponse.builder()
-				.upcomingLessons(upcomingLessons)
-				.totalLessonCount(0L) // Trainer用: 統計情報は表示しないため0を設定
+				.upcomingLessons(lessonPage.getContent())
+				.totalLessonCount(lessonPage.getTotalElements()) // 総件数を設定
 				.build();
 
 		return ResponseEntity.ok(response);
@@ -74,18 +80,19 @@ public class HomeApiController {
 	@PreAuthorize("hasRole('ADMIN')")
 	@GetMapping("/admin/home")
 	public ResponseEntity<HomeResponse> getAdminHome(
+			@RequestParam(required = false) UUID storeId,
 			@RequestParam(defaultValue = "month") String chartType,
-			@RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be 0 or greater") @Max(value = ApplicationConstants.MAX_PAGE_NUMBER, message = "Page is too large") int page,
-			@RequestParam(defaultValue = "10") @Min(value = ApplicationConstants.MIN_PAGE_SIZE, message = "Size must be at least 1") @Max(value = ApplicationConstants.MAX_PAGE_SIZE, message = "Size must not exceed 100") int size) {
+			@RequestParam(defaultValue = "0") @ValidPage int page,
+			@RequestParam(defaultValue = "10") @ValidPageSize int size) {
 
 		// レッスン履歴一覧（最新の数件）
 		Pageable pageable = PageRequest.of(page, size, Sort.by("startDate").descending());
-		var lessonPage = lessonService.searchLessons(null, pageable);
+		var lessonPage = lessonService.searchLessons(storeId, pageable);
 		List<LessonResponse> recentLessons = lessonPage.getContent();
 
 		// グラフデータ（StringからChartPeriodに変換）
 		ChartPeriod period = convertToChartPeriod(chartType);
-		var chartData = lessonService.getLessonChartData(null, period);
+		var chartData = lessonService.getLessonChartData(storeId, period);
 
 		// 総レッスン数（簡易版：ページネーションの総件数を使用）
 		long totalLessonCount = lessonPage.getTotalElements();
@@ -108,8 +115,8 @@ public class HomeApiController {
 	public ResponseEntity<HomeResponse> getManagerHome(
 			@PathVariable("store_id") UUID storeId,
 			@RequestParam(defaultValue = "month") String chartType,
-			@RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be 0 or greater") @Max(value = ApplicationConstants.MAX_PAGE_NUMBER, message = "Page is too large") int page,
-			@RequestParam(defaultValue = "10") @Min(value = ApplicationConstants.MIN_PAGE_SIZE, message = "Size must be at least 1") @Max(value = ApplicationConstants.MAX_PAGE_SIZE, message = "Size must not exceed 100") int size) {
+			@RequestParam(defaultValue = "0") @ValidPage int page,
+			@RequestParam(defaultValue = "10") @ValidPageSize int size) {
 
 		// 現在のユーザーを取得
 		User currentUser = securityUtil.getCurrentUserOrThrow();

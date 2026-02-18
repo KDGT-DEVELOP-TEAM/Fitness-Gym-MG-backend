@@ -1,10 +1,13 @@
 package com.example.fitnessgym_mg.service;
 
 import java.time.ZoneOffset;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 
 import org.springframework.data.domain.Page;
@@ -24,9 +27,9 @@ import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.CustomerSort;
 import com.example.fitnessgym_mg.exception.InvalidRequestException;
 import com.example.fitnessgym_mg.repository.CustomerRepository;
+import com.example.fitnessgym_mg.repository.CustomerRepositoryCustom;
 import com.example.fitnessgym_mg.repository.LessonRepository;
 import com.example.fitnessgym_mg.repository.StoreRepository;
-import com.example.fitnessgym_mg.repository.UserCustomerRepository;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
@@ -40,10 +43,10 @@ public class CustomerService {
 
 	private final CustomerRepository customerRepository;
 	private final LessonRepository lessonRepository;
-	private final UserCustomerRepository userCustomerRepository;
 	private final StoreRepository storeRepository;
 	private final AuthorizationFacade authorizationFacade;
 	private final SecurityUtil securityUtil;
+	private final com.example.fitnessgym_mg.repository.UserRepository userRepository;
 
 	// --- 顧客一覧検索（ページネーション対応） ---
 	@Transactional(readOnly = true)
@@ -91,8 +94,8 @@ public class CustomerService {
 		int size = Math.min(pageable.getPageSize(), ApplicationConstants.MAX_PAGE_SIZE);
 		Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), size, sortObj);
 
-		// 4. 検索メソッドの実行 (findAllNotDeletedを使用 - 論理削除条件が自動適用される)
-		Page<Customer> customerPage = customerRepository.findAllNotDeleted(spec, sortedPageable);
+		// 4. 検索メソッドの実行 (findAllNotDeletedWithStoresを使用 - storesもJOIN FETCHで一括取得、N+1問題を回避)
+		Page<Customer> customerPage = customerRepository.findAllNotDeletedWithStores(spec, sortedPageable);
 
 		// 5. マッピング
 		return customerPage.map(CustomerResponse::fromEntity);
@@ -103,19 +106,9 @@ public class CustomerService {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 
 		// storeIdの決定: パス変数があればそれを優先、なければリクエストボディから取得
+		// 注意: 現在の実装では、ADMINとMANAGERの両方でリクエストボディのstoreIdを使用するため、
+		// storeIdFromPathは後方互換性のために残しているが、通常はnullになる
 		UUID storeId = storeIdFromPath != null ? storeIdFromPath : req.getStoreId();
-
-		if (storeId == null) {
-			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("店舗IDは必須です");
-		}
-
-		// 認可チェック: 店舗へのアクセス権を検証
-		authorizationFacade.checkCanAccessStoreOrThrow(currentUser, storeId);
-
-		// Storeエンティティの取得
-		Store store = storeRepository.findById(storeId)
-				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException(
-						"店舗が見つかりません: " + storeId));
 
 		// バリデーション: 作成時のビジネスルールチェック
 		validateForCreate(req);
@@ -136,8 +129,21 @@ public class CustomerService {
 		// システム設定
 		customer.setActive(true); // is_active は新規作成時は有効 (true)
 
-		// Storeとの紐付け
-		customer.addStore(store);
+		// Storeとの紐付け（storeIdが指定されている場合のみ）
+		// ADMINとMANAGERの両方: リクエストボディのstoreIdを使用して店舗に紐付ける（顧客がどの店舗で登録されたかを記録するため）
+		// storeIdFromPathは後方互換性のために残しているが、通常はnullになる
+		if (storeId != null) {
+			// 認可チェック: 店舗へのアクセス権を検証
+			authorizationFacade.checkCanAccessStoreOrThrow(currentUser, storeId);
+
+			// Storeエンティティの取得
+			Store store = storeRepository.findById(storeId)
+					.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException(
+							"店舗が見つかりません: " + storeId));
+
+			// Storeとの紐付け（store_customersテーブルに保存される）
+			customer.addStore(store);
+		}
 
 		customerRepository.save(customer);
 	}
@@ -147,28 +153,52 @@ public class CustomerService {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		Customer customer = getAuthorizedCustomer(id, currentUser);
 
-		// email変更時の重複チェック
-		if (!customer.getEmail().equals(req.getEmail())) {
+		// email変更時の重複チェック（部分更新対応: emailが送信されている場合のみチェック）
+		if (req.getEmail() != null && !customer.getEmail().equals(req.getEmail())) {
 			// emailが変更されている場合のみチェック
-			if (customerRepository.existsByEmailAndIdNot(req.getEmail(), id)) {
-				throw new com.example.fitnessgym_mg.exception.InvalidRequestException("このメールアドレスは既に登録されています");
+			// @SQLRestrictionを回避するため、ネイティブSQLクエリを使用するexistsByEmailAndIdNotNative()を使用
+			// CustomerRepositoryをCustomerRepositoryCustomにキャストして直接呼び出す
+			if (customerRepository instanceof CustomerRepositoryCustom) {
+				boolean emailExists = ((CustomerRepositoryCustom) customerRepository)
+						.existsByEmailAndIdNotNative(req.getEmail(), id);
+				if (emailExists) {
+					throw new com.example.fitnessgym_mg.exception.InvalidRequestException("このメールアドレスは既に登録されています");
+				}
+			} else {
+				throw new com.example.fitnessgym_mg.exception.ImplementationException(
+					"CustomerRepository does not implement CustomerRepositoryCustom");
 			}
 		}
 
-		// 必須項目を更新
+		// 必須項目を更新（部分更新対応: nullフィールドは既存値を保持）
 		setCustomerBasicFields(customer, req);
 
-		// 任意項目を更新
-		customer.setMedical(req.getMedical());
-		customer.setTaboo(req.getTaboo());
-		customer.setMemo(req.getMemo());
+		// 任意項目を更新（部分更新対応: nullフィールドは既存値を保持）
+		if (req.getMedical() != null) {
+			customer.setMedical(req.getMedical());
+		}
+		if (req.getTaboo() != null) {
+			customer.setTaboo(req.getTaboo());
+		}
+		if (req.getMemo() != null) {
+			customer.setMemo(req.getMemo());
+		}
 
-		// システム設定
-		customer.setActive(req.isActive()); // 有効/無効状態も更新できる想定
+		// システム設定（部分更新対応: activeが明示的に送信されている場合のみ更新）
+		// 注意: booleanのデフォルト値はfalseのため、falseを明示的に送信した場合と区別できない
+		// ただし、顧客プロフィール編集ではactiveを更新しないため、この問題は発生しない想定
+		// 必要に応じて、Boolean型に変更してnullチェックを行うことを検討
+		// customer.setActive(req.isActive()); // 部分更新ではactiveは更新しない
 
 		// バリデーション: 更新時のビジネスルールチェック
+		// 部分更新のため、送信されたフィールドのみをバリデーション
 		validateForUpdate(req);
-		customer.setFirstPostureGroupId(req.getFirstPostureGroupId());
+		
+		// firstPostureGroupIdの更新（nullの場合は既存の値を保持）
+		if (req.getFirstPostureGroupId() != null) {
+			customer.setFirstPostureGroupId(req.getFirstPostureGroupId());
+		}
+		// req.getFirstPostureGroupId()がnullの場合は、既存のfirstPostureGroupIdを保持（変更しない）
 
 		customerRepository.save(customer);
 	}
@@ -192,14 +222,19 @@ public class CustomerService {
 	public void delete(UUID id) {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		Customer customer = getAuthorizedCustomer(id, currentUser);
+		
+		// デバッグ: 顧客の状態をログに出力
+		log.debug("顧客削除リクエスト: customerId={}, active={}, deletedAt={}", 
+			id, customer.isActive(), customer.getDeletedAt());
 
-		// ドメイン制約の検証
-		customer.validateDeletable();
+		// ドメイン制約の検証（ビジネスロジックはサービス層で実施）
+		validateDeletable(customer);
 
 		// 論理削除を実行（物理削除は行わない）
 		// 注意: hasRelatedDataチェックは削除（論理削除のため、レッスンデータは統計に表示される）
 		customer.setDeletedAt(java.time.OffsetDateTime.now(ZoneOffset.UTC));
 		customerRepository.save(customer);
+		log.info("顧客削除成功: customerId={}", id);
 	}
 
 	// IDでエンティティを取得する（編集モーダル初期表示用など）
@@ -225,16 +260,26 @@ public class CustomerService {
 	@Transactional(readOnly = true)
 	private Customer getAuthorizedCustomer(UUID id, User currentUser) {
 		// 1. エンティティ取得（Repository直接アクセス）
-		Customer customer = customerRepository.findByIdWithStores(id)
-				.orElseThrow(() -> {
-					log.warn("顧客が見つかりません: customerId={}", id);
-					return new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません: " + id);
-				});
+		// 退会済み顧客も検出するために、findByIdWithStoresNativeIncludingDeleted()を使用
+		// CustomerRepositoryをCustomerRepositoryCustomにキャストして直接呼び出す
+		Customer customer;
+		if (customerRepository instanceof CustomerRepositoryCustom) {
+			customer = ((CustomerRepositoryCustom) customerRepository)
+					.findByIdWithStoresNativeIncludingDeleted(id)
+					.orElseThrow(() -> {
+						log.warn("顧客が見つかりません: customerId={}", id);
+						return new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません: " + id);
+					});
+		} else {
+			throw new com.example.fitnessgym_mg.exception.ImplementationException(
+				"CustomerRepository does not implement CustomerRepositoryCustom");
+		}
 
 		// 2. 状態検証: 論理削除チェック
+		// 退会済み顧客の場合は特別な例外をスロー
 		if (customer.isDeleted()) {
 			log.warn("論理削除済みの顧客にアクセスしようとしました: customerId={}", id);
-			throw new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません: " + id);
+			throw new com.example.fitnessgym_mg.exception.CustomerDeletedException(id);
 		}
 
 		// 3. 認可チェック（エンティティ版を使用）
@@ -245,31 +290,94 @@ public class CustomerService {
 
 	// --- トレーナー用顧客取得 ---
 	/**
-	 * 現在ログイン中のトレーナーが担当している顧客リストを取得
-	 * UserCustomerRepositoryを使用して中間テーブル経由で取得し、CustomerResponseに変換
+	 * 現在ログイン中のトレーナーが所属店舗の全ての顧客リストを取得
+	 * トレーナーが所属する店舗の顧客のみを取得
+	 * 
+	 * @param storeId - 店舗ID（オプショナル）。指定された場合は該当店舗の顧客のみを返す
 	 */
 	@Transactional(readOnly = true)
-	public List<CustomerResponse> getMyCustomers() {
+	public List<CustomerResponse> getAllCustomersForTrainerStores(UUID storeId) {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		UUID trainerId = currentUser.getId();
-
-		return userCustomerRepository.findByUserIdWithCustomer(trainerId).stream()
-				.filter(uc -> !uc.getCustomer().isDeleted() && uc.getCustomer().isActive())
-				.map(uc -> CustomerResponse.fromEntity(uc.getCustomer()))
+		
+		log.info("トレーナーが顧客を取得: trainerId={}, storeId={}", trainerId, storeId);
+		
+		// トレーナーにはuser_storesテーブルにレコードがないため、店舗フィルタリングを行わず全顧客を取得
+		// 店舗と顧客の紐付けは維持されるが、トレーナーは全顧客を閲覧可能
+		
+		// デバッグ: 全顧客数を確認（店舗フィルタリング前）
+		Specification<Customer> allCustomersSpec = (root, query, cb) -> cb.conjunction();
+		Page<Customer> allCustomersPage = customerRepository.findAllNotDeleted(allCustomersSpec, Pageable.unpaged());
+		long totalCustomersCount = allCustomersPage.getTotalElements();
+		log.info("全顧客数（論理削除されていない）: count={}", totalCustomersCount);
+		
+		// 店舗IDが指定されている場合は、該当店舗の顧客のみを取得
+		Specification<Customer> distinctSpec = (root, query, cb) -> {
+			query.distinct(true);
+			if (storeId != null) {
+				// 店舗IDでフィルタリング
+				Join<Customer, Store> storesJoin = root.join("stores", JoinType.INNER);
+				return cb.equal(storesJoin.get("id"), storeId);
+			}
+			return cb.conjunction();
+		};
+		
+		// 論理削除されていない、かつ有効な顧客のみを取得
+		// findAllNotDeletedWithStoresを使用してstoresもJOIN FETCHで一括取得（N+1問題を回避）
+		// Pageable.unpaged()を使用して全件取得
+		Page<Customer> customerPage = customerRepository.findAllNotDeletedWithStores(distinctSpec, Pageable.unpaged());
+		List<Customer> customers = customerPage.getContent();
+		
+		log.info("トレーナーが取得した顧客数: trainerId={}, storeId={}, count={}", trainerId, storeId, customers.size());
+		
+		// デバッグ: 取得された顧客のIDと名前をログ出力
+		if (log.isDebugEnabled() || customers.isEmpty()) {
+			if (customers.isEmpty()) {
+				log.warn("顧客が取得できませんでした: trainerId={}, storeId={}, totalCustomers={}", 
+					trainerId, storeId, totalCustomersCount);
+			} else {
+				customers.forEach(customer -> 
+					log.debug("取得された顧客: customerId={}, name={}, active={}, stores={}", 
+						customer.getId(), customer.getName(), customer.isActive(),
+						customer.getStores() != null ? customer.getStores().stream()
+							.map(s -> s.getId() + "(" + s.getName() + ")")
+							.collect(Collectors.joining(", ")) : "null")
+				);
+			}
+		}
+		
+		return customers.stream()
+				.filter(Customer::isActive)
+				.map(CustomerResponse::fromEntity)
 				.collect(Collectors.toList());
 	}
 
+	// --- 顧客一覧取得（オプション選択用） ---
 	/**
-	 * トレーナーが顧客に割り当てられているか確認（存在確認専用）
+	 * オプション選択用の顧客一覧を取得
+	 * 最大件数制限付きでidとnameのみを返す（パフォーマンス対策）
 	 * 
-	 * @param trainerId トレーナーID
-	 * @param customerId 顧客ID
-	 * @return 割り当てられている場合 true
+	 * <p>注意: @SQLRestrictionを回避するために、ネイティブSQLクエリを使用して
+	 * idとnameのみを取得し、直接CustomerResponseを作成します。</p>
+	 * 
+	 * @param limit 取得件数の上限（最大1000件）
+	 * @return 顧客のリスト（CustomerResponse形式、idとnameのみ）
 	 */
 	@Transactional(readOnly = true)
-	public boolean isTrainerAssignedToCustomer(UUID trainerId, UUID customerId) {
-		return userCustomerRepository.existsById(
-				new com.example.fitnessgym_mg.entity.UserCustomer.UserCustomerId(trainerId, customerId));
+	public List<CustomerResponse> getAllCustomersForOptions(int limit) {
+		// @SQLRestrictionを回避するために、ネイティブSQLクエリでidとnameのみを取得
+		int safeLimit = Math.min(Math.max(limit, 1), 1000); // 1以上1000以下に制限
+		List<Object[]> results = customerRepository.findAllIdAndNameForOptions(safeLimit);
+		
+		// Object[]からCustomerResponseを作成
+		return results.stream()
+				.map(row -> {
+					CustomerResponse response = new CustomerResponse();
+					response.setId((UUID) row[0]);
+					response.setName((String) row[1]);
+					return response;
+				})
+				.collect(Collectors.toList());
 	}
 
 	// --- 顧客IDで顧客詳細を取得（CustomerResponse形式） ---
@@ -309,41 +417,153 @@ public class CustomerService {
 	 */
 	private void validateForCreate(CustomerRequest req) {
 		// emailの重複チェック
-		if (customerRepository.existsByEmail(req.getEmail())) {
-			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("このメールアドレスは既に登録されています");
+		// @SQLRestrictionを回避するため、ネイティブSQLクエリを使用するexistsByEmailNative()を使用
+		// CustomerRepositoryをCustomerRepositoryCustomにキャストして直接呼び出す
+		if (customerRepository instanceof CustomerRepositoryCustom) {
+			boolean emailExists = ((CustomerRepositoryCustom) customerRepository)
+					.existsByEmailNative(req.getEmail());
+			if (emailExists) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException("このメールアドレスは既に登録されています");
+			}
+		} else {
+			throw new com.example.fitnessgym_mg.exception.ImplementationException(
+				"CustomerRepository does not implement CustomerRepositoryCustom");
+		}
+		
+		// 電話番号のバリデーション（ハイフンを含めない）
+		if (req.getPhone() != null) {
+			// ハイフン（-）が含まれている場合はエラー
+			if (req.getPhone().contains("-")) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"電話番号にハイフン（-）を含めることはできません");
+			}
+			// 数字のみで10-15文字であることを確認
+			if (!req.getPhone().matches("^[0-9]{10,15}$")) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"電話番号は10文字以上15文字以下の数字のみで入力してください");
+			}
 		}
 	}
 
 	/**
 	 * 顧客更新時のバリデーション
 	 * 
-	 * <p>更新時はfirstPostureGroupIdは必須。</p>
-	 * <p>既存顧客には必ず初回姿勢画像が登録されている必要があるため。</p>
+	 * <p>更新時はfirstPostureGroupIdは任意（null許容）。</p>
+	 * <p>初回姿勢画像は後から登録可能なため。</p>
 	 * 
 	 * @param req 顧客リクエストDTO
 	 * @throws InvalidRequestException バリデーションエラーの場合
 	 */
 	private void validateForUpdate(CustomerRequest req) {
-		if (req.getFirstPostureGroupId() == null) {
-			throw new com.example.fitnessgym_mg.exception.InvalidRequestException("初回姿勢画像は必須です");
+		// firstPostureGroupIdは任意のため、バリデーションは不要
+		
+		// 部分更新（PATCH）対応: 送信されたフィールドのみをバリデーション
+		// 生年月日のバリデーション（送信されている場合のみ）
+		if (req.getBirthday() != null) {
+			// @Pastアノテーションのチェック（過去の日付である必要がある）
+			if (!req.getBirthday().isBefore(java.time.LocalDate.now())) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"生年月日は過去の日付である必要があります");
+			}
+		}
+		
+		// メールアドレスのバリデーション（送信されている場合のみ）
+		if (req.getEmail() != null) {
+			if (req.getEmail().trim().isEmpty()) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"メールアドレスは必須です");
+			}
+			// 簡易的なメールアドレス形式チェック
+			if (!req.getEmail().contains("@")) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"有効なメールアドレスを入力してください");
+			}
+		}
+		
+		// 電話番号のバリデーション（送信されている場合のみ）
+		if (req.getPhone() != null) {
+			if (req.getPhone().trim().isEmpty()) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"電話番号は必須です");
+			}
+			// ハイフン（-）が含まれている場合はエラー
+			if (req.getPhone().contains("-")) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"電話番号にハイフン（-）を含めることはできません");
+			}
+			// 数字のみで10-15文字であることを確認
+			if (!req.getPhone().matches("^[0-9]{10,15}$")) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"電話番号は10文字以上15文字以下の数字のみで入力してください");
+			}
+		}
+		
+		// 身長のバリデーション（送信されている場合のみ）
+		if (req.getHeight() != null) {
+			if (req.getHeight().compareTo(java.math.BigDecimal.valueOf(50.0)) < 0 ||
+				req.getHeight().compareTo(java.math.BigDecimal.valueOf(300.0)) > 0) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"身長は50cm以上300cm以下である必要があります");
+			}
 		}
 	}
 
 	/**
 	 * 顧客の基本情報フィールドを設定（共通ロジック）
 	 * 
+	 * <p>部分更新（PATCH）対応: nullフィールドは既存値を保持します。</p>
+	 * 
 	 * @param customer 顧客エンティティ
 	 * @param req 顧客リクエストDTO
 	 */
 	private void setCustomerBasicFields(Customer customer, CustomerRequest req) {
-		customer.setKana(req.getKana());
-		customer.setName(req.getName());
-		customer.setGender(req.getGender());
-		customer.setBirthday(req.getBirthday());
-		customer.setHeight(req.getHeight());
-		customer.setEmail(req.getEmail());
-		customer.setPhone(req.getPhone());
-		customer.setAddress(req.getAddress());
+		if (req.getKana() != null) {
+			customer.setKana(req.getKana());
+		}
+		if (req.getName() != null) {
+			customer.setName(req.getName());
+		}
+		if (req.getGender() != null) {
+			customer.setGender(req.getGender());
+		}
+		if (req.getBirthday() != null) {
+			// 日付の有効性チェック（無効な日付（例：4月90日）を防ぐ）
+			try {
+				customer.setBirthday(req.getBirthday());
+			} catch (Exception e) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"有効な日付を入力してください: " + e.getMessage());
+			}
+		}
+		if (req.getHeight() != null) {
+			customer.setHeight(req.getHeight());
+		}
+		if (req.getEmail() != null) {
+			customer.setEmail(req.getEmail());
+		}
+		if (req.getPhone() != null) {
+			customer.setPhone(req.getPhone());
+		}
+		if (req.getAddress() != null) {
+			customer.setAddress(req.getAddress());
+		}
+	}
+
+	/**
+	 * 顧客が削除可能かどうかを検証
+	 * 
+	 * <p>ビジネスルール: 有効（active=true）の顧客は削除できない。</p>
+	 * <p>このメソッドはサービス層に配置することで、ビジネスロジックとエンティティ層の責務を分離しています。</p>
+	 * 
+	 * @param customer 検証対象の顧客エンティティ
+	 * @throws InvalidRequestException 削除不可の場合
+	 */
+	private void validateDeletable(Customer customer) {
+		if (customer.isActive()) {
+			log.warn("削除不可: 顧客が有効な状態です。customerId={}, active={}", customer.getId(), customer.isActive());
+			throw new InvalidRequestException("有効な顧客は削除できません。先に無効化してください。");
+		}
+		log.debug("削除可能: 顧客は無効な状態です。customerId={}, active={}", customer.getId(), customer.isActive());
 	}
 
 }

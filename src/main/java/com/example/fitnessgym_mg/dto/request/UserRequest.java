@@ -24,11 +24,11 @@ public class UserRequest {
 	private String email;
 
 	@NotBlank(message = "名前は必須です")
-	@Size(min = 2, max = 50)
+	@Size(min = 2, max = 100)
 	private String name;
 
 	@NotBlank(message = "フリガナは必須です")
-	@Size(min = 2, max = 50)
+	@Size(min = 2, max = 100)
 	private String kana;
 
 	/**

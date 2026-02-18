@@ -9,13 +9,15 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.ToString;
 
 /**
  * 監査ログレスポンスDTO
+ * 
+ * <p>セキュリティ: 個人情報（userName、customerName）はログ出力から除外します。</p>
  */
-@Slf4j
 @Data
+@ToString(exclude = {"userName", "customerName"}) // セキュリティ: PIIをログに出力しない
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -27,6 +29,8 @@ public class AuditLogResponse {
     private String action;
     private String targetTable;
     private UUID targetId;
+    private UUID customerId;
+    private String customerName;
     private LocalDateTime createdAt;
     
     /**
@@ -40,26 +44,13 @@ public class AuditLogResponse {
             return null;
         }
         
-        // targetIdはString型だが、UUIDに変換を試みる（変換できない場合はnull）
-        UUID targetIdUuid = null;
-        try {
-            if (entity.getTargetId() != null && !entity.getTargetId().isEmpty()) {
-                targetIdUuid = UUID.fromString(entity.getTargetId());
-            }
-        } catch (IllegalArgumentException e) {
-            // UUID形式でない場合はnullのまま
-            // データ不整合の兆候を検知するため、ログに記録
-            log.warn("Invalid targetId format in AuditLog. id={}, targetId={}", 
-                     entity.getId(), entity.getTargetId());
-        }
-        
         return AuditLogResponse.builder()
                 .id(entity.getId())
                 .userId(entity.getUser() != null ? entity.getUser().getId() : null)
                 .userName(entity.getUser() != null ? entity.getUser().getName() : null)
                 .action(entity.getAction() != null ? entity.getAction().name() : null)
                 .targetTable(entity.getTargetTable() != null ? entity.getTargetTable().getTableName() : null)
-                .targetId(targetIdUuid)
+                .targetId(entity.getTargetId())
                 .createdAt(entity.getCreatedAt() != null 
                         ? entity.getCreatedAt().toLocalDateTime() 
                         : null)

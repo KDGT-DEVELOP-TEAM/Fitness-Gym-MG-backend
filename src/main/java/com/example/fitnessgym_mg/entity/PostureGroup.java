@@ -18,6 +18,8 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -31,6 +33,7 @@ import lombok.ToString;
 @Entity
 @Table(name = "posture_groups", 
        uniqueConstraints = @UniqueConstraint(columnNames = { "lesson_id" }))
+@DynamicUpdate
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -58,7 +61,14 @@ public class PostureGroup {
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private OffsetDateTime createdAt;
 
-	@OneToMany(mappedBy = "postureGroup", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+	/**
+	 * 姿勢画像リスト
+	 * 
+	 * <p>注意: cascadeはPERSISTとMERGEのみに制限しています。
+	 * 削除操作は明示的にサービス層で制御することで、パフォーマンスと意図しない削除を防止します。
+	 * orphanRemoval=trueにより、親エンティティから削除された子エンティティは自動的に削除されます。</p>
+	 */
+	@OneToMany(mappedBy = "postureGroup", cascade = {CascadeType.PERSIST, CascadeType.MERGE}, orphanRemoval = true, fetch = FetchType.LAZY)
 	private List<PostureImage> images = new ArrayList<>();
 
 	/**
@@ -74,6 +84,10 @@ public class PostureGroup {
 
 	/**
 	 * 画像追加（双方向関連を同期）
+	 * 
+	 * <p>注意: このメソッドはエンティティ層で双方向関連を同期します。
+	 * JPAのベストプラクティスに従い、エンティティ層で双方向関連の整合性を保ちます。
+	 * プロジェクト全体でこの方針を統一しています。</p>
 	 */
 	public void addImage(PostureImage image) {
 		if (image == null)
@@ -84,6 +98,10 @@ public class PostureGroup {
 
 	/**
 	 * 画像削除（双方向関連を同期）
+	 * 
+	 * <p>注意: このメソッドはエンティティ層で双方向関連を同期します。
+	 * JPAのベストプラクティスに従い、エンティティ層で双方向関連の整合性を保ちます。
+	 * プロジェクト全体でこの方針を統一しています。</p>
 	 */
 	public void removeImage(PostureImage image) {
 		if (image == null)

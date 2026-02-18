@@ -1,5 +1,7 @@
 package com.example.fitnessgym_mg.config;
 
+import java.time.ZoneId;
+
 /**
  * アプリケーション全体で使用する定数クラス
  * マジックナンバーを定数として集約
@@ -16,11 +18,6 @@ public final class ApplicationConstants {
      * デフォルトのページ番号
      */
     public static final int DEFAULT_PAGE_NUMBER = 0;
-    
-    /**
-     * デフォルトのページサイズ
-     */
-    public static final int DEFAULT_PAGE_SIZE = 10;
     
     /**
      * 最大ページサイズ
@@ -100,47 +97,14 @@ public final class ApplicationConstants {
      */
     public static final int MAX_TRAINING_REPS = 10000;
 
-    // ===== 文字列長制限 =====
-    
-    /**
-     * キーワード検索の最大文字数
-     */
-    public static final int MAX_KEYWORD_LENGTH = 100;
-    
-    /**
-     * 名前・かなの最大文字数
-     */
-    public static final int MAX_NAME_LENGTH = 100;
-    
-    /**
-     * メモ・コンディション・食事内容の最大文字数
-     */
-    public static final int MAX_MEMO_LENGTH = 500;
-    
-    /**
-     * 詳細メモの最大文字数
-     */
-    public static final int MAX_DETAIL_MEMO_LENGTH = 1000;
-    
-    /**
-     * 体重の最大値（kg）
-     */
-    public static final int MAX_WEIGHT = 500;
-    
-    /**
-     * 身長の最小値（cm）
-     */
-    public static final int MIN_HEIGHT = 50;
-    
-    /**
-     * 身長の最大値（cm）
-     */
-    public static final int MAX_HEIGHT = 300;
-
     // ===== その他 =====
     
     /**
-     * BMI計算時の身長変換係数（cmからmへの変換）
+     * デフォルトタイムゾーン
+     * 
+     * <p>レッスンの日時検証などで使用するタイムゾーンです。</p>
+     * <p>フロントエンドから送信される日時はローカルタイムゾーン（日本時間）であり、
+     * それをサーバー側でも日本時間として比較します。</p>
      */
-    public static final int HEIGHT_CONVERSION_FACTOR = 100;
+    public static final ZoneId DEFAULT_TIMEZONE = ZoneId.of("Asia/Tokyo");
 }

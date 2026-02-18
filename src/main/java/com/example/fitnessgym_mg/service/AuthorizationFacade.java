@@ -41,7 +41,28 @@ public class AuthorizationFacade {
         try {
             return customerAuthorizationService.canAccessCustomerInternal(currentUser, customerId);
         } catch (RuntimeException e) {
-            log.error("Authorization check failed unexpectedly for customerId={}", customerId, e);
+            log.error("AuthorizationFacade.canAccessCustomer: Authorization check failed unexpectedly - userId={}, customerId={}", 
+                    currentUser != null ? currentUser.getId() : "null", customerId, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 有効な顧客（論理削除済みを除く）へのアクセス権限を確認
+     * 
+     * <p>判断の最終責任者。プロフィール、履歴、姿勢画像など、有効な顧客のみ表示すべきページで使用する。</p>
+     * <p>canAccessCustomerとは異なり、ADMINロールでもisActiveとisDeletedのチェックを実施する。</p>
+     * 
+     * @param currentUser 現在のユーザー
+     * @param customerId 顧客ID
+     * @return アクセス可能な場合 true
+     */
+    public boolean canAccessActiveCustomer(User currentUser, UUID customerId) {
+        try {
+            return customerAuthorizationService.canAccessActiveCustomerInternal(currentUser, customerId);
+        } catch (RuntimeException e) {
+            log.error("AuthorizationFacade.canAccessActiveCustomer: Authorization check failed unexpectedly - userId={}, customerId={}", 
+                    currentUser != null ? currentUser.getId() : "null", customerId, e);
             return false;
         }
     }
@@ -112,7 +133,31 @@ public class AuthorizationFacade {
      */
     public void checkCanAccessCustomerOrThrow(User currentUser, UUID customerId) {
         if (!canAccessCustomer(currentUser, customerId)) {
-            throw new com.example.fitnessgym_mg.exception.AccessDeniedException("この顧客にアクセスする権限がありません");
+            String userId = currentUser != null ? currentUser.getId().toString() : "unknown";
+            String resource = "customer:" + (customerId != null ? customerId.toString() : "unknown");
+            log.warn("Access denied: userId={}, resource={}, role={}", 
+                    userId, resource, currentUser != null ? currentUser.getRole() : "unknown");
+            throw new com.example.fitnessgym_mg.exception.AccessDeniedException(userId, resource);
+        }
+    }
+    
+    /**
+     * 有効な顧客（論理削除済みを除く）へのアクセス権限を確認し、不可能な場合は例外をスロー
+     * 
+     * <p>Service層での認可チェック用メソッド。
+     * プロフィール、履歴、姿勢画像など、有効な顧客のみ表示すべきページで使用する。</p>
+     * 
+     * @param currentUser 現在のユーザー
+     * @param customerId 顧客ID
+     * @throws AccessDeniedException アクセス権限がない場合（HTTP 403 Forbidden）
+     */
+    public void checkCanAccessActiveCustomerOrThrow(User currentUser, UUID customerId) {
+        if (!canAccessActiveCustomer(currentUser, customerId)) {
+            String userId = currentUser != null ? currentUser.getId().toString() : "unknown";
+            String resource = "activeCustomer:" + (customerId != null ? customerId.toString() : "unknown");
+            log.warn("Access denied (active customer): userId={}, resource={}, role={}", 
+                    userId, resource, currentUser != null ? currentUser.getRole() : "unknown");
+            throw new com.example.fitnessgym_mg.exception.AccessDeniedException(userId, resource);
         }
     }
     
@@ -191,8 +236,36 @@ public class AuthorizationFacade {
      * @return アクセス可能な場合 true
      */
     public boolean canAccessCustomer(Authentication authentication, UUID customerId) {
+        try {
         User currentUser = securityUtil.getUserFromAuthenticationOrThrow(authentication);
         return canAccessCustomer(currentUser, customerId);
+        } catch (Exception e) {
+            log.error("AuthorizationFacade.canAccessCustomer (SpEL): Failed to extract user or check access - authentication={}, customerId={}", 
+                    authentication != null ? authentication.getName() : "null", customerId, e);
+            return false;
+        }
+    }
+    
+    /**
+     * SpEL用: 現在のユーザーが指定された有効な顧客（論理削除済みを除く）にアクセス可能か確認
+     * 
+     * <p>@PreAuthorizeのSpELから呼び出すためのメソッド。
+     * AuthenticationからUserを取得し、内部のcanAccessActiveCustomerに委譲する。</p>
+     * <p>プロフィール、履歴、姿勢画像など、有効な顧客のみ表示すべきページで使用する。</p>
+     * 
+     * @param authentication Spring Securityの認証情報
+     * @param customerId 顧客ID
+     * @return アクセス可能な場合 true
+     */
+    public boolean canAccessActiveCustomer(Authentication authentication, UUID customerId) {
+        try {
+            User currentUser = securityUtil.getUserFromAuthenticationOrThrow(authentication);
+            return canAccessActiveCustomer(currentUser, customerId);
+        } catch (Exception e) {
+            log.error("AuthorizationFacade.canAccessActiveCustomer (SpEL): Failed to extract user or check access - authentication={}, customerId={}", 
+                    authentication != null ? authentication.getName() : "null", customerId, e);
+            return false;
+        }
     }
     
     /**
@@ -243,17 +316,18 @@ public class AuthorizationFacade {
     /**
      * 顧客検索の認可チェック
      * 
-     * <p>storeIdがnullの場合はADMINのみ許可、storeIdが指定されている場合は店舗へのアクセス権を検証する。</p>
+     * <p>storeIdがnullの場合はADMINとMANAGERのみ許可、storeIdが指定されている場合は店舗へのアクセス権を検証する。</p>
      * 
      * @param currentUser 現在のユーザー
      * @param storeId 店舗ID（nullの場合は全店舗検索）
      * @throws AccessDeniedException 認可不可の場合
      */
     public void checkCanSearchCustomers(User currentUser, UUID storeId) {
-        // storeIdがnullの場合はADMINのみ許可
+        // storeIdがnullの場合はADMINとMANAGERのみ許可
         if (storeId == null) {
-            if (currentUser.getRole() != com.example.fitnessgym_mg.entity.enums.UserRole.ADMIN) {
-                throw new com.example.fitnessgym_mg.exception.AccessDeniedException("全店舗の顧客を取得できるのはADMINのみです");
+            if (currentUser.getRole() != com.example.fitnessgym_mg.entity.enums.UserRole.ADMIN && 
+                currentUser.getRole() != com.example.fitnessgym_mg.entity.enums.UserRole.MANAGER) {
+                throw new com.example.fitnessgym_mg.exception.AccessDeniedException("全店舗の顧客を取得できるのはADMINとMANAGERのみです");
             }
         } else {
             // storeIdが指定されている場合、その店舗へのアクセス権を検証

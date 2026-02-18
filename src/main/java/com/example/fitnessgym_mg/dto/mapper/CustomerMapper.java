@@ -78,6 +78,9 @@ public final class CustomerMapper {
         request.setPhone(response.getPhone());
         request.setAddress(response.getAddress());
         request.setActive(response.isActive());
+        request.setMedical(response.getMedical());
+        request.setTaboo(response.getTaboo());
+        request.setMemo(response.getMemo());
         
         // ビジネスロジックを排除: 受け取った値をそのまま設定
         // 優先順位の決定は呼び出し側で行うこと

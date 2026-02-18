@@ -33,4 +33,111 @@ public interface CustomerRepositoryCustom {
 	 * @return 検索結果のページ
 	 */
 	Page<Customer> findAllNotDeleted(Specification<Customer> spec, Pageable pageable);
+
+	/**
+	 * 論理削除されていない顧客を検索（storesもJOIN FETCH、ページネーション対応）
+	 * 
+	 * <p>指定されたSpecificationに自動的に`notDeleted()`条件を適用し、
+	 * storesもJOIN FETCHで一括取得します。N+1問題を回避するために使用します。</p>
+	 * 
+	 * <p>パフォーマンスに関する注意事項:</p>
+	 * <ul>
+	 *   <li>storesが多くなる場合、メモリ負荷が大きくなる可能性があります。</li>
+	 *   <li>顧客は通常1つの店舗にのみ紐づくため、メモリ負荷は軽微です。</li>
+	 * </ul>
+	 * 
+	 * @param spec 検索条件（論理削除条件は自動的に追加される）
+	 * @param pageable ページネーション情報
+	 * @return 検索結果のページ（storesもロード済み）
+	 */
+	Page<Customer> findAllNotDeletedWithStores(Specification<Customer> spec, Pageable pageable);
+
+	/**
+	 * 論理削除されていない全顧客を取得（オプション選択用）
+	 * 
+	 * <p>オプション選択用の全件取得メソッドです。
+	 * 論理削除条件が自動的に適用されます。</p>
+	 * 
+	 * @return 論理削除されていない全顧客のリスト
+	 */
+	java.util.List<Customer> findAllNotDeleted();
+
+	/**
+	 * 全顧客のIDと名前を取得（オプション選択用、@SQLRestrictionを回避）
+	 * 
+	 * <p>ネイティブSQLクエリを使用して@SQLRestrictionを完全に回避します。
+	 * オプション選択用なので、idとnameのみを取得します。</p>
+	 * 
+	 * @param limit 取得件数の上限（最大1000件）
+	 * @return 顧客のIDと名前のリスト（[id, name]の配列）
+	 */
+	java.util.List<Object[]> findAllIdAndNameForOptions(int limit);
+
+	/**
+	 * 顧客IDで顧客を取得し、storesもJOIN FETCHで一括取得（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * <p>データベースに`deleted_at`カラムが存在しない場合でも、エラーが発生しません。</p>
+	 * <p>重要: このメソッドは論理削除されていない顧客のみを取得します（deleted_at IS NULL条件を含む）。</p>
+	 * 
+	 * @param customerId 顧客ID
+	 * @return 顧客エンティティ（存在しない場合はempty）
+	 */
+	java.util.Optional<Customer> findByIdWithStoresNative(java.util.UUID customerId);
+
+	/**
+	 * 顧客IDで顧客を取得し、storesもJOIN FETCHで一括取得（論理削除された顧客も含む、@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * <p>データベースに`deleted_at`カラムが存在しない場合でも、エラーが発生しません。</p>
+	 * <p>重要: このメソッドは論理削除された顧客も含めて取得します（deleted_at条件を含まない）。</p>
+	 * <p>レッスン認可チェックなど、論理削除された顧客の情報も必要な場合に使用します。</p>
+	 * 
+	 * @param customerId 顧客ID
+	 * @return 顧客エンティティ（存在しない場合はempty）
+	 */
+	java.util.Optional<Customer> findByIdWithStoresNativeIncludingDeleted(java.util.UUID customerId);
+
+	/**
+	 * マネージャーと顧客が同じ店舗に所属しているか確認（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * 
+	 * @param managerId マネージャーID
+	 * @param customerId 顧客ID
+	 * @return 同じ店舗に所属している場合 true
+	 */
+	boolean existsManagerCustomerInSameStoreNative(java.util.UUID managerId, java.util.UUID customerId);
+
+	/**
+	 * トレーナーと顧客が同じ店舗に所属しているか確認（ネイティブSQLクエリ）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * 
+	 * @param trainerId トレーナーID
+	 * @param customerId 顧客ID
+	 * @return 同じ店舗に所属している場合 true
+	 */
+	boolean existsTrainerCustomerInSameStoreNative(java.util.UUID trainerId, java.util.UUID customerId);
+
+	/**
+	 * メールアドレスの存在確認（@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * 
+	 * @param email メールアドレス
+	 * @return メールアドレスが存在する場合 true
+	 */
+	boolean existsByEmailNative(String email);
+
+	/**
+	 * メールアドレスの存在確認（指定ID以外、@SQLRestrictionを回避するため、ネイティブSQLクエリを使用）
+	 * 
+	 * <p>ネイティブSQLクエリを使用することで、Hibernateの`@SQLRestriction`の影響を完全に回避できます。</p>
+	 * 
+	 * @param email メールアドレス
+	 * @param id 除外する顧客ID
+	 * @return メールアドレスが存在する場合 true
+	 */
+	boolean existsByEmailAndIdNotNative(String email, java.util.UUID id);
 }

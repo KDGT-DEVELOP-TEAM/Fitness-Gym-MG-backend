@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,6 +23,7 @@ import com.example.fitnessgym_mg.dto.response.PostureImageUploadResponse;
 import com.example.fitnessgym_mg.dto.response.SignedUrlResponse;
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.PostureImagePosition;
+import com.example.fitnessgym_mg.exception.InvalidRequestException;
 import com.example.fitnessgym_mg.service.PostureImageService;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
@@ -53,23 +55,35 @@ public class PostureImageApiController {
      * 
      * <p>Controllerの責務: HTTPリクエスト/レスポンスの制御のみ。
      * 認可チェックとファイルバリデーションはService層で実施される。</p>
+     * 
+     * <p>positionパラメータ: フロントエンドから小文字コード（front/right/back/left）を受け取り、
+     * PostureImagePosition.fromCode()でEnumに変換します。不正な値の場合は400エラーを返します。</p>
      */
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<PostureImageUploadResponse> uploadImage(
         @RequestParam MultipartFile file,
         @RequestParam UUID postureGroupId,
-        @RequestParam PostureImagePosition position,
+        @RequestParam String position,
         @RequestParam(defaultValue = "false") boolean consentPublication,
         @RequestParam(required = false) OffsetDateTime takenAt
     ) {
         log.debug("Upload image request: groupId={}, position={}", postureGroupId, position);
+        
+        // positionをStringからEnumに変換（不正値は400エラー）
+        PostureImagePosition positionEnum;
+        try {
+            positionEnum = PostureImagePosition.fromCode(position);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidRequestException("Invalid position value: " + position + ". Must be one of: front, right, back, left");
+        }
         
         // 現在のユーザーを取得
         User currentUser = securityUtil.getCurrentUserOrThrow();
         
         PostureImageUploadRequest request = new PostureImageUploadRequest();
         request.setPostureGroupId(postureGroupId);
-        request.setPosition(position);
+        request.setPosition(positionEnum);
         request.setConsentPublication(consentPublication);
         request.setTakenAt(takenAt);
         
@@ -88,6 +102,7 @@ public class PostureImageApiController {
      * <p>Controllerの責務: HTTPリクエスト/レスポンスの制御のみ。
      * 認可チェックはService層で実施される。</p>
      */
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
     @GetMapping("/{imageId}/signed-url")
     public ResponseEntity<SignedUrlResponse> getSignedUrl(
         @PathVariable UUID imageId,
@@ -116,6 +131,7 @@ public class PostureImageApiController {
      * <p>Controllerの責務: HTTPリクエスト/レスポンスの制御のみ。
      * 認可チェックはService層で実施される。</p>
      */
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
     @PostMapping("/signed-urls")
     public ResponseEntity<BatchSignedUrlResponse> getBatchSignedUrls(
         @RequestBody @Valid BatchSignedUrlRequest request
@@ -142,6 +158,7 @@ public class PostureImageApiController {
      * <p>Controllerの責務: HTTPリクエスト/レスポンスの制御のみ。
      * 認可チェックはService層で実施される。</p>
      */
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
     @DeleteMapping("/{imageId}")
     public ResponseEntity<Void> deleteImage(@PathVariable UUID imageId) {
         log.debug("Delete image request: imageId={}", imageId);

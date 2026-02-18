@@ -15,7 +15,7 @@ public class CustomerSpecifications {
 	 * 
 	 * <p>すべての取得系メソッドで必ず合成すること。</p>
 	 * 
-	 * @return 論理削除されていない顧客のSpecification
+	 * @return 論理削除されていない顧客のSpecification（deleted_at IS NULL）
 	 */
 	public static Specification<Customer> notDeleted() {
 		return (root, query, cb) -> cb.isNull(root.get("deletedAt"));

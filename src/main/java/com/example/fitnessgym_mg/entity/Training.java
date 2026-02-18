@@ -13,6 +13,8 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -28,6 +30,7 @@ import lombok.ToString;
 @Entity
 @Table(name = "trainings",
        uniqueConstraints = @UniqueConstraint(columnNames = { "lesson_id", "order_no" }))
+@DynamicUpdate
 @Data
 @Builder
 @NoArgsConstructor

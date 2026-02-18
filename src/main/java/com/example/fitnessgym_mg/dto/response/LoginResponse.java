@@ -1,12 +1,15 @@
 package com.example.fitnessgym_mg.dto.response;
 
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 
+import com.example.fitnessgym_mg.entity.Store;
 import com.example.fitnessgym_mg.entity.enums.UserRole;
 
 /**
@@ -18,6 +21,7 @@ import com.example.fitnessgym_mg.entity.enums.UserRole;
  * <ul>
  *   <li>ユーザーID、メールアドレス、ユーザー名: 初期表示用</li>
  *   <li>ユーザーロール: 認可判定用</li>
+ *   <li>店舗IDリスト: 店舗選択用（MANAGER/TRAINERの場合）</li>
  *   <li>JWTトークン: 認証情報</li>
  * </ul>
  * <p>このDTOは認証結果とユーザー基本情報を返します。</p>
@@ -54,6 +58,15 @@ public class LoginResponse {
      * <p>JSONシリアライズ時は文字列として出力されます。</p>
      */
     private UserRole role;
+    
+    /**
+     * 店舗IDリスト
+     * 
+     * <p>ユーザーが所属する店舗のIDリストです。</p>
+     * <p>MANAGER/TRAINERの場合は所属店舗のIDが含まれます。</p>
+     * <p>ADMINの場合は空のセットです。</p>
+     */
+    private Set<UUID> storeIds;
     
     /**
      * JWTトークン

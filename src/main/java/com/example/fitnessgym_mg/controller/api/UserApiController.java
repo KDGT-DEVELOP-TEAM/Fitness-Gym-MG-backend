@@ -1,6 +1,7 @@
 package com.example.fitnessgym_mg.controller.api;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
@@ -26,10 +27,11 @@ import com.example.fitnessgym_mg.dto.response.UserResponse;
 import com.example.fitnessgym_mg.entity.User;
 import com.example.fitnessgym_mg.entity.enums.UserRole;
 import com.example.fitnessgym_mg.entity.enums.UserSortType;
-import com.example.fitnessgym_mg.exception.InvalidRequestException;
 import com.example.fitnessgym_mg.service.AccountAuthorizationService;
 import com.example.fitnessgym_mg.service.AccountService;
 import com.example.fitnessgym_mg.util.SecurityUtil;
+import com.example.fitnessgym_mg.validation.ValidPage;
+import com.example.fitnessgym_mg.validation.ValidPageSize;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +51,26 @@ public class UserApiController {
 	private final AccountAuthorizationService accountAuthorizationService;
 
 	/**
+	 * GET /api/users
+	 * ユーザー一覧取得（オプション選択用）
+	 * 認証済みユーザー全員がアクセス可能
+	 * 最大1000件まで取得可能（パフォーマンス対策）
+	 * 
+	 * @param limit 取得件数の上限（デフォルト: 1000、最大: 1000）
+	 */
+	@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'TRAINER')")
+	@GetMapping("/users")
+	public ResponseEntity<List<UserResponse>> getUsersForOptions(
+			@RequestParam(defaultValue = "1000") 
+			@jakarta.validation.constraints.Min(value = 1, message = "Limit must be at least 1") 
+			@jakarta.validation.constraints.Max(value = 1000, message = "Limit must not exceed 1000") int limit) {
+		log.debug("ユーザー一覧取得（オプション選択用）リクエスト: limit={}", limit);
+		List<UserResponse> users = accountService.getAllUsersForOptions(limit);
+		log.info("ユーザー一覧取得（オプション選択用）成功: count={}", users.size());
+		return ResponseEntity.ok(users);
+	}
+
+	/**
 	 * GET /api/admin/users
 	 * 全ユーザーアカウントの一覧取得（検索/フィルタリング可）
 	 */
@@ -57,12 +79,13 @@ public class UserApiController {
 	public ResponseEntity<Page<UserResponse>> getUsers(
 			@RequestParam(required = false) @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") String name,
 			@RequestParam(required = false) UserRole role,
-			@RequestParam(defaultValue = "created") UserSortType sort,
-			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
-			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
+			@RequestParam(defaultValue = "created") String sort,
+			@RequestParam(defaultValue = "0") @ValidPage int page,
+			@RequestParam(defaultValue = "10") @ValidPageSize int size) {
 
 		Pageable pageable = PageRequest.of(page, size);
-		Page<UserResponse> userPage = accountService.searchUsers(name, role, sort, null, pageable);
+		UserSortType sortEnum = UserSortType.fromCode(sort);
+		Page<UserResponse> userPage = accountService.searchUsers(name, role, sortEnum, null, pageable);
 		log.debug("ユーザー一覧取得成功: page={}, size={}, total={}", page, size, userPage.getTotalElements());
 		return ResponseEntity.ok(userPage);
 	}
@@ -90,11 +113,7 @@ public class UserApiController {
 	@PreAuthorize("hasRole('ADMIN') and @accountAuthorizationService.canCreateUser(authentication, null)")
 	@PostMapping("/admin/users")
 	public ResponseEntity<Void> createUser(@Valid @RequestBody UserRequest request) {
-		// ビジネスルールチェック（Service層で実施）
-		User currentUser = securityUtil.getCurrentUserOrThrow();
-		accountAuthorizationService.validateRoleChange(currentUser, null, request.getRole());
-		accountAuthorizationService.checkManagerPermission(currentUser, request.getRole());
-
+		// ビジネスロジックチェックはService層に委譲
 		accountService.createByAdmin(request,
 				request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
 		log.info("ユーザー作成成功: role={}", request.getRole());
@@ -110,13 +129,7 @@ public class UserApiController {
 	public ResponseEntity<Void> updateUser(
 			@PathVariable("user_id") UUID userId,
 			@Valid @RequestBody UserRequest request) {
-		// ビジネスルールチェック（Service層で実施）
-		User currentUser = securityUtil.getCurrentUserOrThrow();
-		// targetUserはService層で取得
-		User targetUser = accountService.findUserEntityById(userId, null);
-		accountAuthorizationService.validateRoleChange(currentUser, userId, request.getRole());
-		accountAuthorizationService.checkManagerPermission(currentUser, targetUser.getRole(), request.getRole());
-
+		// ビジネスロジックチェックはService層に委譲
 		accountService.updateByAdmin(userId, request,
 				request.getStoreIds() != null ? request.getStoreIds() : Collections.emptySet());
 		log.info("ユーザー更新成功: userId={}, role={}", userId, request.getRole());
@@ -149,17 +162,15 @@ public class UserApiController {
 			@PathVariable("store_id") UUID storeId,
 			@RequestParam(required = false) @jakarta.validation.constraints.Size(max = 100, message = "Keyword must be less than 100 characters") String name,
 			@RequestParam(required = false) UserRole role,
-			@RequestParam(defaultValue = "created") UserSortType sort,
-			@RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(value = 0, message = "Page must be 0 or greater") int page,
-			@RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "Size must be at least 1") @jakarta.validation.constraints.Max(value = 100, message = "Size must not exceed 100") int size) {
+			@RequestParam(defaultValue = "created") String sort,
+			@RequestParam(defaultValue = "0") @ValidPage int page,
+			@RequestParam(defaultValue = "10") @ValidPageSize int size) {
 
-		// Manager APIではTRAINERロールのみ検索可能
-		if (role != null && role != UserRole.TRAINER) {
-			throw new InvalidRequestException("Manager APIではTRAINERロールのみ検索可能です");
-		}
-
+		log.debug("getManagerUsers called: storeId={}, name={}, role={}, sort={}, page={}, size={}", storeId, name, role, sort, page, size);
 		Pageable pageable = PageRequest.of(page, size);
-		Page<UserResponse> userPage = accountService.searchUsers(name, role, sort, storeId, pageable);
+		UserSortType sortEnum = UserSortType.fromCode(sort);
+		Page<UserResponse> userPage = accountService.searchUsers(name, role, sortEnum, storeId, pageable);
+		log.debug("getManagerUsers result: totalElements={}, totalPages={}, numberOfElements={}", userPage.getTotalElements(), userPage.getTotalPages(), userPage.getNumberOfElements());
 		return ResponseEntity.ok(userPage);
 	}
 
@@ -190,11 +201,7 @@ public class UserApiController {
 	public ResponseEntity<Void> createManagerUser(
 			@PathVariable("store_id") UUID storeId,
 			@Valid @RequestBody UserRequest request) {
-		// ビジネスルールチェック（Service層で実施）
-		User currentUser = securityUtil.getCurrentUserOrThrow();
-		accountAuthorizationService.validateRoleChange(currentUser, null, request.getRole());
-		accountAuthorizationService.checkManagerPermission(currentUser, request.getRole());
-
+		// ビジネスロジックチェックはService層に委譲
 		// Manager APIではリクエストボディのstoreIdsを完全に無視し、pathパラメータのstoreIdのみを使用
 		accountService.createByManager(request, storeId);
 		return ResponseEntity.status(HttpStatus.CREATED).build();
@@ -210,13 +217,7 @@ public class UserApiController {
 			@PathVariable("store_id") UUID storeId,
 			@PathVariable("user_id") UUID userId,
 			@Valid @RequestBody UserRequest request) {
-		// ビジネスルールチェック（Service層で実施）
-		User currentUser = securityUtil.getCurrentUserOrThrow();
-		// targetUserはService層で取得
-		User targetUser = accountService.findUserEntityById(userId, storeId);
-		accountAuthorizationService.validateRoleChange(currentUser, userId, request.getRole());
-		accountAuthorizationService.checkManagerPermission(currentUser, targetUser.getRole(), request.getRole());
-
+		// ビジネスロジックチェックはService層に委譲
 		// Manager APIではリクエストボディのstoreIdsを完全に無視し、pathパラメータのstoreIdのみを使用
 		accountService.updateByManager(userId, request, storeId);
 		return ResponseEntity.ok().build();

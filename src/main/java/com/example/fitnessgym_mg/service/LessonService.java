@@ -1,9 +1,13 @@
 package com.example.fitnessgym_mg.service;
 
+import java.math.BigInteger;
+import java.sql.Timestamp;
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
@@ -44,6 +48,7 @@ import com.example.fitnessgym_mg.util.PageableValidator;
 import com.example.fitnessgym_mg.util.SecurityUtil;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * レッスン関連のビジネスロジックを提供するService
@@ -57,6 +62,7 @@ import lombok.RequiredArgsConstructor;
  * </ul>
  * Service層は最終防衛ラインとして機能し、Controller層の前提に依存しない設計を維持する。</p>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class LessonService {
@@ -69,6 +75,8 @@ public class LessonService {
 	private final UserRepository userRepository;
 	private final SecurityUtil securityUtil;
 	private final AuthorizationFacade authorizationFacade;
+	private final StorageService storageService;
+	private final AuditLogService auditLogService;
 
 	/**
 	 * レッスン一覧の検索と絞り込み
@@ -92,7 +100,7 @@ public class LessonService {
 		PageableValidator.validateOffset(pageable);
 
 		Page<Lesson> lessonPage;
-		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
 
 		// ソートは Repository メソッド名で定義されているため、Pageableにはサイズとページ番号のみを渡す
 		// findByStoreIdAndEndDateBefore... (ソート済み) を使用するため、Pageableはソート情報なしでOK
@@ -106,8 +114,61 @@ public class LessonService {
 			lessonPage = lessonRepository.findByEndDateBefore(now, pageable);
 		}
 
-		// 2. マッピング
-		return lessonPage.map(LessonResponse::fromEntity);
+		// 2. Customer情報をバッチで取得（削除状態も含む）
+		java.util.List<Lesson> lessons = lessonPage.getContent();
+		java.util.Map<UUID, java.util.Map<String, Object>> customerMap = new java.util.HashMap<>();
+		
+		if (!lessons.isEmpty()) {
+			// レッスンIDのリストを作成
+			java.util.List<UUID> lessonIds = lessons.stream()
+					.map(Lesson::getId)
+					.collect(Collectors.toList());
+			
+			try {
+				// バッチでCustomer情報を取得（削除状態も含む）
+				java.util.List<Object[]> customerDataList = lessonRepository.findCustomerIdNameAndDeletedByLessonIds(lessonIds);
+				
+				log.debug("Customer情報取得: lessonIds={}, customerDataList.size()={}", lessonIds.size(), customerDataList.size());
+				
+				// レッスンIDをキーとしてCustomer情報をマップに格納
+				for (Object[] row : customerDataList) {
+					try {
+						UUID lessonId = convertToUUID(row[0]);
+						UUID customerId = convertToUUID(row[1]);
+						String customerName = row[2] != null ? row[2].toString() : null;
+						Boolean customerDeleted = row[3] != null ? (Boolean) row[3] : false;
+						
+						if (lessonId != null && customerId != null && customerName != null) {
+							java.util.Map<String, Object> customerInfo = new java.util.HashMap<>();
+							customerInfo.put("id", customerId);
+							customerInfo.put("name", customerName);
+							customerInfo.put("deleted", customerDeleted);
+							customerMap.put(lessonId, customerInfo);
+						}
+					} catch (Exception e) {
+						log.warn("Customer情報のマッピングに失敗: row={}, error={}", java.util.Arrays.toString(row), e.getMessage());
+					}
+				}
+			} catch (Exception e) {
+				log.error("Customer情報の取得に失敗: lessonIds={}, error={}", lessonIds, e.getMessage(), e);
+				// エラーが発生しても処理を続行（Customer情報なしでレスポンスを返す）
+			}
+		}
+
+		// 3. マッピング（Customer情報と削除状態を設定）
+		return lessonPage.map(lesson -> {
+			LessonResponse response = LessonResponse.fromEntity(lesson);
+			
+			// Customerの情報をマップから取得して設定
+			java.util.Map<String, Object> customerInfo = customerMap.get(lesson.getId());
+			if (customerInfo != null) {
+				response.setCustomerId((UUID) customerInfo.get("id"));
+				response.setCustomerName((String) customerInfo.get("name"));
+				response.setCustomerDeleted((Boolean) customerInfo.get("deleted"));
+			}
+			
+			return response;
+		});
 	}
 
 	/**
@@ -127,15 +188,20 @@ public class LessonService {
 			throw new AccessDeniedException("この操作を実行する権限がありません");
 		}
 
-		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
 		UUID storeUuid = storeId;
 
 		// 1. 期間タイプの決定とJPQL呼び出し
 		String intervalType = (period == ChartPeriod.WEEK) ? "week" : "month";
 
-		// DBから集計結果を取得（DTO Projectionを使用）
-		List<PeriodCount> rawChartData = lessonRepository.countLessonsGroupedByPeriod(
+		// DBから集計結果を取得（Object[]で受け取り、手動マッピング）
+		List<Object[]> rawResults = lessonRepository.countLessonsGroupedByPeriodRaw(
 				intervalType, now, storeUuid);
+		
+		// Object[]からPeriodCountに変換
+		List<PeriodCount> rawChartData = rawResults.stream()
+				.map(this::mapToPeriodCount)
+				.collect(Collectors.toList());
 
 		return buildChartData(rawChartData, period);
 	}
@@ -170,6 +236,14 @@ public class LessonService {
 			trainingService.createTrainings(savedLesson.getId(), request.getTrainings());
 		}
 
+		// 監査ログ記録
+		auditLogService.recordAuditLog(
+				com.example.fitnessgym_mg.entity.enums.ActionType.CREATE,
+				com.example.fitnessgym_mg.entity.enums.TargetTableType.LESSONS,
+				savedLesson.getId(),
+				currentUser
+		);
+
 		return savedLesson;
 	}
 
@@ -192,21 +266,44 @@ public class LessonService {
 
 		// 認可チェック: Service層での最終防衛ライン（Controller層での早期リターンとは別）
 		User currentUser = securityUtil.getCurrentUserOrThrow();
-		UUID customerId = lesson.getCustomer().getId();
-		authorizationFacade.checkCanAccessCustomerOrThrow(currentUser, customerId);
+		authorizationFacade.checkCanAccessLessonOrThrow(currentUser, lessonId);
 
-		// トレーニング取得
+		// トレーニングと姿勢画像の取得（順次実行、N+1問題を回避するためJOIN FETCHを使用）
 		List<TrainingResponse> trainings = trainingService.getTrainingsByLessonId(lessonId);
+		List<PostureGroup> postureGroups = postureGroupRepository.findByLessonIdWithImages(lessonId);
 
-		// 姿勢画像取得
-		List<PostureGroup> postureGroups = postureGroupRepository.findByLessonIdOrderByCapturedAtDesc(lessonId);
+		// 姿勢画像をレスポンスに変換し、署名付きURLも生成（並列化）
+		int expiresIn = com.example.fitnessgym_mg.config.ApplicationConstants.DEFAULT_SIGNED_URL_EXPIRES_IN;
 		List<PostureImageResponse> postureImages = postureGroups.stream()
 				.flatMap(pg -> pg.getImages().stream())
-				.map(PostureImageResponse::fromEntity)
+				.parallel() // 並列ストリームに変換して署名付きURL生成を並列化
+				.map(entity -> {
+					PostureImageResponse response = PostureImageResponse.fromEntity(entity);
+					// 署名付きURLを生成して設定（並列実行）
+					try {
+						String signedUrl = storageService.generateSignedUrl(entity.getStorageKey(), expiresIn);
+						response.setSignedUrl(signedUrl);
+					} catch (Exception e) {
+						log.warn("Failed to generate signed URL for image: {}", entity.getId(), e);
+						// 署名付きURLの生成に失敗しても続行（URLなしで表示）
+					}
+					return response;
+				})
 				.collect(Collectors.toList());
 
 		// レスポンス作成（fromEntityを使用して基本データを設定）
 		LessonResponse response = LessonResponse.fromEntity(lesson);
+
+		// 顧客の削除状態を取得して設定
+		UUID customerId = lesson.getCustomer().getId();
+		if (customerRepository instanceof com.example.fitnessgym_mg.repository.CustomerRepositoryCustom) {
+			java.util.Optional<Customer> customerOpt = ((com.example.fitnessgym_mg.repository.CustomerRepositoryCustom) customerRepository)
+					.findByIdWithStoresNativeIncludingDeleted(customerId);
+			if (customerOpt.isPresent()) {
+				Customer customer = customerOpt.get();
+				response.setCustomerDeleted(customer.getDeletedAt() != null);
+			}
+		}
 
 		// 追加データを設定
 		response.setCondition(lesson.getCondition());
@@ -233,13 +330,51 @@ public class LessonService {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		authorizationFacade.checkCanAccessCustomerOrThrow(currentUser, customerId);
 
-		return lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId).stream()
-				.map(LessonResponse::fromEntity)
+		// Customer情報を取得（BMI計算に必要）
+		Customer customer = customerRepository.findById(customerId)
+				.orElse(null);
+		java.math.BigDecimal customerHeight = customer != null ? customer.getHeight() : null;
+
+		// レッスン一覧を取得
+		List<Lesson> lessons = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId);
+
+		// LessonResponseに変換し、weightとbmiを設定
+		return lessons.stream()
+				.map(lesson -> {
+					LessonResponse response = LessonResponse.fromEntity(lesson);
+					
+					// Customer情報を設定
+					if (customer != null) {
+						response.setCustomerId(customer.getId());
+						response.setCustomerName(customer.getName());
+					}
+					
+					// weightとbmiを設定（BMI計算に必要）
+					response.setWeight(lesson.getWeight());
+					if (lesson.getWeight() != null && customerHeight != null) {
+						java.math.BigDecimal bmi = BmiCalculator.calculate(lesson.getWeight(), customerHeight);
+						response.setBmi(bmi);
+					}
+					
+					// 次回レッスン情報を設定
+					if (lesson.getNextDate() != null) {
+						response.setNextDate(lesson.getNextDate());
+					}
+					if (lesson.getNextStore() != null) {
+						response.setNextStoreName(lesson.getNextStore().getName());
+					}
+					if (lesson.getNextUser() != null) {
+						response.setNextTrainerName(lesson.getNextUser().getName());
+					}
+					
+					return response;
+				})
 				.collect(Collectors.toList());
 	}
 
 	/**
 	 * 顧客IDに紐づくレッスン履歴をページネーション対応で取得
+	 * CustomerをJOIN FETCHしないことで@SQLRestrictionを回避し、Customer情報はネイティブSQLクエリで別途取得
 	 */
 	@Transactional(readOnly = true)
 	public Page<LessonResponse> getLessonsByCustomerId(UUID customerId, Pageable pageable) {
@@ -250,8 +385,68 @@ public class LessonService {
 		// offset検証: DoS対策として巨大なOFFSETクエリを防ぐ
 		PageableValidator.validateOffset(pageable);
 
+		// CustomerをJOIN FETCHしないことで@SQLRestrictionを回避
 		Page<Lesson> lessonPage = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId, pageable);
-		return lessonPage.map(LessonResponse::fromEntity);
+
+		// Customer情報を1回のクエリで取得（すべてのレッスンが同じcustomerIdを持つため）
+		// 論理削除された顧客も取得できるようにfindByIdWithStoresNativeIncludingDeletedを使用
+		final Customer customer;
+		final Boolean customerDeleted;
+		if (customerRepository instanceof com.example.fitnessgym_mg.repository.CustomerRepositoryCustom) {
+			java.util.Optional<Customer> customerOpt = ((com.example.fitnessgym_mg.repository.CustomerRepositoryCustom) customerRepository)
+					.findByIdWithStoresNativeIncludingDeleted(customerId);
+			if (customerOpt.isPresent()) {
+				Customer foundCustomer = customerOpt.get();
+				customer = foundCustomer;
+				customerDeleted = foundCustomer.getDeletedAt() != null;
+			} else {
+				customer = null;
+				customerDeleted = null;
+			}
+		} else {
+			customer = null;
+			customerDeleted = null;
+		}
+		
+		final UUID customerIdForResponse = customer != null ? customer.getId() : customerId;
+		final String customerNameForResponse = customer != null ? customer.getName() : null;
+		final java.math.BigDecimal customerHeight = customer != null ? customer.getHeight() : null;
+
+		// LessonResponseに変換し、Customer情報を設定
+		return lessonPage.map(lesson -> {
+			LessonResponse response = LessonResponse.fromEntity(lesson);
+				
+			// Customer情報を設定（全レッスンが同じcustomerIdを持つため）
+			if (customerIdForResponse != null) {
+				response.setCustomerId(customerIdForResponse);
+			}
+			if (customerNameForResponse != null) {
+				response.setCustomerName(customerNameForResponse);
+			}
+			if (customerDeleted != null) {
+				response.setCustomerDeleted(customerDeleted);
+			}
+			
+			// weightとbmiを設定（BMI計算に必要）
+			response.setWeight(lesson.getWeight());
+			if (lesson.getWeight() != null && customerHeight != null) {
+				java.math.BigDecimal bmi = BmiCalculator.calculate(lesson.getWeight(), customerHeight);
+				response.setBmi(bmi);
+			}
+			
+			// 次回レッスン情報を設定
+			if (lesson.getNextDate() != null) {
+				response.setNextDate(lesson.getNextDate());
+			}
+			if (lesson.getNextStore() != null) {
+				response.setNextStoreName(lesson.getNextStore().getName());
+			}
+			if (lesson.getNextUser() != null) {
+				response.setNextTrainerName(lesson.getNextUser().getName());
+			}
+			
+			return response;
+		});
 	}
 
 	/**
@@ -269,16 +464,118 @@ public class LessonService {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		authorizationFacade.checkCanAccessCustomerOrThrow(currentUser, customerId);
 
-		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
 
 		// 1. 期間タイプの決定
 		String intervalType = (period == ChartPeriod.WEEK) ? "week" : "month";
 
-		// DBから集計結果を取得（DTO Projectionを使用）
-		List<PeriodCount> rawChartData = lessonRepository.countLessonsGroupedByPeriodByCustomerId(
+		// DBから集計結果を取得（Object[]で受け取り、手動マッピング）
+		List<Object[]> rawResults = lessonRepository.countLessonsGroupedByPeriodByCustomerIdRaw(
 				intervalType, now, customerId);
+		
+		// Object[]からPeriodCountに変換
+		List<PeriodCount> rawChartData = rawResults.stream()
+				.map(this::mapToPeriodCount)
+				.collect(Collectors.toList());
 
 		return buildChartData(rawChartData, period);
+	}
+
+	/**
+	 * Object[]からPeriodCountへの手動マッピング
+	 * 
+	 * <p>PostgreSQLのネイティブクエリ結果を型安全にマッピングする。</p>
+	 * <p>結果配列: [periodStart (Timestamp/OffsetDateTime/LocalDateTime/Instant), count (BigInteger/Number)]</p>
+	 * <p>PostgreSQLのtimestamptzは、JDBCドライバのバージョンによって異なるJava型にマッピングされるため、
+	 * 複数の型に対応する必要がある。</p>
+	 * 
+	 * @param row クエリ結果のObject配列
+	 * @return PeriodCountレコード
+	 * @throws IllegalArgumentException 行がnull、配列長が不足、またはサポートされていない型の場合
+	 */
+	private PeriodCount mapToPeriodCount(Object[] row) {
+		if (row == null) {
+			log.error("Query result row is null");
+			throw new com.example.fitnessgym_mg.exception.SystemException("Invalid query result: row is null");
+		}
+		if (row.length < 2) {
+			log.error("Query result row has insufficient elements: length={}", row.length);
+			throw new com.example.fitnessgym_mg.exception.SystemException(
+				"Invalid query result: row must have at least 2 elements, but got " + row.length);
+		}
+		
+		// periodStartの変換: 複数の型に対応（よく使われる型を優先的にチェック）
+		OffsetDateTime periodStart;
+		if (row[0] == null) {
+			log.error("periodStart value is null in query result");
+			throw new com.example.fitnessgym_mg.exception.SystemException("Invalid query result: periodStart is null");
+		}
+		
+		try {
+			if (row[0] instanceof Timestamp) {
+				Timestamp timestamp = (Timestamp) row[0];
+				periodStart = OffsetDateTime.ofInstant(timestamp.toInstant(), ZoneOffset.UTC);
+				log.debug("Converted Timestamp to OffsetDateTime: {}", periodStart);
+			} else if (row[0] instanceof OffsetDateTime) {
+				periodStart = (OffsetDateTime) row[0];
+				log.debug("Using OffsetDateTime as-is: {}", periodStart);
+			} else if (row[0] instanceof Instant) {
+				Instant instant = (Instant) row[0];
+				periodStart = OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
+				log.debug("Converted Instant to OffsetDateTime: {}", periodStart);
+			} else if (row[0] instanceof java.time.LocalDateTime) {
+				periodStart = ((java.time.LocalDateTime) row[0]).atOffset(ZoneOffset.UTC);
+				log.debug("Converted LocalDateTime to OffsetDateTime: {}", periodStart);
+			} else {
+				String actualType = row[0].getClass().getName();
+				String actualValue = row[0].toString();
+				log.warn("Unsupported type for periodStart: type={}, value={}", actualType, actualValue);
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					String.format("Unsupported type for periodStart: %s (value: %s). Supported types: Timestamp, OffsetDateTime, Instant, LocalDateTime", 
+						actualType, actualValue));
+			}
+		} catch (com.example.fitnessgym_mg.exception.SystemException e) {
+			// 既に適切なメッセージが設定されているため、そのまま再スロー
+			throw e;
+		} catch (Exception e) {
+			log.error("Error converting periodStart to OffsetDateTime: type={}, value={}", 
+				row[0].getClass().getName(), row[0], e);
+			throw new com.example.fitnessgym_mg.exception.SystemException(
+				String.format("Failed to convert periodStart to OffsetDateTime: %s", e.getMessage()), e);
+		}
+		
+		// countの変換: BigInteger or Number -> Long
+		Long count;
+		try {
+			if (row[1] == null) {
+				log.warn("count value is null in query result, using 0 as default");
+				count = 0L;
+			} else if (row[1] instanceof BigInteger) {
+				count = ((BigInteger) row[1]).longValue();
+				log.debug("Converted BigInteger count to Long: {}", count);
+			} else if (row[1] instanceof Number) {
+				count = ((Number) row[1]).longValue();
+				log.debug("Converted Number count to Long: {}", count);
+			} else {
+				String actualType = row[1].getClass().getName();
+				String actualValue = row[1].toString();
+				log.warn("Unsupported type for count: type={}, value={}", actualType, actualValue);
+				throw new com.example.fitnessgym_mg.exception.SystemException(
+					String.format("Unsupported type for count: %s (value: %s). Supported types: BigInteger, Number", 
+						actualType, actualValue));
+			}
+		} catch (com.example.fitnessgym_mg.exception.SystemException e) {
+			// 既に適切なメッセージが設定されているため、そのまま再スロー
+			throw e;
+		} catch (Exception e) {
+			log.error("Error converting count to Long: type={}, value={}", 
+				row[1] != null ? row[1].getClass().getName() : "null", 
+				row[1], e);
+			throw new com.example.fitnessgym_mg.exception.SystemException(
+				String.format("Failed to convert count to Long: %s", e.getMessage()), e);
+		}
+		
+		return new PeriodCount(periodStart, count);
 	}
 
 	/**
@@ -354,7 +651,7 @@ public class LessonService {
 			throw new AccessDeniedException("自分のレッスンのみアクセス可能です");
 		}
 
-		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
 		LocalDateTime oneWeekLater = now.plusWeeks(1);
 
 		// 開始日時が現在から1週間以内のレッスンを取得（Repositoryで範囲検索）
@@ -363,6 +660,124 @@ public class LessonService {
 
 		return lessons.stream()
 				.map(LessonResponse::fromEntity)
+				.collect(Collectors.toList());
+	}
+
+	/**
+	 * トレーナーIDで1週間後～1ヶ月後までのレッスンを取得（ページネーション対応）
+	 * トレーナーホームページ用
+	 * 
+	 * <p>認可方針: Service層で自己参照（自分のIDのみ）を検証。</p>
+	 * 
+	 * @param trainerId トレーナーID
+	 * @param pageable ページネーション情報
+	 * @return 1週間後～1ヶ月後までのレッスン一覧（ページネーション）
+	 */
+	@Transactional(readOnly = true)
+	public org.springframework.data.domain.Page<LessonResponse> getUpcomingLessonsByTrainerId(UUID trainerId, org.springframework.data.domain.Pageable pageable) {
+		// 認可チェック: Service層での最終防衛ライン（自己参照の検証）
+		User currentUser = securityUtil.getCurrentUserOrThrow();
+		if (!currentUser.getId().equals(trainerId)) {
+			throw new AccessDeniedException("自分のレッスンのみアクセス可能です");
+		}
+
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
+		LocalDateTime oneWeekLater = now.plusWeeks(1);
+		LocalDateTime oneMonthLater = now.plusMonths(1);
+
+		// 1週間後～1ヶ月後のレッスンを取得（ページネーション対応）
+		org.springframework.data.domain.Page<Lesson> lessonPage = lessonRepository.findUpcomingLessonsByTrainerIdBetween(
+				trainerId, oneWeekLater, oneMonthLater, pageable);
+
+		return lessonPage.map(LessonResponse::fromEntity);
+	}
+
+	/**
+	 * 次回トレーナーIDで1週間後～1ヶ月後までの次回レッスン希望を取得（ページネーション対応）
+	 * トレーナーホームページ用
+	 * 
+	 * <p>認可方針: Service層で自己参照（自分のIDのみ）を検証。</p>
+	 * 
+	 * @param trainerId 次回トレーナーID（nextUser.id）
+	 * @param pageable ページネーション情報
+	 * @return 1週間後～1ヶ月後までの次回レッスン希望一覧（ページネーション）
+	 */
+	@Transactional(readOnly = true)
+	public org.springframework.data.domain.Page<LessonResponse> getNextLessonsByTrainerId(UUID trainerId, org.springframework.data.domain.Pageable pageable) {
+		// 認可チェック: Service層での最終防衛ライン（自己参照の検証）
+		User currentUser = securityUtil.getCurrentUserOrThrow();
+		if (!currentUser.getId().equals(trainerId)) {
+			throw new AccessDeniedException("自分のレッスンのみアクセス可能です");
+		}
+
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
+
+		// 次回レッスン希望を取得（ページネーション対応）
+		// レッスンを登録したトレーナーまたは次回担当トレーナーのどちらかに一致するレッスンを取得
+		// 次回レッスン希望を取得（ページネーション対応）
+		// CustomerもJOIN FETCHされているため、退会済み顧客のレッスンは自動的に除外される
+		org.springframework.data.domain.Page<Lesson> lessonPage = lessonRepository.findNextLessonsByTrainerIdOrNextTrainerId(
+				trainerId, now, pageable);
+
+		// LessonResponseに変換（Customer情報はJOIN FETCHで取得済み）
+		return lessonPage.map(lesson -> {
+			LessonResponse response = LessonResponse.fromEntity(lesson);
+			
+			// CustomerはJOIN FETCHで取得済み
+			if (lesson.getCustomer() != null) {
+				response.setCustomerId(lesson.getCustomer().getId());
+				response.setCustomerName(lesson.getCustomer().getName());
+			}
+			
+			// 次回レッスン情報を設定
+			if (lesson.getNextDate() != null) {
+				response.setNextDate(lesson.getNextDate());
+			}
+			if (lesson.getNextStore() != null) {
+				response.setNextStoreName(lesson.getNextStore().getName());
+			}
+			if (lesson.getNextUser() != null) {
+				response.setNextTrainerName(lesson.getNextUser().getName());
+			}
+			return response;
+		});
+	}
+
+	/**
+	 * トレーナー別の次回レッスン希望日程一覧取得（ページングなし）
+	 * 
+	 * <p>指定されたトレーナーの次回レッスン希望日程（nextDateが設定されているレッスン）を取得します。</p>
+	 * <p>nextDateが未来の日時のレッスンのみを返します。</p>
+	 * 
+	 * <p>認可方針: ADMIN、MANAGER、TRAINERがアクセス可能。</p>
+	 * 
+	 * @param trainerId トレーナーID
+	 * @return 次回レッスン希望日程一覧
+	 */
+	@Transactional(readOnly = true)
+	public List<LessonResponse> getNextLessonsByTrainerIdWithoutPaging(UUID trainerId) {
+		// 現在時刻を取得
+		LocalDateTime now = LocalDateTime.now();
+		
+		// 次回レッスン希望日程が設定されているレッスンを取得
+		List<Lesson> lessons = lessonRepository.findNextLessonsByTrainerId(trainerId, now);
+		
+		// LessonResponseに変換（nextDate, nextStoreName, nextTrainerNameも含める）
+		return lessons.stream()
+				.map(lesson -> {
+					LessonResponse response = LessonResponse.fromEntity(lesson);
+					// 次回レッスン情報を設定
+					if (lesson.getNextDate() != null) {
+						response.setNextDate(lesson.getNextDate());
+					}
+					if (lesson.getNextStore() != null) {
+						response.setNextStoreName(lesson.getNextStore().getName());
+					}
+					if (lesson.getNextUser() != null) {
+						response.setNextTrainerName(lesson.getNextUser().getName());
+					}
+					return response;
+				})
 				.collect(Collectors.toList());
 	}
 
@@ -377,14 +792,19 @@ public class LessonService {
 		User currentUser = securityUtil.getCurrentUserOrThrow();
 		authorizationFacade.checkCanAccessCustomerOrThrow(currentUser, customerId);
 
+		// Customer情報を1回のクエリで取得（N+1問題を回避）
+		Customer customer = customerRepository.findById(customerId)
+				.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException("顧客が見つかりません"));
+		java.math.BigDecimal customerHeight = customer.getHeight();
+
+		// レッスン一覧を取得（CustomerはJOIN FETCHしない）
 		List<Lesson> lessons = lessonRepository.findByCustomerIdOrderByStartDateDesc(customerId);
 
+		// Customer情報を使用してBMIを計算（N+1問題を回避）
 		return lessons.stream()
-				.filter(lesson -> lesson.getWeight() != null && lesson.getStartDate() != null
-						&& lesson.getCustomer() != null)
+				.filter(lesson -> lesson.getWeight() != null && lesson.getStartDate() != null)
 				.map(lesson -> {
-					java.math.BigDecimal bmi = BmiCalculator.calculate(lesson.getWeight(),
-							lesson.getCustomer().getHeight());
+					java.math.BigDecimal bmi = BmiCalculator.calculate(lesson.getWeight(), customerHeight);
 					return com.example.fitnessgym_mg.dto.response.VitalsHistoryResponse.VitalsData.builder()
 							.date(DateTimeUtil.toUtcOffsetAssumingUtc(lesson.getStartDate()))
 							.weight(lesson.getWeight())
@@ -445,6 +865,14 @@ public class LessonService {
 				? userRepository.findById(request.getNextTrainerId()).orElse(null)
 				: null;
 
+		// バリデーション: 日時範囲と未来日時のチェック
+		// セキュリティ: 更新時も同じバリデーションを適用（データ整合性の保証）
+		validateLessonDateRange(request.getStartDate(), request.getEndDate());
+		validateLessonDateNotFuture(request.getStartDate(), request.getEndDate());
+
+		// 文字列フィールドのバリデーション
+		validateLessonStringFields(request.getCondition(), request.getMeal(), request.getMemo());
+
 		// レッスン情報を更新（storeIdとtrainerIdは既存の値を保持）
 		lesson.setCondition(request.getCondition());
 		lesson.setWeight(request.getWeight());
@@ -458,7 +886,17 @@ public class LessonService {
 		// 注意: lesson.setCustomer(), lesson.setStore(), lesson.setTrainer()は呼び出さない
 
 		// レッスン保存
-		return lessonRepository.save(lesson);
+		Lesson savedLesson = lessonRepository.save(lesson);
+
+		// 監査ログ記録
+		auditLogService.recordAuditLog(
+				com.example.fitnessgym_mg.entity.enums.ActionType.UPDATE,
+				com.example.fitnessgym_mg.entity.enums.TargetTableType.LESSONS,
+				savedLesson.getId(),
+				currentUser
+		);
+
+		return savedLesson;
 	}
 
 	/**
@@ -507,11 +945,16 @@ public class LessonService {
 
 		// 次回店舗・トレーナーの組み合わせ検証（nullでない場合のみ）
 		if (nextStore != null && nextTrainer != null) {
-			// 次回トレーナーが次回店舗に所属しているか検証
-			if (nextTrainer.getStores() == null || nextTrainer.getStores().isEmpty() ||
-					!nextTrainer.getStores().contains(nextStore)) {
-				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
-						"次回トレーナーは次回店舗に所属している必要があります");
+			// トレーナーにはuser_storesテーブルにレコードがないため、店舗所属チェックをスキップ
+			// トレーナーは所属していない店舗でも次回予約を設定可能
+			// ただし、MANAGERロールの場合は店舗所属チェックを実施
+			if (nextTrainer.getRole() != UserRole.TRAINER) {
+				// MANAGERまたはADMINの場合のみ、店舗所属チェックを実施
+				if (nextTrainer.getStores() == null || nextTrainer.getStores().isEmpty() ||
+						!nextTrainer.getStores().contains(nextStore)) {
+					throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+							"次回トレーナーは次回店舗に所属している必要があります");
+				}
 			}
 		}
 
@@ -533,19 +976,21 @@ public class LessonService {
 	 * @throws InvalidRequestException 検証失敗の場合
 	 */
 	private void validateLessonEntityCombinations(Customer customer, Store store, User trainer) {
-		// トレーナーが指定店舗に所属しているか検証
-		if (trainer.getStores() == null || trainer.getStores().isEmpty() ||
-				!trainer.getStores().contains(store)) {
-			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
-					"指定されたトレーナーは指定された店舗に所属していません");
+		// トレーナーにはuser_storesテーブルにレコードがないため、店舗所属チェックをスキップ
+		// トレーナーは所属していない店舗でもレッスンを作成可能
+		// ただし、MANAGERロールの場合は店舗所属チェックを実施（店長はuser_storesテーブルにレコードがある）
+		if (trainer.getRole() != UserRole.TRAINER) {
+			// MANAGERまたはADMINの場合のみ、店舗所属チェックを実施
+			if (trainer.getStores() == null || trainer.getStores().isEmpty() ||
+					!trainer.getStores().contains(store)) {
+				throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+						"指定されたトレーナーは指定された店舗に所属していません");
+			}
 		}
 
-		// 顧客が指定店舗に紐づいているか検証
-		if (customer.getStores() == null || customer.getStores().isEmpty() ||
-				!customer.getStores().contains(store)) {
-			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
-					"指定された顧客は指定された店舗に紐づいていません");
-		}
+		// 顧客が店舗に紐づいているかのチェックを削除
+		// 店舗と顧客の紐付けは維持するが、レッスン作成の条件からは除外
+		// 顧客が店舗に紐づいていなくてもレッスンを作成可能
 	}
 
 	/**
@@ -559,6 +1004,39 @@ public class LessonService {
 		if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
 			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
 					"終了日時は開始日時より後に設定してください");
+		}
+	}
+
+	/**
+	 * レッスンの日時が未来でないことを検証
+	 * 
+	 * <p>レッスンの開始日時・終了日時は現在の日時より未来に設定できません。
+	 * これは業務ルールとして、レッスンは実施済み（過去または現在）のものを記録することを前提としています。</p>
+	 * 
+	 * <p>タイムゾーン: Asia/Tokyo（日本時間）基準で検証します。
+	 * フロントエンドから送信される日時はローカルタイムゾーン（日本時間）であり、
+	 * それをサーバー側でも日本時間として比較します。</p>
+	 * 
+	 * <p>セキュリティ: サービス層での第二層の防御として機能します。
+	 * Bean Validationをバイパスされても、サービス層で必ず検証されるため、セキュリティを強化します。</p>
+	 * 
+	 * <p>パフォーマンス: 現在時刻は一度だけ取得して、複数の検証で再利用することで、パフォーマンスを最適化します。</p>
+	 * 
+	 * @param startDate 開始日時
+	 * @param endDate 終了日時
+	 * @throws InvalidRequestException 日時が未来の場合
+	 */
+	private void validateLessonDateNotFuture(LocalDateTime startDate, LocalDateTime endDate) {
+		// パフォーマンス: 現在時刻を一度だけ取得（日本時間基準）
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
+		
+		if (startDate != null && startDate.isAfter(now)) {
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"開始日時は現在の日時より未来に設定できません");
+		}
+		if (endDate != null && endDate.isAfter(now)) {
+			throw new com.example.fitnessgym_mg.exception.InvalidRequestException(
+					"終了日時は現在の日時より未来に設定できません");
 		}
 	}
 
@@ -587,10 +1065,21 @@ public class LessonService {
 
 	/**
 	 * レッスンリクエストの内容をレッスンエンティティに適用する共通メソッド
+	 * 
+	 * <p>バリデーション順序:
+	 * <ol>
+	 *   <li>日時範囲のバリデーション（終了日時 > 開始日時）</li>
+	 *   <li>未来日時チェック（セキュリティ重視）</li>
+	 *   <li>文字列フィールドのバリデーション</li>
+	 * </ol>
+	 * </p>
 	 */
 	private void applyLessonRequestToEntity(Lesson lesson, LessonRequest request, LessonEntities entities) {
-		// 日時範囲のバリデーション
+		// 日時範囲のバリデーション（終了日時 > 開始日時）
 		validateLessonDateRange(request.getStartDate(), request.getEndDate());
+
+		// 未来日時チェック（セキュリティ: Bean Validationをバイパスされても検証される）
+		validateLessonDateNotFuture(request.getStartDate(), request.getEndDate());
 
 		// 文字列フィールドのバリデーション
 		validateLessonStringFields(request.getCondition(), request.getMeal(), request.getMemo());
@@ -659,15 +1148,21 @@ public class LessonService {
 			stores = List.of(storeRepository.findById(storeId)
 					.orElseThrow(() -> new com.example.fitnessgym_mg.exception.EntityNotFoundException(
 							"店舗が見つかりません: " + storeId)));
-			trainers = userRepository.findAll();
+			// 店長とトレーナーのみ選択可能（管理者を除外）
+			trainers = userRepository.findAll().stream()
+					.filter(u -> u.getRole() == UserRole.MANAGER || u.getRole() == UserRole.TRAINER)
+					.collect(Collectors.toList());
 			isTrainer = false;
 		} else if (caller == LessonFormCaller.ADMIN) {
 			// 管理者の場合：全店舗
 			stores = storeRepository.findAll();
-			trainers = userRepository.findAll();
+			// 店長とトレーナーのみ選択可能（管理者を除外）
+			trainers = userRepository.findAll().stream()
+					.filter(u -> u.getRole() == UserRole.MANAGER || u.getRole() == UserRole.TRAINER)
+					.collect(Collectors.toList());
 			isTrainer = false;
 		} else {
-			throw new IllegalArgumentException("Unknown caller: " + caller);
+			throw new com.example.fitnessgym_mg.exception.ImplementationException("Unknown caller: " + caller);
 		}
 
 		return new LessonFormData(customer, stores, trainers, isTrainer);
@@ -681,5 +1176,36 @@ public class LessonService {
 			List<Store> stores,
 			List<User> trainers,
 			boolean isTrainer) {
+	}
+
+	/**
+	 * ObjectをUUIDに安全に変換するヘルパーメソッド
+	 * 
+	 * @param obj UUIDに変換するオブジェクト
+	 * @return UUID（変換できない場合はnull）
+	 */
+	private UUID convertToUUID(Object obj) {
+		if (obj == null) {
+			return null;
+		}
+		if (obj instanceof UUID) {
+			return (UUID) obj;
+		}
+		if (obj instanceof String) {
+			try {
+				return UUID.fromString((String) obj);
+			} catch (IllegalArgumentException e) {
+				log.warn("UUIDへの変換に失敗: obj={}", obj);
+				return null;
+			}
+		}
+		// PostgreSQLのネイティブクエリでは、UUIDがjava.sql.Types.OTHERとして返される可能性がある
+		// toString()してからUUIDに変換を試みる
+		try {
+			return UUID.fromString(obj.toString());
+		} catch (IllegalArgumentException e) {
+			log.warn("UUIDへの変換に失敗: obj={}, obj.getClass()={}", obj, obj.getClass());
+			return null;
+		}
 	}
 }

@@ -1,10 +1,9 @@
 package com.example.fitnessgym_mg.service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
 import java.util.List;
+
+import com.example.fitnessgym_mg.util.EmailHashUtil;
 
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -55,7 +54,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         // メールアドレスでアクティブなユーザーを検索（Repository側でactive条件を適用）
         User user = userRepository.findByEmailAndActiveTrue(email)
                 .orElseThrow(() -> {
-                    log.warn("Login failed: user not found or inactive. emailHash={}", hashEmail(email));
+                    log.warn("Login failed: user not found or inactive. emailHash={}", EmailHashUtil.hashEmail(email));
                     return new UsernameNotFoundException("ユーザー名またはパスワードが正しくありません");
                 });
 
@@ -94,35 +93,5 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .toList();
     }
 
-    /**
-     * メールアドレスをSHA-256ハッシュ化（ログ出力用）
-     * 
-     * <p>個人情報保護のため、ログにはメールアドレスを直接出力せず、ハッシュ値を出力する。</p>
-     * 
-     * @param email メールアドレス
-     * @return SHA-256ハッシュ値（16進数文字列）
-     */
-    private String hashEmail(String email) {
-        if (email == null) {
-            return "null";
-        }
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(email.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hash) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) {
-                    hexString.append('0');
-                }
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
-            // SHA-256は標準アルゴリズムなので、この例外は発生しないはず
-            log.error("SHA-256 algorithm not found", e);
-            return "hash_error";
-        }
-    }
 }
 

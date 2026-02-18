@@ -9,12 +9,16 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
  * 姿勢画像レスポンスDTO
  * 姿勢画像情報をAPIレスポンスとして返す際に使用
+ * 
+ * <p>セキュリティ: ストレージキーは機密情報のため、ログ出力から除外します。</p>
  */
 @Data
+@ToString(exclude = "storageKey") // セキュリティ: ストレージキーをログに出力しない
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -44,6 +48,11 @@ public class PostureImageResponse {
      * 撮影位置（Enumのcode値: "front", "back", "left", "right"）
      */
     private String position;
+    
+    /**
+     * 署名付きURL（オプショナル、レッスン詳細取得時に生成される）
+     */
+    private String signedUrl;
     
     /**
      * PostureImageエンティティからレスポンスDTOに変換
